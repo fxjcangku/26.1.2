@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "addon-template",
+  "id": "yiyiaddon",
   "version": "${version}",
-  "name": "Addon Template",
-  "description": "An addon template for Meteor Client addons.",
+  "name": "yiyiaddon",
+  "description": "yiyiaddon 的 Meteor Client 功能扩展与界面汉化。",
   "authors": [
-    "seasnail"
+    "yiyijia"
   ],
   "contact": {
-    "sources": "https://github.com/MeteorDevelopment/meteor-addon-template"
+    "sources": "https://github.com/yiyijia/yiyiaddon"
   },
   "icon": "assets/template/icon.png",
   "environment": "client",

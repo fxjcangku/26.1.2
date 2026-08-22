@@ -1,9 +1,13 @@
 {
   "required": true,
   "package": "com.example.addon.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
-    "ExampleMixin"
+    "ExampleMixin",
+    "ModulesScreenTranslationMixin",
+    "ModuleTranslationMixin",
+    "SettingTranslationMixin",
+    "TextTranslationMixin"
   ],
   "injectors": {
     "defaultRequire": 1

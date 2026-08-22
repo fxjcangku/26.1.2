@@ -26,6 +26,7 @@ dependencies {
 
     // Meteor
     implementation(libs.meteor.client)
+    implementation(files("libs/baritone-fabric-26.1.2.jar"))
 }
 
 java {
@@ -58,11 +59,32 @@ tasks {
     }
 
     jar {
+        archiveFileName.set("yiyiaddon1.0-personal.jar")
         inputs.property("archivesName", project.base.archivesName.get())
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(zipTree("libs/baritone-fabric-26.1.2.jar")) {
+            exclude("META-INF/MANIFEST.MF", "fabric.mod.json", "mixins.baritone.json")
+        }
+        from(zipTree("libs/nether-pathfinder-1.4.1.jar")) {
+            exclude("META-INF/**", "fabric.mod.json")
+        }
 
         from("LICENSE") {
             rename { "${it}_${inputs.properties["archivesName"]}" }
         }
+    }
+
+    register("buildPersonal") {
+        group = "build"
+        dependsOn(jar)
+    }
+
+    register<Copy>("buildOfficial") {
+        group = "build"
+        dependsOn(jar)
+        from(jar)
+        into(layout.buildDirectory.dir("libs"))
+        rename { "yiyiaddon1.0.jar" }
     }
 
     withType<JavaCompile>().configureEach {
