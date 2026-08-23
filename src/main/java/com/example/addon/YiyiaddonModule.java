@@ -243,12 +243,12 @@ public abstract class YiyiaddonModule extends Module {
     //  【4】发布 / 上传仓库约定
     //  ─────────────────────────────────────────────────────────────────
     //
-    //  私人仓库  https://github.com/fxjcangku/yiyiaddon
+    //  私人仓库  https://github.com/fxjcangku/26.1.2
     //  · 构建任务：gradlew buildPersonal  →  输出未混淆 Personal JAR
     //  · 上传内容：源码 + Personal JAR（不加密，保留完整符号，方便自查调试）
     //  · 用途：自用存档、断点还原、跨设备同步
     //
-    //  公开仓库  https://github.com/fxjcangku/jerinin-addon
+    //  公开仓库  https://github.com/fxjcangku/26.1.2
     //  · 构建任务：gradlew buildOfficial  →  输出混淆 Official JAR
     //  · 上传内容：仅 Official JAR（已加密混淆，不含源码，对外发布）
     //  · Release 标签命名：v<版本>-beta<n>  例：v1.3-beta3
@@ -310,7 +310,7 @@ public abstract class YiyiaddonModule extends Module {
     //  | Java | 21 |
     //
     //  💬 Discord：https://discord.gg/vwrRCtET
-    //  🔗 GitHub：https://github.com/fxjcangku/jerinin-addon
+    //  🔗 GitHub：https://github.com/fxjcangku/26.1.2
     //
     //  ─────────────────────────────────────────────────────────────────
     //  注：emoji 选色约定

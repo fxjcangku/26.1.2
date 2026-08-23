@@ -16,8 +16,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class YiyiaddonWelcomeService {
-    private static final String REPOSITORY_URL = "https://github.com/fxjcangku/jerinin-addon";
-    private static final String LATEST_RELEASE_API = "https://api.github.com/repos/fxjcangku/jerinin-addon/releases/latest";
+    private static final String REPOSITORY_URL = "https://github.com/fxjcangku/26.1.2";
+    private static final String LATEST_RELEASE_API = "https://api.github.com/repos/fxjcangku/26.1.2/releases/latest";
     private static final Pattern TAG_PATTERN = Pattern.compile("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern RELEASE_URL_PATTERN = Pattern.compile("\\\"html_url\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
