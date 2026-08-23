@@ -2,6 +2,7 @@ package com.example.addon;
 
 import com.example.addon.commands.CommandExample;
 import com.example.addon.hud.HudExample;
+import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -15,7 +16,7 @@ import org.slf4j.Logger;
 
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l杂项");
+    public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具");
     public static final HudGroup HUD_GROUP = new HudGroup("Example");
 
     @Override
@@ -26,6 +27,9 @@ public class AddonTemplate extends MeteorAddon {
         YiyiaddonTranslationModule translationModule = new YiyiaddonTranslationModule();
         Modules.get().add(translationModule);
         translationModule.enable();
+
+        BaritoneCommandGuideModule baritoneCommandGuideModule = new BaritoneCommandGuideModule();
+        Modules.get().add(baritoneCommandGuideModule);
 
         // Commands
         Commands.add(new CommandExample());
