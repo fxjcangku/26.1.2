@@ -26,9 +26,10 @@ A template to allow easy usage of the Meteor Addon API.
 - Use this template to add custom modules, commands, HUDs, and other features to Meteor Client.
 - To test, run the `Minecraft Client` configuration in your IDE.
   This will start a Minecraft client with the Meteor Client mod and your addon loaded.
-- To build, run the gradle `build` task. This will create a JAR file in the `build/libs` folder.
-    - Move the JAR file to the `mods` folder of your Minecraft installation, alongside the Meteor Client mod and run the
-      game.
+- To build personal jar, run `gradlew buildPersonal`.
+- To build official obfuscated jar, run `gradlew buildOfficial`.
+- Personal jar: `build/libs/yiyiaddon1.0-personal.jar`
+- Official jar: `build/libs/yiyiaddon1.0.jar`
 
 ### Updating to newer Minecraft versions
 

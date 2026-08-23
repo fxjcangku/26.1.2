@@ -1,3 +1,13 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.guardsquare:proguard-gradle:7.8.1")
+    }
+}
+
 plugins {
     alias(libs.plugins.fabric.loom)
 }
@@ -62,13 +72,9 @@ tasks {
         archiveFileName.set("yiyiaddon1.0-personal.jar")
         inputs.property("archivesName", project.base.archivesName.get())
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        from(zipTree("libs/baritone-fabric-26.1.2.jar")) {
-            exclude("META-INF/MANIFEST.MF", "fabric.mod.json", "mixins.baritone.json")
+        from("libs/baritone-fabric-26.1.2.jar") {
+            into("META-INF/jars")
         }
-        from(zipTree("libs/nether-pathfinder-1.4.1.jar")) {
-            exclude("META-INF/**", "fabric.mod.json")
-        }
-
         from("LICENSE") {
             rename { "${it}_${inputs.properties["archivesName"]}" }
         }
@@ -79,12 +85,34 @@ tasks {
         dependsOn(jar)
     }
 
-    register<Copy>("buildOfficial") {
-        group = "build"
+    val obfuscateOfficial by register<proguard.gradle.ProGuardTask>("obfuscateOfficial") {
         dependsOn(jar)
-        from(jar)
-        into(layout.buildDirectory.dir("libs"))
-        rename { "yiyiaddon1.0.jar" }
+
+        val inputJar = jar.get().archiveFile.get().asFile
+        val outputJar = layout.buildDirectory.file("libs/yiyiaddon1.0.jar").get().asFile
+
+        injars(inputJar)
+        outjars(outputJar)
+        libraryjars(configurations.runtimeClasspath.get())
+
+        keepattributes(
+            "RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations," +
+                "RuntimeVisibleParameterAnnotations,RuntimeInvisibleParameterAnnotations," +
+                "AnnotationDefault,Signature,InnerClasses,EnclosingMethod"
+        )
+        adaptresourcefilecontents("fabric.mod.json")
+        adaptresourcefilecontents("**.mixins.json")
+        keep("public class com.example.addon.AddonTemplate { *; }")
+        keep("public class com.example.addon.mixin.** { *; }")
+        dontoptimize()
+        dontshrink()
+        dontwarn("**")
+        dontnote("**")
+    }
+
+    register("buildOfficial") {
+        group = "build"
+        dependsOn(obfuscateOfficial)
     }
 
     withType<JavaCompile>().configureEach {

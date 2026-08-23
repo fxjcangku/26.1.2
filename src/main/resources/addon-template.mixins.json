@@ -5,9 +5,20 @@
   "client": [
     "ExampleMixin",
     "ModulesScreenTranslationMixin",
+    "ModuleScreenTranslationMixin",
+    "PathManagerScreenTranslationMixin",
     "ModuleTranslationMixin",
     "SettingTranslationMixin",
-    "TextTranslationMixin"
+    "SettingGroupTranslationMixin",
+    "CategoryTranslationMixin",
+    "TextTranslationMixin",
+    "ButtonBuilderTranslationMixin",
+    "JoinMultiplayerScreenTranslationMixin",
+    "BaritoneHelperTranslationMixin",
+    "BaritoneHelpCommandMixin",
+    "BaritoneCommandLongDescMixin",
+    "BaritoneSetCommandMixin",
+    "BaritonePaginatorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

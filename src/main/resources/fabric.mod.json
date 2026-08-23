@@ -20,6 +20,11 @@
   "mixins": [
     "addon-template.mixins.json"
   ],
+  "jars": [
+    {
+      "file": "META-INF/jars/baritone-fabric-26.1.2.jar"
+    }
+  ],
   "custom": {
     "meteor-client:color": "225,25,25",
     "modmenu": {

@@ -8,6 +8,26 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import net.minecraft.network.chat.Component;
 import java.util.function.Consumer;
 
+// ╔════════════════════════════════════════════════════════════════════╗
+// ║                    构建与发布防错规则（必读）                      ║
+// ╠════════════════════════════════════════════════════════════════════╣
+// ║ 开发客户端：gradlew runClient                                     ║
+// ║ 个人测试版：gradlew buildPersonal                                 ║
+// ║ 输出：build/libs/yiyiaddon1.0-personal.jar（未混淆）               ║
+// ║ 官方发布版：gradlew buildOfficial                                 ║
+// ║ 输出：build/libs/yiyiaddon1.0.jar（混淆版）                        ║
+// ║ gradlew build 只刷新 Personal JAR，不代表 Official 已重新生成      ║
+// ║ 每次代码变更后必须重新构建所需类型，禁止复用旧 JAR                 ║
+// ║ 构建后核对：类型、文件名、修改时间、大小、SHA-256                  ║
+// ║ Personal 与 Official 严禁混用，公开发布只使用 Official             ║
+// ║ 构建与部署相互独立；只要求构建时不得修改游戏 mods 目录             ║
+// ║ 部署前核对目标实例、实际加载 JAR，并排查重复 JAR                   ║
+// ║ 未经明确允许，不得替换、禁用、恢复或重命名实例中的模组             ║
+// ║ 发布顺序：私人仓库同步源码和 Personal，再由同一源码构建 Official   ║
+// ║ 环境：MC 26.1.2 / Fabric 0.19.3 / Meteor 26.1.2-42 / Java 25       ║
+// ║ Baritone 已内嵌，不得额外安装 Baritone JAR                         ║
+// ╚════════════════════════════════════════════════════════════════════╝
+
 /**
  * 所有 yiyiaddon 模块的基类。
  * 项目统一提示规范：
@@ -240,12 +260,14 @@ public abstract class YiyiaddonModule extends Module {
     //
     // ──────────────────────────────────────────────────────────────────
     //
-    //  【4】发布 / 上传仓库约定
+    //  【4】反编译声明 / 发布 / 上传仓库约定
     //  ─────────────────────────────────────────────────────────────────
+    //  反编译声明：本项目源码仅供学习、调试与个人维护使用，公开发布版本请使用混淆构建。
+    //  个人版保留完整符号，便于排查问题；公开版执行混淆与裁剪，以降低反编译可读性。
     //
     //  私人仓库  https://github.com/fxjcangku/26.1.2
     //  · 构建任务：gradlew buildPersonal  →  输出未混淆 Personal JAR
-    //  · 上传内容：源码 + Personal JAR（不加密，保留完整符号，方便自查调试）
+    //  · 上传内容：源码 + Personal JAR（保留完整符号，方便自查调试）
     //  · 用途：自用存档、断点还原、跨设备同步
     //
     //  公开仓库  https://github.com/fxjcangku/26.1.2
@@ -262,16 +284,16 @@ public abstract class YiyiaddonModule extends Module {
     //  ## yiyiaddon v<版本>
     //
     //  > 🧪 Beta 测试版，欢迎反馈 bug            ← beta 版加此行，正式版删掉
-    //  > Minecraft 1.21.11 | Meteor Client 1.21.11-SNAPSHOT
+    //  > Minecraft 26.1.2 | Meteor Client 26.1.2-SNAPSHOT
     //
     //  ---
     //
     //  ### 📦 安装说明
     //
-    //  1. 下载 `Jerinin-addon-Official-<版本>.jar` 放入 `.minecraft/mods/` 文件夹
+    //  1. 下载 `yiyiaddon1.0.jar` 放入 `.minecraft/mods/` 文件夹
     //  2. 启动游戏，按 Right Shift 打开 Meteor 菜单，找到 yiyiaddon 分类即可使用
-    //  3. **使用自动导路功能需额外安装 Baritone**，下载 `bariton1.21.11.jar` 放入同一 mods 文件夹
-    //  4. 不使用自动导路功能只装第一个即可
+    //  3. Baritone 已内置在插件中，使用自动导路功能无需额外安装
+    //  4. 个人测试版文件名为 `yiyiaddon1.0-personal.jar`
     //
     //  ---
     //
@@ -304,10 +326,10 @@ public abstract class YiyiaddonModule extends Module {
     //
     //  | 依赖 | 版本 |
     //  |------|------|
-    //  | Minecraft | 1.21.11 |
-    //  | Fabric Loader | 0.16.5 |
-    //  | Meteor Client | 1.21.11-SNAPSHOT |
-    //  | Java | 21 |
+    //  | Minecraft | 26.1.2 |
+    //  | Fabric Loader | 0.19.3 |
+    //  | Meteor Client | 26.1.2-SNAPSHOT |
+    //  | Java | 25 |
     //
     //  💬 Discord：https://discord.gg/vwrRCtET
     //  🔗 GitHub：https://github.com/fxjcangku/26.1.2
@@ -321,8 +343,8 @@ public abstract class YiyiaddonModule extends Module {
     //    🔧/⚙️          → 底层修复/工具类
     //
     //  附件上传顺序（用户看到的顺序）：
-    //    1. Jerinin-addon-Official-<版本>.jar  ← 主插件，必传
-    //    2. bariton1.21.11.jar                ← 寻路依赖，有导路功能时必传
+    //    1. yiyiaddon1.0.jar         ← 官方混淆版，必传
+    //    2. yiyiaddon1.0-personal.jar ← 个人测试版，按需上传
     //
     // ══════════════════════════════════════════════════════════════════
     //  buildInfoWidget 示例（新模块直接复制并修改内容）
