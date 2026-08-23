@@ -8,6 +8,11 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(value = VanillaTextRenderer.class, remap = false)
 public abstract class TextTranslationMixin {
+    @ModifyVariable(method = "getWidth", at = @At("HEAD"), argsOnly = true)
+    private String yiyiaddon$translateWidth(String text) {
+        return YiyiaddonTranslator.translateVisible(text);
+    }
+
     @ModifyVariable(method = "render", at = @At("HEAD"), argsOnly = true)
     private String yiyiaddon$translate(String text) {
         return YiyiaddonTranslator.translateVisible(text);
