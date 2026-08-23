@@ -11,6 +11,8 @@
     "SettingTranslationMixin",
     "SettingGroupTranslationMixin",
     "CategoryTranslationMixin",
+    "ConfigCustomFontDefaultMixin",
+    "HudCustomFontDefaultMixin",
     "TextTranslationMixin",
     "ButtonBuilderTranslationMixin",
     "JoinMultiplayerScreenTranslationMixin",
