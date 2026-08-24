@@ -5,7 +5,7 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 
-import static com.example.addon.tactical.TacticalCategory.TACTICAL;
+import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
  * 服务器检测模块
@@ -33,7 +33,7 @@ public class ServerDetector extends YiyiaddonModule {
     );
 
     public ServerDetector() {
-        super(TACTICAL, "服务器检测", "服务器核心/反作弊侦测，资源包自动下载。开发中。");
+        super(CATEGORY_TACTICAL, "服务器检测", "服务器核心/反作弊侦测，资源包自动下载。开发中。");
     }
 
     @Override

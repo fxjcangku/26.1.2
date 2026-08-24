@@ -5,7 +5,7 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 
-import static com.example.addon.tactical.TacticalCategory.TACTICAL;
+import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
  * 飞行绕过模块
@@ -26,7 +26,7 @@ public class FlightBypass extends YiyiaddonModule {
     );
 
     public FlightBypass() {
-        super(TACTICAL, "飞行绕过", "四种模式绕过 GrimAC/Matrix 等顶级反作弊。开发中。");
+        super(CATEGORY_TACTICAL, "飞行绕过", "四种模式绕过 GrimAC/Matrix 等顶级反作弊。开发中。");
     }
 
     @Override

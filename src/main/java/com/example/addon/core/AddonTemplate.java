@@ -20,14 +20,14 @@ import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
-
-import static com.example.addon.tactical.TacticalCategory.TACTICAL;
 
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
     public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具");
     public static final Category CATEGORY_AUTOMATION = new Category("§c§lyiyiaddon §e§l自动化");
+    public static final Category CATEGORY_TACTICAL = new Category("§c§lyiyiaddon §d§l绕过", () -> Items.ENDER_EYE.getDefaultInstance());
     public static final HudGroup HUD_GROUP = new HudGroup("示例");
 
     @Override
@@ -66,7 +66,7 @@ public class AddonTemplate extends MeteorAddon {
     public void onRegisterCategories() {
         Modules.registerCategory(CATEGORY);
         Modules.registerCategory(CATEGORY_AUTOMATION);
-        Modules.registerCategory(TACTICAL);
+        Modules.registerCategory(CATEGORY_TACTICAL);
     }
 
     @Override

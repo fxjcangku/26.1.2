@@ -5,7 +5,7 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 
-import static com.example.addon.tactical.TacticalCategory.TACTICAL;
+import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
  * 发包防踢模块
@@ -33,7 +33,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     public AntiKickBypass() {
-        super(TACTICAL, "发包防踢", "全方位发包拦截，Masa伪装，聊天队列。开发中。");
+        super(CATEGORY_TACTICAL, "发包防踢", "全方位发包拦截，Masa伪装，聊天队列。开发中。");
     }
 
     @Override
