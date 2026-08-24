@@ -7,7 +7,9 @@ import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
-import com.example.addon.tactical.TacticalBypass;
+import com.example.addon.tactical.FlightBypass;
+import com.example.addon.tactical.AntiKickBypass;
+import com.example.addon.tactical.ServerDetector;
 import com.example.addon.utils.YiyiaddonWatermark;
 import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.mojang.logging.LogUtils;
@@ -44,8 +46,10 @@ public class AddonTemplate extends MeteorAddon {
         AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();
         Modules.get().add(autoFarmMatrix);
 
-        // Modules - 反作弊绕过（统一入口）
-        Modules.get().add(new TacticalBypass());
+        // Modules - 反作弊绕过（三个独立模块）
+        Modules.get().add(new FlightBypass());
+        Modules.get().add(new AntiKickBypass());
+        Modules.get().add(new ServerDetector());
 
         // Commands
         Commands.add(new CommandExample());
