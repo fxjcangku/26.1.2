@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(value = SettingGroup.class, remap = false)
-public abstract class SettingGroupTranslationMixin implements com.example.addon.SettingGroupTranslationAccess {
+public abstract class SettingGroupTranslationMixin implements com.example.addon.mixin.SettingGroupTranslationAccess {
     @Mutable @Shadow @Final public String name;
 
     @Override

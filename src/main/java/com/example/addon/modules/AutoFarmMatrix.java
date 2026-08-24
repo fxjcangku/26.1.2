@@ -1,7 +1,7 @@
 package com.example.addon.modules;
 
-import com.example.addon.AddonTemplate;
-import com.example.addon.YiyiaddonModule;
+import com.example.addon.core.AddonTemplate;
+import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.farm.*;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;

@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.YiyiaddonTranslator;
+import com.example.addon.translations.YiyiaddonTranslator;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;

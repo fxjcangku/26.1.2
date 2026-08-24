@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.core;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;

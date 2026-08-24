@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.core;
 
 import com.example.addon.commands.CommandExample;
 import com.example.addon.commands.NongChangCommand;
@@ -7,6 +7,8 @@ import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
+import com.example.addon.utils.YiyiaddonWatermark;
+import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;

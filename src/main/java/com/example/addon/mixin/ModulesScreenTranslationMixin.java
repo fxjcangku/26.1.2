@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.YiyiaddonTranslator;
+import com.example.addon.translations.YiyiaddonTranslator;
 import meteordevelopment.meteorclient.gui.screens.ModulesScreen;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;

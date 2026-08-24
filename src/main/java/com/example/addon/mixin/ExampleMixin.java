@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.AddonTemplate;
+import com.example.addon.core.AddonTemplate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.GameConfig;
 import org.spongepowered.asm.mixin.Mixin;

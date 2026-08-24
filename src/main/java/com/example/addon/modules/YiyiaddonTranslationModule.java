@@ -1,7 +1,7 @@
 package com.example.addon.modules;
 
-import com.example.addon.AddonTemplate;
-import com.example.addon.YiyiaddonModule;
+import com.example.addon.core.AddonTemplate;
+import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.BoolSetting;

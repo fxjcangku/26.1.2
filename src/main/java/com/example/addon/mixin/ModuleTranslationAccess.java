@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.mixin;
 
 public interface ModuleTranslationAccess {
     void yiyiaddon$setTitle(String value);

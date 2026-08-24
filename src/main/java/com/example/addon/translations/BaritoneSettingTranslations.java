@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.translations;
 
 import java.util.Map;
 

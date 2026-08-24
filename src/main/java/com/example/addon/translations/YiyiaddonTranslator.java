@@ -1,5 +1,8 @@
-package com.example.addon;
+package com.example.addon.translations;
 
+import com.example.addon.mixin.ModuleTranslationAccess;
+import com.example.addon.mixin.SettingGroupTranslationAccess;
+import com.example.addon.mixin.SettingTranslationAccess;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;

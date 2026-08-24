@@ -1,4 +1,6 @@
-package com.example.addon;
+package com.example.addon.utils;
+
+import com.example.addon.core.AddonTemplate;
 
 /**
  * 版权水印类 - 防反编译保护

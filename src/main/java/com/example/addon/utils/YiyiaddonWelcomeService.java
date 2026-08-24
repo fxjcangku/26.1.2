@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.utils;
 
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;

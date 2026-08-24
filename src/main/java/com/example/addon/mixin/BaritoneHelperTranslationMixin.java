@@ -1,7 +1,7 @@
 package com.example.addon.mixin;
 
 import baritone.api.utils.Helper;
-import com.example.addon.BaritoneChatTranslations;
+import com.example.addon.translations.BaritoneChatTranslations;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

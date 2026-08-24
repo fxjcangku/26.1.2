@@ -1,6 +1,6 @@
 package com.example.addon.commands;
 
-import com.example.addon.YiyiaddonWelcomeService;
+import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;
 import net.minecraft.client.multiplayer.ClientSuggestionProvider;

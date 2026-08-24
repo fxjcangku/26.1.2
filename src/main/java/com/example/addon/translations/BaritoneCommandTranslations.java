@@ -1,4 +1,4 @@
-package com.example.addon;
+package com.example.addon.translations;
 
 import baritone.api.command.ICommand;
 import java.util.List;

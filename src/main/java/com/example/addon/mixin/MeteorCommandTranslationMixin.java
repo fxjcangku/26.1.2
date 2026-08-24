@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.MeteorCommandTranslations;
+import com.example.addon.translations.MeteorCommandTranslations;
 import meteordevelopment.meteorclient.commands.Command;
 import meteordevelopment.meteorclient.commands.commands.HelpCommand;
 import org.spongepowered.asm.mixin.Mixin;

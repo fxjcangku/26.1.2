@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.YiyiaddonTranslator;
+import com.example.addon.translations.YiyiaddonTranslator;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;

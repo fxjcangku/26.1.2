@@ -2,7 +2,7 @@ package com.example.addon.mixin;
 
 import baritone.command.defaults.HelpCommand;
 import baritone.api.command.ICommand;
-import com.example.addon.YiyiaddonTranslator;
+import com.example.addon.translations.YiyiaddonTranslator;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.At;
