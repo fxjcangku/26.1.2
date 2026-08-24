@@ -17,12 +17,14 @@ import net.minecraft.world.phys.HitResult;
  * 自动物流农场的锚点绑定指令。
  *
  * <pre>
- * .nongchang                       查看当前四个锚点的绑定情况
- * .nongchang set 起点              把准星指向的方块设为农田对角起点
- * .nongchang set 终点              设为农田对角终点
- * .nongchang set 卸货箱            设为卸货总仓（必须是容器）
- * .nongchang set 补货箱            设为种子库（必须是容器）
- * .nongchang remove 卸货箱         解绑
+ * .farm                            查看当前四个锚点的绑定情况
+ * .farm set 起点                   把准星指向的方块设为农田对角起点
+ * .farm set 终点                   设为农田对角终点
+ * .farm set 卸货箱                 设为卸货总仓（必须是容器）
+ * .farm set 补货箱                 设为种子库（必须是容器）
+ * .farm remove 卸货箱              解绑
+ * .farm clear                      清空全部锚点
+ * .farm status                     显示详细信息（含服务器IP）
  * </pre>
  *
  * 两条硬校验：
@@ -34,7 +36,7 @@ import net.minecraft.world.phys.HitResult;
 public class NongChangCommand extends Command {
 
     public NongChangCommand() {
-        super("nongchang", "绑定自动物流农场的农田范围与物流箱子。", "nc");
+        super("farm", "绑定自动物流农场的农田范围与物流箱子。", "nc", "nongchang");
     }
 
     @Override
@@ -81,9 +83,17 @@ public class NongChangCommand extends Command {
         AutoFarmMatrix module = module();
         if (module == null) return SINGLE_SUCCESS;
 
+        // 获取服务器信息
+        String serverInfo = "单人世界";
+        if (mc.getCurrentServer() != null) {
+            serverInfo = mc.getCurrentServer().ip;
+        }
+
         info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         info("§b§l         农场锚点详细信息");
         info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info("");
+        info("  §7服务器: §f" + serverInfo);
         info("");
         
         for (SiteType type : SiteType.values()) {
