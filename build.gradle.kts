@@ -85,6 +85,11 @@ tasks {
         dependsOn(jar)
     }
 
+    register<Exec>("scanMeteorUiText") {
+        group = "verification"
+        commandLine("powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts/scan-meteor-ui-text.ps1")
+    }
+
     val obfuscateOfficial by register<proguard.gradle.ProGuardTask>("obfuscateOfficial") {
         dependsOn(jar)
 

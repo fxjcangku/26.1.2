@@ -125,7 +125,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private boolean harvestOnly;
 
     /** 拾取等待的 tick 数，给服务端判定掉落物留出时间 */
-    private static final int COLLECT_WAIT_TICKS = 12;
+    private static final int COLLECT_WAIT_TICKS = 40;
 
     /** 上次发送开容器包的 stateTick，用于限制重试频率 */
     private int lastOpenAttempt = -100;
@@ -680,6 +680,11 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             }
         }
 
+        // 蛇形巡逻：让 Baritone 一直保持移动状态，边走边收
+        if (serpentinePatrol.get() && FarmNav.available()) {
+            advancePatrol();  // 推进航线，Baritone 会自动走向目标
+        }
+
         // 破坏与播种分开计数：两者共用一个 BPT 会互相饿死，
         // 收割快的时候播种永远排不上号
         int breakBudget = bpt.get();
@@ -689,7 +694,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         for (BlockPos pos : workHarvest) {
             if (breakBudget <= 0) break;
             if (processedHarvest.contains(pos)) continue;
-            if (!mc.player.isWithinBlockInteractionRange(pos, 0.0)) continue;
+            if (!inReach(pos)) continue;  // 够不着就跳过，走近了下一 tick 会收
 
             // 二次确认：快照生成到现在可能已经被别人收了
             BlockState state = mc.level.getBlockState(pos);
@@ -733,38 +738,37 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             }
         }
 
-        // 站着能碰到的都处理完了，才考虑挪窝或收工
-        boolean harvestDone = processedHarvest.size() >= reachableCount(workHarvest);
-        boolean plantDone = harvestOnly || processedPlant.size() >= reachableCount(workPlant);
-        if (!harvestDone || !plantDone) return;
-
-        // 蛇形巡逻：还有航点没走完就继续往下一个走，把整片田都覆盖到
-        if (serpentinePatrol.get() && FarmNav.available() && advancePatrol()) return;
-
-        transitionTo(FarmState.COLLECTING);
+        // 全部目标处理完（包括够不着的也算）才收工
+        // 这样可以确保 Baritone 走完整条航线，不会遗漏任何作物
+        if (processedHarvest.size() >= workHarvest.size()
+            && (harvestOnly || processedPlant.size() >= workPlant.size())) {
+            transitionTo(FarmState.COLLECTING);
+        }
     }
 
     /**
      * 推进蛇形巡逻。
      *
-     * @return true 表示还在路上（本 tick 不该收工），false 表示整条航线已走完
+     * 改成每 tick 都调用，让 Baritone 一直保持移动状态。
+     * 到站后自动指向下一个航点，实现边走边收。
      */
-    private boolean advancePatrol() {
-        if (patrolRoute.isEmpty()) return false;
-        if (patrolIndex >= patrolRoute.size()) return false;
+    private void advancePatrol() {
+        if (patrolRoute.isEmpty()) return;
+        if (patrolIndex >= patrolRoute.size()) return;
 
         BlockPos waypoint = patrolRoute.get(patrolIndex);
 
-        // 还没走到就交给 Baritone 继续走。它自己在路上时不重复下发目标，
-        // 否则每 tick 重设 goal 会让寻路器反复重算，人在原地抽搐
-        if (mc.player.blockPosition().distSqr(waypoint) > 4) {
-            if (!FarmNav.pathing()) FarmNav.goTo(waypoint, 1);
-            return true;
+        // 到站了就指向下一个航点
+        if (mc.player.blockPosition().distSqr(waypoint) <= 4) {
+            patrolIndex++;
+            if (patrolIndex >= patrolRoute.size()) return;  // 航线走完
+            waypoint = patrolRoute.get(patrolIndex);
         }
 
-        // 到站，指向下一个航点
-        patrolIndex++;
-        return patrolIndex < patrolRoute.size();
+        // 让 Baritone 持续走向当前航点
+        if (!FarmNav.pathing()) {
+            FarmNav.goTo(waypoint, 1);
+        }
     }
 
     /**
@@ -801,8 +805,20 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     }
 
     private void tickCollecting() {
-        // 掉落物进背包完全由服务端判定，客户端发包催不动，只能等
+        // 走到农田中心，增大拾取范围覆盖掉落物
+        if (stateTick == 0 && serpentinePatrol.get() && FarmNav.available() && scanner.bounded()) {
+            BlockPos center = new BlockPos(
+                (scanner.min().getX() + scanner.max().getX()) / 2,
+                scanner.min().getY() + 1,
+                (scanner.min().getZ() + scanner.max().getZ()) / 2
+            );
+            FarmNav.goTo(center, 2);
+        }
+
+        // 等待掉落物飞回来或被磁力吸引到
         if (stateTick < COLLECT_WAIT_TICKS) return;
+        
+        FarmNav.cancel();
         transitionTo(FarmState.JUDGMENT);
     }
 

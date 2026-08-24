@@ -12,7 +12,7 @@ public abstract class ButtonBuilderTranslationMixin {
     @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true)
     private static Component yiyiaddon$translateMeteorMultiplayerButtons(Component text) {
         String original = text.getString();
-        if (!original.equals("Proxies") && !original.equals("Accounts")) return text;
-        return Component.literal(YiyiaddonTranslator.translateVisible(original));
+        String translated = YiyiaddonTranslator.translateVisible(original);
+        return translated.equals(original) ? text : Component.literal(translated);
     }
 }

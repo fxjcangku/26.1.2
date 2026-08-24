@@ -6,6 +6,7 @@
     "ExampleMixin",
     "ModulesScreenTranslationMixin",
     "ModuleScreenTranslationMixin",
+    "ReachTranslationMixin",
     "PathManagerScreenTranslationMixin",
     "ModuleTranslationMixin",
     "SettingTranslationMixin",
@@ -13,6 +14,8 @@
     "CategoryTranslationMixin",
     "ConfigCustomFontDefaultMixin",
     "HudCustomFontDefaultMixin",
+    "WMeteorDropdownTranslationMixin",
+    "WMeteorDropdownValueTranslationMixin",
     "TextTranslationMixin",
     "ButtonBuilderTranslationMixin",
     "JoinMultiplayerScreenTranslationMixin",
@@ -21,6 +24,10 @@
     "BaritoneCommandLongDescMixin",
     "BaritoneSetCommandMixin",
     "BaritonePaginatorMixin"
+    ,"MeteorCommandTranslationMixin"
+    ,"MeteorHelpCommandTranslationMixin"
+    ,"MeteorCommandsTranslationMixin"
+    ,"ClientLevelPredictionAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

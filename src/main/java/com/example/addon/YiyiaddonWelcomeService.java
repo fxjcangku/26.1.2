@@ -37,8 +37,8 @@ public final class YiyiaddonWelcomeService {
     private void onGameJoined(GameJoinedEvent event) {
         if (mc.player == null) return;
 
-        mc.player.sendSystemMessage(Component.literal("本扩展已整合简体中文汉化跟Baritone不用单独安装"));
-        mc.player.sendSystemMessage(Component.literal("本模块免费无聊写着玩"));
+        mc.player.sendSystemMessage(Component.literal("本扩展已整合简体中文汉化跟汉化Baritone不用单独安装"));
+        mc.player.sendSystemMessage(Component.literal("本扩展免费 为爱发电"));
 
         ReleaseInfo release = latestRelease;
         if (release != null) notifyUpdateIfNeeded(release);

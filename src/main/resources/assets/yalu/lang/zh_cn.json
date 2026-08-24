@@ -2773,7 +2773,7 @@
     "module.entity-control.description": "让你无需鞍即可控制可骑乘实体。",
     "module.entity-control.control.entities": "实体",
     "module.entity-control.control.entities.description": "目标实体。",
-    "module.entity-control.control.spoof-saddle*": "伪装鞍*",
+    "module.entity-control.control.spoof-saddle*": "伪装鞍",
     "module.entity-control.control.spoof-saddle*.description": "让你无需鞍即可控制可骑乘实体。仅适用于较旧的服务器版本。",
     "module.entity-control.control.max-jump": "最大跳跃",
     "module.entity-control.control.max-jump.description": "将跳跃力设置为最大。",
