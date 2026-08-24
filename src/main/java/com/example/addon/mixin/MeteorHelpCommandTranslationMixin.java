@@ -40,20 +40,55 @@ public abstract class MeteorHelpCommandTranslationMixin {
     // 翻译命令描述
     private String translateDescription(String desc) {
         return switch (desc) {
+            // 基础命令
             case "Shows you what a command does." -> "显示指令的功能说明。";
-            case "List of all bound modules." -> "显示所有已绑定快捷键的模块。";
-            case "Manages fake players that you can use for testing." -> "管理用于测试的假玩家。";
-            case "Damages self" -> "对自己造成伤害";
             case "Sends messages in chat." -> "在聊天框发送消息。";
-            case "Drops selected items from your inventory." -> "从背包中丢弃选定的物品。";
-            case "Gives you items." -> "给予物品。";
-            case "Logs you out of your account." -> "退出当前账号登录。";
+            case "Shows information about Meteor." -> "显示 Meteor 客户端信息。";
+            case "Connects to a server." -> "连接到服务器。";
             case "Allows you to reload parts of the client." -> "重新加载客户端的部分功能。";
             case "Resets all settings to default." -> "重置所有设置为默认值。";
-            case "Connects to a server." -> "连接到服务器。";
-            case "Loads and saves profiles." -> "加载和保存配置文件。";
+            case "Logs you out of your account." -> "退出当前账号登录。";
+            
+            // 模块与按键
             case "Toggles a module on and off." -> "开启或关闭模块。";
-            case "Shows information about Meteor." -> "显示 Meteor 客户端信息。";
+            case "List of all bound modules." -> "显示所有已绑定快捷键的模块。";
+            case "Binds a module to a key." -> "为模块绑定快捷键。";
+            case "Unbinds a module." -> "解除模块的快捷键绑定。";
+            
+            // 物品与背包
+            case "Drops selected items from your inventory." -> "从背包中丢弃选定的物品。";
+            case "Gives you items." -> "给予物品。";
+            case "Enchants held items." -> "对手持物品附魔。";
+            case "Renames held items." -> "重命名手持物品。";
+            
+            // 玩家与实体
+            case "Manages fake players that you can use for testing." -> "管理用于测试的假玩家。";
+            case "Damages self" -> "对自己造成伤害。";
+            case "Sets your FOV." -> "设置视野角度。";
+            case "Manages friends." -> "管理好友列表。";
+            case "Manages your nameprotect list." -> "管理你的名称保护列表。";
+            
+            // 配置与文件
+            case "Loads and saves profiles." -> "加载和保存配置文件。";
+            case "Manages your settings." -> "管理你的设置。";
+            case "Manages your macros." -> "管理你的宏。";
+            case "Manages your HUD." -> "管理你的 HUD 界面。";
+            
+            // 服务器与世界
+            case "Spectates a player." -> "观察指定玩家。";
+            case "Displays information about the server." -> "显示服务器信息。";
+            case "Displays information about players." -> "显示玩家信息。";
+            case "Displays NBT data of an item or block." -> "显示物品或方块的 NBT 数据。";
+            
+            // 工具命令
+            case "Saves a schematic." -> "保存建筑蓝图。";
+            case "Sets a waypoint." -> "设置路径点。";
+            case "Removes a waypoint." -> "删除路径点。";
+            case "Lists all waypoints." -> "列出所有路径点。";
+            
+            // Baritone 相关
+            case "Baritone commands." -> "Baritone 导航指令。";
+            
             default -> desc;
         };
     }
