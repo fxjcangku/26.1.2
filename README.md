@@ -1,10 +1,20 @@
+<div align="center">
+
 # yiyiaddon v1.0
 
-> **Minecraft 26.1.2 | Fabric 0.19.3 | Meteor Client 26.1.2-SNAPSHOT | Java 25**
+![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-brightgreen?style=for-the-badge&logo=minecraft)
+![Fabric](https://img.shields.io/badge/Fabric-0.19.3-orange?style=for-the-badge)
+![Meteor](https://img.shields.io/badge/Meteor_Client-26.1.2--SNAPSHOT-blue?style=for-the-badge)
+![Java](https://img.shields.io/badge/Java-25-red?style=for-the-badge&logo=openjdk)
 
-为 Meteor Client 量身打造的增强插件，专注于**全中文界面**和**自动化工具**，让游戏体验更流畅。
+**为 Meteor Client 量身打造的增强插件**  
+**专注全中文界面 · 自动化工具 · 智能农场**
+
+[📥 下载](https://github.com/fxjcangku/26.1.2/releases) · [📖 文档](#-使用说明) · [💬 Discord](https://discord.gg/vwrRCtET) · [🐛 反馈问题](https://github.com/fxjcangku/26.1.2/issues)
 
 ---
+
+</div>
 
 ## ✨ 核心特性
 
@@ -101,6 +111,14 @@
 - **GitHub**：[https://github.com/fxjcangku/26.1.2](https://github.com/fxjcangku/26.1.2)
 - **Discord**：[https://discord.gg/vwrRCtET](https://discord.gg/vwrRCtET)
 - **问题反馈**：[GitHub Issues](https://github.com/fxjcangku/26.1.2/issues)
+
+---
+
+## 🔗 参考与致谢
+
+- **Meteor Client 模板**：[MeteorCommunity/example-addon](https://github.com/MeteorCommunity/example-addon)
+- **Meteor Client**：[https://meteorclient.com](https://meteorclient.com)
+- **Baritone**：[cabaletta/baritone](https://github.com/cabaletta/baritone)
 
 ---
 

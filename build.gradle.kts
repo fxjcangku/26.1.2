@@ -128,8 +128,8 @@ tasks {
         allowaccessmodification()
         overloadaggressively()
         
-        // 输出混淆映射文件，用于复原
-        printmapping(layout.buildDirectory.file("obfuscation-mapping.txt").get().asFile)
+        // 输出混淆映射文件，用于复原（带版本号）
+        printmapping(layout.buildDirectory.file("obfuscation-mapping-v${libs.versions.mod.version.get()}.txt").get().asFile)
         
         // 字符串加密（ProGuard 不直接支持，但可以让反编译更难读）
         // 使用自定义字典让混淆名更难识别
