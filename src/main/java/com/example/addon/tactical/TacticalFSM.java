@@ -1,38 +1,15 @@
 package com.example.addon.tactical;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
+import meteordevelopment.meteorclient.MeteorClient;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 
-// ╔════════════════════════════════════════════════════════════════════╗
-// ║                    战术枢纽 - 全局状态机                          ║
-// ║               三大模块联动的事件总线与状态管理                     ║
-// ╚════════════════════════════════════════════════════════════════════╝
-//
-// 【核心功能】
-// 1. 事件发布订阅系统 - 模块间解耦通信
-// 2. 全局状态共享 - 反作弊类型、拉回标记、资源包下载状态
-// 3. 线程安全保证 - ConcurrentHashMap + CopyOnWriteArrayList
-//
-// 【联动逻辑】
-// [服务器检测] 识别反作弊 → 发布 AntiCheatDetectedEvent
-//     ↓
-// [飞行绕过] 监听事件 → 强制切换到安全模式
-//
-// [飞行绕过] 收到拉回包 → 发布 RubberBandEvent
-//     ↓
-// [发包防踢] 监听事件 → 暂停移动包 + 发确认包
-//
-// [服务器检测] 下载资源包 → 发布 ResourcePackDownloadingEvent
-//     ↓
-// [发包防踢] 监听事件 → 降低发包速率
-//
-// ════════════════════════════════════════════════════════════════════
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 战术枢纽全局状态机
+ * 战术三枢纽 - 全局状态机
  * 
- * 负责三大模块（飞行绕过、发包防踢、服务器检测）的事件联动
+ * 负责三模块之间的事件传递与状态同步
  * 
  * @author yiyijia
  */
@@ -42,248 +19,196 @@ public class TacticalFSM {
     //  全局状态存储
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 当前服务器的反作弊类型 */
-    private static volatile AntiCheatType detectedAntiCheat = AntiCheatType.UNKNOWN;
+    /** 检测到的服务器核心类型 */
+    private static volatile String detectedServerCore = "未知";
 
-    /** 当前服务器核心类型 */
-    private static volatile ServerCoreType detectedServerCore = ServerCoreType.UNKNOWN;
+    /** 检测到的反作弊类型 */
+    private static volatile String detectedAntiCheat = "未知";
 
-    /** 是否正在被拉回 */
-    private static volatile boolean isRubberBanding = false;
+    /** 是否检测到高级反作弊（Matrix/GrimAC） */
+    private static volatile boolean hasAdvancedAntiCheat = false;
 
-    /** 是否正在下载资源包 */
+    /** 资源包下载状态 */
     private static volatile boolean isDownloadingResourcePack = false;
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  事件总线
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    /** 拉回包冷却状态 */
+    private static volatile boolean rubberBandCooldown = false;
 
-    private static final ConcurrentHashMap<Class<?>, CopyOnWriteArrayList<Consumer<?>>> listeners = new ConcurrentHashMap<>();
-
-    /**
-     * 订阅事件
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> void subscribe(Class<T> eventType, Consumer<T> listener) {
-        listeners.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(listener);
-    }
-
-    /**
-     * 发布事件
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> void publish(T event) {
-        CopyOnWriteArrayList<Consumer<?>> list = listeners.get(event.getClass());
-        if (list != null) {
-            for (Consumer<?> listener : list) {
-                try {
-                    ((Consumer<T>) listener).accept(event);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
+    /** 正在下载的资源包记录 */
+    private static final ConcurrentHashMap<UUID, ResourcePackDownload> downloadingPacks = new ConcurrentHashMap<>();
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  状态访问器
+    //  状态读取方法
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    public static AntiCheatType getDetectedAntiCheat() {
-        return detectedAntiCheat;
-    }
-
-    public static void setDetectedAntiCheat(AntiCheatType type) {
-        detectedAntiCheat = type;
-    }
-
-    public static ServerCoreType getDetectedServerCore() {
+    public static String getDetectedServerCore() {
         return detectedServerCore;
     }
 
-    public static void setDetectedServerCore(ServerCoreType type) {
-        detectedServerCore = type;
+    public static String getDetectedAntiCheat() {
+        return detectedAntiCheat;
     }
 
-    public static boolean isRubberBanding() {
-        return isRubberBanding;
-    }
-
-    public static void setRubberBanding(boolean value) {
-        isRubberBanding = value;
+    public static boolean hasAdvancedAntiCheat() {
+        return hasAdvancedAntiCheat;
     }
 
     public static boolean isDownloadingResourcePack() {
         return isDownloadingResourcePack;
     }
 
-    public static void setDownloadingResourcePack(boolean value) {
-        isDownloadingResourcePack = value;
+    public static boolean isRubberBandCooldown() {
+        return rubberBandCooldown;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  事件定义
+    //  状态更新方法
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 更新服务器核心检测结果 */
+    public static void setDetectedServerCore(String core) {
+        detectedServerCore = core;
+    }
+
+    /** 更新反作弊检测结果 */
+    public static void setDetectedAntiCheat(String antiCheat) {
+        detectedAntiCheat = antiCheat;
+        hasAdvancedAntiCheat = antiCheat.contains("Matrix") || antiCheat.contains("Grim");
+    }
+
+    /** 设置资源包下载状态 */
+    public static void setDownloadingResourcePack(boolean downloading) {
+        isDownloadingResourcePack = downloading;
+    }
+
+    /** 设置拉回包冷却状态 */
+    public static void setRubberBandCooldown(boolean cooldown) {
+        rubberBandCooldown = cooldown;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  事件发布方法
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 服务器核心检测事件
+     * 发布反作弊检测事件
+     * 飞行绕过模块会监听此事件并切换到安全模式
      */
-    public static class ServerCoreDetectedEvent {
-        public final ServerCoreType coreType;
-        public final String version;
+    public static void publishAntiCheatDetected(String antiCheatName) {
+        setDetectedAntiCheat(antiCheatName);
+        MeteorClient.EVENT_BUS.post(AntiCheatDetectedEvent.get(antiCheatName));
+    }
 
-        public ServerCoreDetectedEvent(ServerCoreType coreType, String version) {
-            this.coreType = coreType;
-            this.version = version;
+    /**
+     * 发布拉回包事件
+     * 发包防踢模块会监听此事件并执行断流
+     */
+    public static void publishRubberBand(ClientboundPlayerPositionPacket packet) {
+        setRubberBandCooldown(true);
+        MeteorClient.EVENT_BUS.post(RubberBandEvent.get(packet));
+    }
+
+    /**
+     * 发布资源包下载开始事件
+     * 发包防踢模块会监听此事件并降低发包速率
+     */
+    public static void publishResourcePackDownloadStart(UUID packId) {
+        setDownloadingResourcePack(true);
+        downloadingPacks.put(packId, new ResourcePackDownload(packId, System.currentTimeMillis()));
+        MeteorClient.EVENT_BUS.post(ResourcePackDownloadingEvent.get(packId, true));
+    }
+
+    /**
+     * 发布资源包下载完成事件
+     * 发包防踢模块会监听此事件并恢复正常发包速率
+     */
+    public static void publishResourcePackDownloadComplete(UUID packId, boolean success) {
+        downloadingPacks.remove(packId);
+        if (downloadingPacks.isEmpty()) {
+            setDownloadingResourcePack(false);
         }
+        MeteorClient.EVENT_BUS.post(ResourcePackDownloadingEvent.get(packId, false));
     }
 
-    /**
-     * 反作弊检测事件
-     */
+    /** 重置所有状态（离开服务器时调用） */
+    public static void reset() {
+        detectedServerCore = "未知";
+        detectedAntiCheat = "未知";
+        hasAdvancedAntiCheat = false;
+        isDownloadingResourcePack = false;
+        rubberBandCooldown = false;
+        downloadingPacks.clear();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  自定义事件类
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 反作弊检测事件 */
     public static class AntiCheatDetectedEvent {
-        public final AntiCheatType type;
-        public final String version;
+        private static final AntiCheatDetectedEvent INSTANCE = new AntiCheatDetectedEvent();
+        public String antiCheatName;
 
-        public AntiCheatDetectedEvent(AntiCheatType type, String version) {
-            this.type = type;
-            this.version = version;
+        private AntiCheatDetectedEvent() {}
+
+        public static AntiCheatDetectedEvent get(String name) {
+            INSTANCE.antiCheatName = name;
+            return INSTANCE;
         }
     }
 
-    /**
-     * 拉回包事件
-     */
+    /** 拉回包事件 */
     public static class RubberBandEvent {
-        public final double x, y, z;
-        public final float yaw, pitch;
-        public final int teleportId;
+        private static final RubberBandEvent INSTANCE = new RubberBandEvent();
+        public ClientboundPlayerPositionPacket packet;
 
-        public RubberBandEvent(double x, double y, double z, float yaw, float pitch, int teleportId) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.yaw = yaw;
-            this.pitch = pitch;
-            this.teleportId = teleportId;
+        private RubberBandEvent() {}
+
+        public static RubberBandEvent get(ClientboundPlayerPositionPacket pkt) {
+            INSTANCE.packet = pkt;
+            return INSTANCE;
+        }
+
+        public int getTeleportId() {
+            return packet.id();
+        }
+
+        public double getX() {
+            return packet.change().position().x;
+        }
+
+        public double getY() {
+            return packet.change().position().y;
+        }
+
+        public double getZ() {
+            return packet.change().position().z;
         }
     }
 
-    /**
-     * 资源包下载事件
-     */
+    /** 资源包下载事件 */
     public static class ResourcePackDownloadingEvent {
-        public final String url;
-        public final String hash;
-        public final boolean started; // true=开始下载, false=下载完成
+        private static final ResourcePackDownloadingEvent INSTANCE = new ResourcePackDownloadingEvent();
+        public UUID packId;
+        public boolean isDownloading;
 
-        public ResourcePackDownloadingEvent(String url, String hash, boolean started) {
-            this.url = url;
-            this.hash = hash;
-            this.started = started;
+        private ResourcePackDownloadingEvent() {}
+
+        public static ResourcePackDownloadingEvent get(UUID id, boolean downloading) {
+            INSTANCE.packId = id;
+            INSTANCE.isDownloading = downloading;
+            return INSTANCE;
         }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  服务器核心类型枚举
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    /** 资源包下载记录 */
+    private static class ResourcePackDownload {
+        final UUID id;
+        final long startTime;
 
-    public enum ServerCoreType {
-        UNKNOWN("未知"),
-        VANILLA("原版"),
-        
-        // Paper 系列
-        PAPER("Paper"),
-        PURPUR("Purpur"),
-        PUFFERFISH("Pufferfish"),
-        AIRPLANE("Airplane"),
-        
-        // 中国特供版
-        LEAVES("Leaves"),
-        GALE("Gale"),
-        SAKURA("Sakura"),
-        PLAZMA("Plazma"),
-        PEARL("Pearl"),
-        
-        // Spigot 系列
-        SPIGOT("Spigot"),
-        CRAFTBUKKIT("CraftBukkit"),
-        BUKKIT("Bukkit"),
-        
-        // Mod 端
-        FORGE("Forge"),
-        FABRIC("Fabric"),
-        NEOFORGE("NeoForge"),
-        QUILT("Quilt"),
-        
-        // 混合端
-        ARCLIGHT("Arclight"),
-        MOHIST("Mohist"),
-        MAGMA("Magma"),
-        CATSERVER("CatServer"),
-        BANNER("Banner"),
-        
-        // 代理端
-        BUNGEECORD("BungeeCord"),
-        WATERFALL("Waterfall"),
-        VELOCITY("Velocity");
-
-        public final String displayName;
-
-        ServerCoreType(String displayName) {
-            this.displayName = displayName;
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  反作弊类型枚举
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public enum AntiCheatType {
-        UNKNOWN("未知"),
-        
-        // 国际主流反作弊
-        GRIM_AC("GrimAC"),
-        MATRIX("Matrix"),
-        VULCAN("Vulcan"),
-        POLAR("Polar"),
-        SPARTAN("Spartan"),
-        NEGATIVITY("Negativity"),
-        THEMIS("Themis"),
-        REFLEX("Reflex"),
-        VERUS("Verus"),
-        INTAVE("Intave"),
-        HAWK("Hawk"),
-        SUNRISE("Sunrise"),
-        KAURI("Kauri"),
-        
-        // 中国特色反作弊
-        ANTIMC("AntiMC"),
-        VULCANCH("VulcanCH"),
-        MATRIX_CN("MatrixCN"),
-        SHADOW("Shadow"),
-        SPARROW("Sparrow"),
-        HORIZON("Horizon"),
-        PHANTOM("Phantom"),
-        
-        // 开源/社区反作弊
-        NEGATIVEX("NegativeX"),
-        AAC("AAC"),
-        ANTICHEAT("AntiCheat"),
-        NOCHEATPLUS("NoCheatPlus"),
-        
-        // 企业级反作弊
-        GUARDIANAI("GuardianAI"),
-        FIREWALL("Firewall"),
-        SENTINEL("Sentinel"),
-        
-        // 无反作弊
-        VANILLA("无反作弊");
-
-        public final String displayName;
-
-        AntiCheatType(String displayName) {
-            this.displayName = displayName;
+        ResourcePackDownload(UUID id, long startTime) {
+            this.id = id;
+            this.startTime = startTime;
         }
     }
 }
