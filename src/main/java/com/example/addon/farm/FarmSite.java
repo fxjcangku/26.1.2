@@ -63,6 +63,12 @@ public record FarmSite(BlockPos pos, ResourceKey<Level> dimension) {
 
     /** 面向玩家的简短描述 */
     public String describe() {
-        return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ") @ " + dimension.identifier().getPath();
+        String dimName = switch (dimension.identifier().getPath()) {
+            case "overworld" -> "主世界";
+            case "the_nether" -> "下界";
+            case "the_end" -> "末地";
+            default -> dimension.identifier().getPath();
+        };
+        return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ") @ " + dimName;
     }
 }
