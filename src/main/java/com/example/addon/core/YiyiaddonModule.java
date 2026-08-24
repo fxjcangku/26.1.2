@@ -304,6 +304,34 @@ public abstract class YiyiaddonModule extends Module {
 // ╠════════════════════════════════════════════════════════════════════╣
 // ║                       开发规范快速参考                             ║
 // ╠════════════════════════════════════════════════════════════════════╣
+// ║ 【代码目录结构规范】                                               ║
+// ║ 每次新增插件模块后，整理代码目录结构：                             ║
+// ║                                                                    ║
+// ║ com.example.addon/                                                 ║
+// ║ ├─ core/          核心基础类（AddonTemplate、YiyiaddonModule 等）  ║
+// ║ ├─ translations/  翻译引擎（*Translations、Translator）            ║
+// ║ ├─ utils/         工具类（Watermark、WelcomeService）              ║
+// ║ ├─ commands/      指令类（*Command）                              ║
+// ║ ├─ modules/       模块类（*Module）                               ║
+// ║ ├─ mixin/         Mixin 注入（*Mixin、*Access）                   ║
+// ║ ├─ hud/           HUD 组件（*Hud）                                ║
+// ║ └─ farm/          农场系统（Scanner、Nav、Renderer 等）            ║
+// ║                                                                    ║
+// ║ 整理步骤：                                                         ║
+// ║ 1. 新建子目录（如有新分类需求）                                   ║
+// ║ 2. 使用 git mv 移动文件到对应目录                                 ║
+// ║ 3. 更新文件的 package 声明                                        ║
+// ║ 4. 批量更新所有文件的 import 语句                                 ║
+// ║ 5. 修复 Access 接口等特殊引用                                     ║
+// ║ 6. 编译测试：gradlew buildPersonal                                ║
+// ║ 7. 提交到 source 分支                                             ║
+// ║                                                                    ║
+// ║ 反编译防护：                                                       ║
+// ║ • 清晰的目录结构不会增加反编译风险                                 ║
+// ║ • ProGuard 混淆会重命名所有类名和包名                              ║
+// ║ • 结构化组织提升开发效率，发布时仍然完全混淆                       ║
+// ║ • 映射文件妥善保存，可以将混淆类名还原                             ║
+// ╠════════════════════════════════════════════════════════════════════╣
 // ║ 【构建命令】                                                       ║
 // ║ gradlew runClient       - 开发客户端测试                           ║
 // ║ gradlew buildPersonal   - 个人测试版（未混淆）                     ║
