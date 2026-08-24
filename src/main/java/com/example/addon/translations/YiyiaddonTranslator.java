@@ -1,8 +1,5 @@
 package com.example.addon.translations;
 
-import com.example.addon.mixin.ModuleTranslationAccess;
-import com.example.addon.mixin.SettingGroupTranslationAccess;
-import com.example.addon.mixin.SettingTranslationAccess;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
@@ -778,11 +775,11 @@ public final class YiyiaddonTranslator {
         String modulePrefix = "module." + key(originalModuleName);
 
         if (!enabled()) {
-            ((ModuleTranslationAccess) module).yiyiaddon$setTitle(originalModuleName);
-            ((ModuleTranslationAccess) module).yiyiaddon$setDescription(originalModuleDescription);
+            ((com.example.addon.accessor.ModuleTranslationAccess) module).yiyiaddon$setTitle(originalModuleName);
+            ((com.example.addon.accessor.ModuleTranslationAccess) module).yiyiaddon$setDescription(originalModuleDescription);
             for (SettingGroup group : module.settings) {
                 String originalGroupName = GROUP_NAMES.computeIfAbsent(group, ignored -> group.name);
-                ((SettingGroupTranslationAccess) group).yiyiaddon$setName(originalGroupName);
+                ((com.example.addon.accessor.SettingGroupTranslationAccess) group).yiyiaddon$setName(originalGroupName);
                 for (Setting<?> setting : group) {
                     restoreSetting(setting);
                 }
@@ -790,16 +787,16 @@ public final class YiyiaddonTranslator {
             return;
         }
 
-        ((ModuleTranslationAccess) module).yiyiaddon$setTitle(
+        ((com.example.addon.accessor.ModuleTranslationAccess) module).yiyiaddon$setTitle(
             TRANSLATIONS.getOrDefault(modulePrefix, originalModuleName)
         );
-        ((ModuleTranslationAccess) module).yiyiaddon$setDescription(
+        ((com.example.addon.accessor.ModuleTranslationAccess) module).yiyiaddon$setDescription(
             TRANSLATIONS.getOrDefault(modulePrefix + ".description", originalModuleDescription)
         );
         for (SettingGroup group : module.settings) {
             String originalGroupName = GROUP_NAMES.computeIfAbsent(group, ignored -> group.name);
             String groupKey = key(originalGroupName);
-            ((SettingGroupTranslationAccess) group).yiyiaddon$setName(
+            ((com.example.addon.accessor.SettingGroupTranslationAccess) group).yiyiaddon$setName(
                 TRANSLATIONS.getOrDefault("setting.group." + groupKey, originalGroupName)
             );
             for (Setting<?> setting : group) {
@@ -809,15 +806,15 @@ public final class YiyiaddonTranslator {
                 if (originalModuleName.equalsIgnoreCase("Baritone") && !originalSettingName.isEmpty()) {
                     String baritoneKey = Character.toLowerCase(originalSettingName.charAt(0)) + originalSettingName.substring(1);
                     BaritoneSettingTranslations.Translation translation = BaritoneSettingTranslations.get(baritoneKey);
-                    ((SettingTranslationAccess) setting).yiyiaddon$setTitle(translation.name());
-                    ((SettingTranslationAccess) setting).yiyiaddon$setDescription(translation.description());
+                    ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setTitle(translation.name());
+                    ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setDescription(translation.description());
                     continue;
                 }
                 String prefix = modulePrefix + "." + groupKey + "." + key(originalSettingName);
-                ((SettingTranslationAccess) setting).yiyiaddon$setTitle(
+                ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setTitle(
                     TRANSLATIONS.getOrDefault(prefix, originalSettingTitle)
                 );
-                ((SettingTranslationAccess) setting).yiyiaddon$setDescription(
+                ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setDescription(
                     TRANSLATIONS.getOrDefault(prefix + ".description", originalSettingDescription)
                 );
             }
@@ -830,7 +827,7 @@ public final class YiyiaddonTranslator {
 
         for (SettingGroup group : settings) {
             String originalGroupName = GROUP_NAMES.computeIfAbsent(group, ignored -> group.name);
-            ((SettingGroupTranslationAccess) group).yiyiaddon$setName(
+            ((com.example.addon.accessor.SettingGroupTranslationAccess) group).yiyiaddon$setName(
                 enabled() ? TRANSLATIONS.getOrDefault("setting.group." + key(originalGroupName), originalGroupName) : originalGroupName
             );
 
@@ -839,14 +836,14 @@ public final class YiyiaddonTranslator {
                 String originalSettingTitle = SETTING_TITLES.computeIfAbsent(setting, ignored -> setting.title);
                 String originalSettingDescription = SETTING_DESCRIPTIONS.computeIfAbsent(setting, ignored -> setting.description);
                 if (!enabled()) {
-                    ((SettingTranslationAccess) setting).yiyiaddon$setTitle(originalSettingTitle);
-                    ((SettingTranslationAccess) setting).yiyiaddon$setDescription(originalSettingDescription);
+                    ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setTitle(originalSettingTitle);
+                    ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setDescription(originalSettingDescription);
                     continue;
                 }
 
                 BaritoneSettingTranslations.Translation translation = BaritoneSettingTranslations.get(originalSettingName);
-                ((SettingTranslationAccess) setting).yiyiaddon$setTitle(translation.name());
-                ((SettingTranslationAccess) setting).yiyiaddon$setDescription(translation.description());
+                ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setTitle(translation.name());
+                ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setDescription(translation.description());
             }
         }
     }
@@ -855,8 +852,8 @@ public final class YiyiaddonTranslator {
         String originalTitle = SETTING_TITLES.get(setting);
         String originalDescription = SETTING_DESCRIPTIONS.get(setting);
         if (originalTitle != null && originalDescription != null) {
-            ((SettingTranslationAccess) setting).yiyiaddon$setTitle(originalTitle);
-            ((SettingTranslationAccess) setting).yiyiaddon$setDescription(originalDescription);
+            ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setTitle(originalTitle);
+            ((com.example.addon.accessor.SettingTranslationAccess) setting).yiyiaddon$setDescription(originalDescription);
         }
     }
 

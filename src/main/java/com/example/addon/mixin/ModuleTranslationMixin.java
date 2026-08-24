@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Mixin;
 
 @Mixin(value = Module.class, remap = false)
-public abstract class ModuleTranslationMixin implements com.example.addon.mixin.ModuleTranslationAccess {
+public abstract class ModuleTranslationMixin implements com.example.addon.accessor.ModuleTranslationAccess {
     @Mutable @Shadow @Final public String title;
     @Mutable @Shadow @Final public String description;
 

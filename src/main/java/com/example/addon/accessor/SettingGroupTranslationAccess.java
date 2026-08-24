@@ -1,4 +1,4 @@
-package com.example.addon.mixin;
+package com.example.addon.accessor;
 
 public interface SettingGroupTranslationAccess {
     void yiyiaddon$setName(String value);
