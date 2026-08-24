@@ -1,7 +1,7 @@
 package com.example.addon.farm;
 
 /**
- * 自动物流农场的状态机状态。
+ * 自动农场的状态机状态。
  *
  * 流转主线：
  * STANDBY → NUKE_FARMING → COLLECTING → JUDGMENT → (UNLOADING | RESTOCKING) → NUKE_FARMING

@@ -2,6 +2,7 @@ package com.example.addon.mixin;
 
 import baritone.command.defaults.HelpCommand;
 import baritone.api.command.ICommand;
+import com.example.addon.translations.BaritoneCommandTranslations;
 import com.example.addon.translations.YiyiaddonTranslator;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
@@ -20,17 +21,17 @@ public abstract class BaritoneHelpCommandMixin {
 
     @ModifyConstant(method = "execute(Ljava/lang/String;Lbaritone/api/command/argument/IArgConsumer;)V", constant = @Constant(stringValue = "Click to return to the help menu"))
     private String yiyiaddon$translateReturnHint(String value) {
-        return "点击返回帮助菜单";
+        return YiyiaddonTranslator.enabled() ? "点击返回帮助菜单" : value;
     }
 
     @ModifyConstant(method = "lambda$execute$1()V", constant = @Constant(stringValue = "All Baritone commands (clickable):"))
     private String yiyiaddon$translateCommandListTitle(String value) {
-        return "所有 Baritone 命令（可点击）：";
+        return YiyiaddonTranslator.enabled() ? "所有 Baritone 命令（可点击）：" : value;
     }
 
     @ModifyConstant(method = "lambda$execute$2(Ljava/lang/String;Lbaritone/api/command/ICommand;)Lnet/minecraft/network/chat/Component;", constant = @Constant(stringValue = "\n\nClick to view full help"))
     private static String yiyiaddon$translateFullHelpHint(String value) {
-        return "\n\n点击查看完整帮助";
+        return YiyiaddonTranslator.enabled() ? "\n\n点击查看完整帮助" : value;
     }
 
     @Redirect(

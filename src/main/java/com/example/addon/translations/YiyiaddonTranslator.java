@@ -611,6 +611,7 @@ public final class YiyiaddonTranslator {
             case "Snapping Range" -> "吸附范围";
             case "Editor" -> "编辑器";
             case "Clear" -> "清除";
+            case "Clear All" -> "全部清除";
             case "Reset to default elements" -> "重置为默认元素";
             case "Custom Font" -> "自定义字体";
             case "Rainbow Speed" -> "彩虹速度";

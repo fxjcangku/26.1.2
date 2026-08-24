@@ -6,6 +6,72 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class BaritoneCommandTranslations {
+    private static final Map<String, String> COMMAND_NAMES = Map.ofEntries(
+        Map.entry("help", "帮助"),
+        Map.entry("?", "帮助"),
+        Map.entry("set", "设置"),
+        Map.entry("setting", "设置"),
+        Map.entry("settings", "设置"),
+        Map.entry("modified", "已修改"),
+        Map.entry("mod", "已修改"),
+        Map.entry("baritone", "已修改"),
+        Map.entry("modifiedsettings", "已修改"),
+        Map.entry("reset", "重置"),
+        Map.entry("goal", "目标"),
+        Map.entry("goto", "前往"),
+        Map.entry("path", "寻路"),
+        Map.entry("proc", "进程"),
+        Map.entry("eta", "预计时间"),
+        Map.entry("version", "版本"),
+        Map.entry("repack", "重新整理"),
+        Map.entry("rescan", "重新整理"),
+        Map.entry("build", "建造"),
+        Map.entry("litematica", "Litematica建造"),
+        Map.entry("come", "过来"),
+        Map.entry("axis", "坐标轴"),
+        Map.entry("highway", "坐标轴"),
+        Map.entry("forcecancel", "强制取消"),
+        Map.entry("gc", "垃圾回收"),
+        Map.entry("invert", "反向"),
+        Map.entry("tunnel", "隧道"),
+        Map.entry("render", "渲染修复"),
+        Map.entry("farm", "耕作"),
+        Map.entry("follow", "跟随"),
+        Map.entry("pickup", "拾取"),
+        Map.entry("explorefilter", "探索过滤"),
+        Map.entry("reloadall", "重载缓存"),
+        Map.entry("saveall", "保存缓存"),
+        Map.entry("explore", "探索"),
+        Map.entry("blacklist", "黑名单"),
+        Map.entry("find", "查找"),
+        Map.entry("mine", "挖掘"),
+        Map.entry("click", "点击"),
+        Map.entry("surface", "地表"),
+        Map.entry("top", "地表"),
+        Map.entry("thisway", "沿当前方向"),
+        Map.entry("forward", "沿当前方向"),
+        Map.entry("waypoints", "路径点"),
+        Map.entry("waypoint", "路径点"),
+        Map.entry("wp", "路径点"),
+        Map.entry("sethome", "设置家"),
+        Map.entry("home", "回家"),
+        Map.entry("sel", "选区"),
+        Map.entry("selection", "选区"),
+        Map.entry("s", "选区"),
+        Map.entry("elytra", "鞘翅"),
+        Map.entry("pause", "暂停"),
+        Map.entry("p", "暂停"),
+        Map.entry("paws", "暂停"),
+        Map.entry("resume", "恢复"),
+        Map.entry("r", "恢复"),
+        Map.entry("unpause", "恢复"),
+        Map.entry("unpaws", "恢复"),
+        Map.entry("paused", "暂停状态"),
+        Map.entry("cancel", "取消"),
+        Map.entry("c", "取消"),
+        Map.entry("stop", "取消")
+    );
+
     private static final Map<String, List<String>> LONG_DESCRIPTIONS = Map.ofEntries(
         entry("help", "使用此命令可查看 Baritone 命令的详细帮助。", "", "用法：", "> help - 列出所有命令及其简短说明。", "> help <command> - 显示指定命令的帮助信息。"),
         entry("set", "使用 set 命令管理 Baritone 的全部设置。Baritone 几乎所有行为均由这些设置控制。", "", "用法：", "> set - 等同于 `set list`", "> set list [page] - 查看全部设置", "> set modified [page] - 查看已修改的设置", "> set <setting> - 查看设置的当前值", "> set <setting> <value> - 修改设置值", "> set reset all - 将全部设置恢复默认值", "> set reset <setting> - 将指定设置恢复默认值", "> set toggle <setting> - 切换布尔设置", "> set save - 保存全部设置（通常会自动保存）", "> set load - 从 settings.txt 加载设置", "> set load [filename] - 从 minecraft/baritone 目录中的其他文件加载设置"),
@@ -52,6 +118,23 @@ public final class BaritoneCommandTranslations {
     );
 
     private BaritoneCommandTranslations() {}
+
+    public static String translateCommandName(String commandName) {
+        if (!YiyiaddonTranslator.enabled() || commandName == null) return commandName;
+        return COMMAND_NAMES.getOrDefault(commandName.toLowerCase(Locale.ROOT), commandName);
+    }
+
+    public static String reverseTranslate(String chineseName) {
+        if (!YiyiaddonTranslator.enabled() || chineseName == null) return chineseName;
+        String lower = chineseName.toLowerCase(Locale.ROOT);
+        // 反向查找：中文 → 英文
+        for (Map.Entry<String, String> entry : COMMAND_NAMES.entrySet()) {
+            if (entry.getValue().equals(lower)) {
+                return entry.getKey();
+            }
+        }
+        return chineseName;
+    }
 
     public static List<String> translateLongDescription(ICommand command, List<String> fallback) {
         if (!YiyiaddonTranslator.enabled() || command == null) return fallback;

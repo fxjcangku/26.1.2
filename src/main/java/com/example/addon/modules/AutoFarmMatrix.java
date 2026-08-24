@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 自动物流农场 - 商业级全自动农业系统
+ * 自动农场 - 商业级全自动农业系统
  * 
  * 核心能力：
  * · 爆破收割 - 无视角转动发包收割，支持 10 种作物
@@ -145,7 +145,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     // ═══════════════════════════════════════════════════════════════════
 
     public AutoFarmMatrix() {
-        super(AddonTemplate.CATEGORY, "自动物流农场",
+        super(AddonTemplate.CATEGORY_AUTOMATION, "自动农场",
             "爆破收割补种，Baritone 导航，箱子物流自动化，分帧扫描不掉帧。详细参考下面使用说明。");
 
         // ─── 作物分类选择器 ───
@@ -1108,7 +1108,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             new String[]{
-                "§l自动物流农场 · 使用说明"
+                "§l自动农场 · 使用说明"
             },
             new String[]{
                 "§e§l▌ 准备工作",

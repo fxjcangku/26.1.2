@@ -11,6 +11,14 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class MeteorCommandsTranslationMixin {
     @Redirect(
         method = "getCommandText(Lmeteordevelopment/meteorclient/commands/Command;)Lnet/minecraft/network/chat/MutableComponent;",
+        at = @At(value = "INVOKE", target = "Lmeteordevelopment/meteorclient/commands/Command;getName()Ljava/lang/String;")
+    )
+    private String yiyiaddon$translateCommandName(Command command) {
+        return MeteorCommandTranslations.translateCommandName(command.getName());
+    }
+
+    @Redirect(
+        method = "getCommandText(Lmeteordevelopment/meteorclient/commands/Command;)Lnet/minecraft/network/chat/MutableComponent;",
         at = @At(value = "INVOKE", target = "Lmeteordevelopment/meteorclient/commands/Command;getDescription()Ljava/lang/String;")
     )
     private String yiyiaddon$translateCommandDescription(Command command) {

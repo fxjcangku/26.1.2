@@ -22,14 +22,14 @@
     "BaritoneHelperTranslationMixin",
     "BaritoneHelpCommandMixin",
     "BaritoneCommandLongDescMixin",
+    "BaritoneCommandNamesMixin",
     "BaritoneSetCommandMixin",
-    "BaritonePaginatorMixin"
-    ,"MeteorCommandTranslationMixin"
-    ,"MeteorHelpCommandTranslationMixin"
-    ,"MeteorCommandsTranslationMixin"
-    ,"ToggleCommandTranslationMixin"
-    ,"ChatMessageTranslationMixin"
-    ,"ClientLevelPredictionAccessor"
+    "BaritonePaginatorMixin",
+    "MeteorCommandTranslationMixin",
+    "MeteorCommandsTranslationMixin",
+    "MeteorCommandNamesMixin",
+    "MeteorCommandRegistrationMixin",
+    "ClientLevelPredictionAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

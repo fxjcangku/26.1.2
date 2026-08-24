@@ -247,12 +247,12 @@ public abstract class YiyiaddonModule extends Module {
 
     /**
      * 格式化模块消息
-     * 格式：§c§l[yiyiaddon] §r§f§l[模块名] §r内容
+     * 格式：§c§l[yiyiaddon]§r§f§l[模块名]§r内容
      */
     public static String formatMessage(String moduleName, String message) {
         String cleanModuleName = stripColorCodes(stripPrefix(moduleName));
         String cleanMessage = stripPrefix(message);
-        return "§c§l[yiyiaddon] §r§f§l[" + cleanModuleName + "] §r" + cleanMessage;
+        return "§c§l[yiyiaddon]§r§f§l[" + cleanModuleName + "]§r" + cleanMessage;
     }
 
     /** 去除 [yiyiaddon] 前缀 */
