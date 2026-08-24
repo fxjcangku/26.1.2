@@ -1107,64 +1107,81 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "§l自动物流农场 · 使用说明" },
             new String[]{
-                "§e§l▌ 准备",
-                "§f  1. 用 " + highlightCommand(".nongchang set 起点") + " 与 " + highlightCommand("set 终点") + " 圈定农田对角",
-                "§f  2. 用 " + highlightCommand(".nongchang set 卸货箱") + " 绑定产物仓库（箱子/桶/潜影盒）",
-                "§f  3. 用 " + highlightCommand(".nongchang set 补货箱") + " 绑定种子补给箱",
-                "§f  4. 勾选要种植的作物（至少一种），副手准备对应种子",
-                "§f  5. 开启模块，四重自检通过后自动开始"
+                "§l自动物流农场 · 使用说明"
             },
             new String[]{
-                "§a§l▌ 状态机流程",
-                "§f  " + highlightText("待机") + " → " + highlightText("收割播种") + " → " + highlightText("拾取") + " → " + highlightText("决策") + " → 卸货 / 补货 → 回待机",
-                "§f  · " + highlightText("收割播种") + "：站着够得到的全收完，蛇形巡逻挪到下一站接着收",
-                "§f  · " + highlightText("拾取") + "：干等 12 tick，掉落物入包由服务端判定，发包催不动",
-                "§f  · " + highlightText("决策") + "：产物够 " + unloadThreshold.get() + " 组去卸货，种子不足去补货，都不满足回待机",
-                "§f  · " + highlightText("卸货") + "：走到箱子倒空白名单产物，种子按安全库存截留",
-                "§f  · " + highlightText("补货") + "：只取当前勾选作物需要的种子，补够就走"
+                "§e§l▌ 准备工作",
+                "§f  1. 建好农田（耕地或对应底盘），规划好起点和终点坐标",
+                "§f  2. 放置卸货箱（接漏斗走物流）和补货箱（装种子）",
+                "§f  3. 在配置页面勾选要种的作物（双作物/单作物/柱状物/蔓生物）",
+                "§f  4. 用指令绑定四个锚点（起点、终点、卸货箱、补货箱）",
+                "§f  5. 主手拿时运工具（可选），背包准备好种子"
+            },
+            new String[]{
+                "§6§l▌ 指令系统",
+                "§f  · " + highlightCommand(".nongchang set 起点") + " — 准星对准农田一角，绑定起点",
+                "§f  · " + highlightCommand(".nongchang set 终点") + " — 准星对准对角，绑定终点",
+                "§f  · " + highlightCommand(".nongchang set 卸货箱") + " — 准星对准箱子，绑定卸货箱",
+                "§f  · " + highlightCommand(".nongchang set 补货箱") + " — 准星对准箱子，绑定补货箱",
+                "§f  · " + highlightCommand(".nongchang status") + " — 查看四个锚点的坐标和维度",
+                "§f  · " + highlightCommand(".nongchang remove 起点") + " — 解绑单个锚点",
+                "§f  · " + highlightCommand(".nongchang clear") + " — 一键清空所有锚点",
+                "§f  · 支持中英文：" + highlightText("起点/start") + "、" + highlightText("终点/end") + "、" + highlightText("卸货箱/dump") + "、" + highlightText("补货箱/supply")
+            },
+            new String[]{
+                "§a§l▌ 状态机运作流程",
+                "§f  1. " + highlightText("待机") + " — 扫描农田（512格/tick），发现成熟作物或空地进入收割",
+                "§f  2. " + highlightText("收割播种") + " — 蛇形巡逻走位，每个航点收完种完才走下一站",
+                "§f     · 收割和补种各自独立BPT预算（默认10格/tick）",
+                "§f     · 够不着的跳过，走近了下一tick自然收到",
+                "§f     · 时运工具耐久不足自动切空手继续收",
+                "§f     · 种子不足降级只收不种，补货后自动恢复",
+                "§f  3. " + highlightText("拾取掉落") + " — 走到农田中心，等待40 tick让掉落物飞回来",
+                "§f  4. " + highlightText("状态决策") + " — 背包空格≤2强制卸货 → 产物≥阈值卸货 → 种子不足补货 → 回待机",
+                "§f  5. " + highlightText("卸货") + " — Baritone走到箱子边，倒白名单产物（按安全库存截留种子）",
+                "§f  6. " + highlightText("补货") + " — 从补货箱取当前启用作物的种子，取够了解除降级"
             },
             new String[]{
                 "§b§l▌ 参数建议",
-                "§f  卸货阈值 — 推荐 " + highlightText("20") + " 组，按背包内产物总组数算（不是槽位数）",
-                "§f  种子安全库存 — 推荐 " + highlightText("3") + " 组，双作物可降至 1",
-                "§f  发包速率 — 推荐 " + highlightText("10") + " BPT，破坏与播种各算一份预算",
-                "§f  收割距离 — 推荐 " + highlightText("4") + " 格（原版上限约 4.5）",
-                "§f    调到 5 以上属于超距，服务端可能拒绝交互或判违规",
-                "§f  时运防爆锁 — 耐久低于 " + fortuneLockThreshold.get() + " 时切空手继续收，不停机"
+                "§f  · " + highlightText("卸货阈值") + "：默认20组，产物达到这个数量就去卸货",
+                "§f  · " + highlightText("种子安全库存") + "：默认3组，单作物会截留这么多不倒进卸货箱",
+                "§f  · " + highlightText("BPT限速") + "：默认10，每tick收割/播种的格子数，太高可能被反作弊拦截",
+                "§f  · " + highlightText("收割距离") + "：默认4格，调到5以上属于超距，服务端可能拒绝",
+                "§f  · " + highlightText("时运防爆阈值") + "：默认5，耐久低于这个值自动切空手"
             },
             new String[]{
-                "§d§l▌ 作物说明",
+                "§d§l▌ 作物分类",
                 "§f  · " + highlightText("双作物") + "（小麦/甜菜）：种子与产物分离，种子自动留作补种",
                 "§f  · " + highlightText("单作物") + "（土豆/胡萝卜/地狱疣）：产物即种子，截留安全库存",
-                "§f  · " + highlightText("柱状物") + "（竹子/甘蔗/仙人掌）：Y+1 切割保留根部，无补种",
+                "§f  · " + highlightText("柱状物") + "（竹子/甘蔗/仙人掌）：Y+1切割保留根部，无补种",
                 "§f  · " + highlightText("蔓生物") + "（南瓜/西瓜）：只砍果实，茎自动再生，无补种",
                 "§f  · " + highlightText("毒马铃薯") + "：进卸货白名单，全部倒进卸货箱，不截留"
             },
             new String[]{
                 "§d§l▌ 蛇形巡逻",
-                "§f  · 沿 X 走一行，Z 跨一步，下一行反向折返，把整片田覆盖一遍",
-                "§f  · 航点间距 = 收割距离 × 2 - 1，相邻两站范围有重叠，不留漏收的缝",
-                "§f  · 依赖 Baritone。加载失败会提示并降级成只收站着够得到的",
-                "§f  · 关掉巡逻就变成原地模式，适合小片田或你想自己走位"
+                "§f  · 开关：" + highlightText("蛇形巡逻") + "（需要Baritone支持）",
+                "§f  · 效果：自动沿Z轴折返走位，覆盖整片农田，无需手动走位",
+                "§f  · 航点间距 = 收割距离×2-1，确保相邻两站覆盖范围重叠",
+                "§f  · Baritone不可用时提示降级，只收站着够得到的作物"
             },
             new String[]{
-                "§c§l▌ 注意",
-                "§f  · " + highlightText("单人世界可以正常开启") + "，走的是标准交互包，适合本地建小田试参数",
-                "§f  · 四个锚点必须在同一维度，跨维度自检不通过会自动关闭",
-                "§f  · 卸货箱是潜影盒被打包机推掉后，" + highlightText("原位放空盒即可，无需重设点位"),
-                "§f  · 种子库空了会降级成「只收不种」继续跑，补货箱补满后自动恢复",
-                "§f  · 防踩踏只拦截跳跃键，不保证 100% 有效，建议用路径砖铺田",
-                "§f  · 只有卸货与补货会发聊天提示，收割循环静默运行避免刷屏",
-                "§f  · 退出世界时模块自动关闭，防止下次进入时锚点维度错位"
+                "§c§l▌ 注意事项",
+                "§f  · 单人世界可以正常开启，走的是标准交互包，适合本地建小田试参数",
+                "§f  · " + highlightText("四个锚点必须在同一维度") + "，跨维度会导致发包发到空气上",
+                "§f  · 双作物（小麦/甜菜）需要分开的补货箱和卸货箱",
+                "§f  · 单作物（土豆/胡萝卜）可以补货箱和卸货箱绑同一个，自动循环",
+                "§f  · " + highlightText("同时勾选多种作物会补错种") + "（底盘相同的作物无法区分）",
+                "§f  · 建议单作物管理，或者手动分层（奇偶Y高度隔离，详见开发文档）",
+                "§f  · 潜影盒被打包机推掉后，" + highlightText("原位放个空盒即可，无需重设点位"),
+                "§f  · 看门狗：待机不计时，其他状态超时回待机，连续3次直接停机报警"
             },
             new String[]{
-                "§6§l▌ 指令",
-                "§f  " + highlightCommand(".nongchang") + " — 查看四锚点绑定情况",
-                "§f  " + highlightCommand(".nongchang set 起点/终点/卸货箱/补货箱") + " — 绑定准星指向方块",
-                "§f  " + highlightCommand(".nongchang remove 起点") + " — 解绑单个锚点",
-                "§f  " + highlightCommand(".nongchang clear") + " — 一键清除所有锚点"
+                "§5§l▌ 渲染辅助",
+                "§f  · " + highlightText("农田雷达") + "：成熟作物绿框，待补种空地黄框",
+                "§f  · " + highlightText("农场边界外框") + "：起点到终点的立方体边界，颜色可配",
+                "§f  · " + highlightText("水源辐射范围") + "：显示每桶水滋润多少格耕地（9×9×2理论上限162格）",
+                "§f  · " + highlightText("防呆字牌") + "：卸货箱金色 [卸货总仓]，补货箱蓝色 [种子库]"
             }
         );
     }

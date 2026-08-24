@@ -77,6 +77,39 @@ public class NongChangCommand extends Command {
         builder.then(literal("status").executes(_ -> showStatus()));
     }
 
+    private int showStatus() {
+        AutoFarmMatrix module = module();
+        if (module == null) return SINGLE_SUCCESS;
+
+        info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info("§b§l         农场锚点详细信息");
+        info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info("");
+        
+        for (SiteType type : SiteType.values()) {
+            FarmSite site = module.site(type);
+            String icon = switch(type) {
+                case START -> "▶";
+                case END -> "◀";
+                case DUMP -> "↓";
+                case SUPPLY -> "↑";
+            };
+            
+            if (site == null) {
+                info("  " + icon + " §f§l" + type.cn());
+                info("    §8└─ §c未绑定");
+            } else {
+                info("  " + icon + " §f§l" + type.cn());
+                info("    §8├─ §7坐标: §a" + site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ());
+                info("    §8└─ §7维度: §b" + site.describe().split("@ ")[1]);
+            }
+            if (type != SiteType.SUPPLY) info("");
+        }
+        
+        info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        return SINGLE_SUCCESS;
+    }
+
     private int clearAll() {
         AutoFarmMatrix module = module();
         if (module == null) return SINGLE_SUCCESS;
@@ -100,38 +133,47 @@ public class NongChangCommand extends Command {
         AutoFarmMatrix module = module();
         if (module == null) return SINGLE_SUCCESS;
 
-        if (mc.level == null || mc.player == null) {
-            error("尚未进入世界。");
+        if (mc.level == null) {
+            error("当前不在游戏世界中，无法绑定锚点");
             return SINGLE_SUCCESS;
         }
 
-        // 唯一锁：占用中的锚点必须显式 remove 才能重设
-        FarmSite existing = module.site(type);
-        if (existing != null) {
-            error(type.cn() + "已绑定在 " + existing.describe() + "，请先执行 .nongchang remove " + type.cn());
+        if (module.isActive()) {
+            error("模块运行中无法修改锚点，请先关闭模块");
             return SINGLE_SUCCESS;
         }
 
-        BlockPos pos = targetBlock();
-        if (pos == null) {
-            error("准星没有指向方块，请对准目标后再执行。");
+        BlockPos target = targetBlock();
+        if (target == null) {
+            error("准星未对准任何方块，请将准星对准要绑定的方块");
             return SINGLE_SUCCESS;
         }
 
-        // 物流箱子必须真的是容器，否则状态机会卡在等待容器打开
-        if (type.requiresContainer() && !isContainer(pos)) {
-            error("目标方块不是容器，" + type.cn() + "必须绑定箱子、桶或潜影盒。");
+        if (type.requiresContainer() && !isContainer(target)) {
+            error("该锚点需要指向容器方块（箱子/桶/潜影盒等），但准星对准的不是容器");
             return SINGLE_SUCCESS;
         }
 
-        FarmSite site = FarmSite.here(pos);
+        FarmSite site = FarmSite.here(target);
         if (site == null) {
-            error("绑定失败，无法读取当前维度。");
+            error("无法获取当前维度信息");
             return SINGLE_SUCCESS;
         }
 
         module.bindSite(type, site);
-        info("§a已绑定 " + type.cn() + " → " + site.describe());
+        
+        String icon = switch(type) {
+            case START -> "▶";
+            case END -> "◀";
+            case DUMP -> "↓";
+            case SUPPLY -> "↑";
+        };
+        
+        info("");
+        info("§a§l✓ 绑定成功");
+        info("  " + icon + " §f" + type.cn() + " §8→ §a" + site.describe());
+        info("");
+        
         return SINGLE_SUCCESS;
     }
 
@@ -163,19 +205,34 @@ public class NongChangCommand extends Command {
         return blockEntity instanceof Container;
     }
 
-    private int showStatus() {
+    private int handleDefault() {
         AutoFarmMatrix module = module();
         if (module == null) return SINGLE_SUCCESS;
 
-        info("§b§l——— 农场锚点绑定情况 ———");
+        info("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info("§6§l           自动物流农场");
+        info("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info("");
+        
         for (SiteType type : SiteType.values()) {
             FarmSite site = module.site(type);
+            String icon = switch(type) {
+                case START -> "▶";
+                case END -> "◀";
+                case DUMP -> "↓";
+                case SUPPLY -> "↑";
+            };
+            
             if (site == null) {
-                info("§7" + type.cn() + "：§c未绑定");
+                info("  " + icon + " §7" + type.cn() + " §8→ §c未绑定");
             } else {
-                info("§7" + type.cn() + "：§a" + site.describe());
+                info("  " + icon + " §7" + type.cn() + " §8→ §a" + site.describe());
             }
         }
+        
+        info("");
+        info("§e提示: 使用 §e§l.nongchang status §r§e查看详细信息");
+        info("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         return SINGLE_SUCCESS;
     }
 
