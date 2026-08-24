@@ -27,6 +27,8 @@
     ,"MeteorCommandTranslationMixin"
     ,"MeteorHelpCommandTranslationMixin"
     ,"MeteorCommandsTranslationMixin"
+    ,"ToggleCommandTranslationMixin"
+    ,"ChatMessageTranslationMixin"
     ,"ClientLevelPredictionAccessor"
   ],
   "injectors": {
