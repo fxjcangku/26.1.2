@@ -1,18 +1,23 @@
 package com.example.addon.tactical;
 
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.mixin.ClientLevelPredictionAccessor;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -88,14 +93,28 @@ public class FlightBypass extends YiyiaddonModule {
     private int scaffoldCounter = 0;
     private final Random random = new Random();
 
+    // 垫脚延迟拆除登记（主线程 tick 驱动，避免子线程碰预测处理器）
+    private BlockPos pendingDestroyPos = null;
+    private long pendingDestroyAt = 0L;
+
     public FlightBypass() {
         super(CATEGORY_TACTICAL, "飞行绕过", "四种模式绕过 GrimAC/Matrix 顶级反作弊。");
+    }
+
+    @Override
+    public void onDeactivate() {
+        // 关闭时先把欠的方块拆掉，否则脚下会留下痕迹
+        if (pendingDestroyPos != null) {
+            destroyScaffoldBlock(pendingDestroyPos);
+            pendingDestroyPos = null;
+        }
     }
 
     @Override
     public void onActivate() {
         tickCounter = 0;
         scaffoldCounter = 0;
+        pendingDestroyPos = null;
 
         // 检测到高级反作弊时自动切换安全模式
         if (TacticalFSM.hasAdvancedAntiCheat()) {
@@ -145,6 +164,12 @@ public class FlightBypass extends YiyiaddonModule {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (!isActive() || mc.player == null) return;
+
+        // 垫脚拆除到点就执行，冷却检查之前处理，避免方块残留
+        if (pendingDestroyPos != null && System.currentTimeMillis() >= pendingDestroyAt) {
+            destroyScaffoldBlock(pendingDestroyPos);
+            pendingDestroyPos = null;
+        }
 
         // 拉回包冷却期间暂停飞行
         if (TacticalFSM.isRubberBandCooldown()) {
@@ -202,79 +227,130 @@ public class FlightBypass extends YiyiaddonModule {
      * 每10个tick发送一次"使用烟花"包，服务器会认为是合法的鞘翅推进
      */
     private void handleFireworkBoost() {
-        if (tickCounter % 10 == 0) {
-            // 检查副手是否有烟花（仅模拟，不需要真有）
-            if (mc.player.getOffhandItem().getItem() == Items.FIREWORK_ROCKET || 
-                mc.player.getMainHandItem().getItem() == Items.FIREWORK_ROCKET) {
-                
-                // 发送使用物品包（模拟发射烟花）
-                mc.player.connection.send(new ServerboundUseItemPacket(
-                    InteractionHand.OFF_HAND,
-                    0,  // sequence (不需要预测)
-                    mc.player.getYRot(),
-                    mc.player.getXRot()
-                ));
-            }
+        if (tickCounter % 10 != 0) return;
+
+        // 判定哪只手真的握着烟花，服务端会校验手上物品，伪造无效
+        InteractionHand hand;
+        if (mc.player.getOffhandItem().getItem() == Items.FIREWORK_ROCKET) {
+            hand = InteractionHand.OFF_HAND;
+        } else if (mc.player.getMainHandItem().getItem() == Items.FIREWORK_ROCKET) {
+            hand = InteractionHand.MAIN_HAND;
+        } else {
+            return;
+        }
+
+        // 必须处于滑翔状态，否则烟花不会产生推进，只是白白消耗
+        if (!mc.player.isFallFlying()) return;
+
+        ClientLevel level = mc.level;
+        if (level == null) return;
+
+        // 物品使用包同样携带预测序号，需经预测处理器取号
+        BlockStatePredictionHandler handler =
+            ((ClientLevelPredictionAccessor) (Object) level).yiyiaddon$getPredictionHandler();
+
+        try (BlockStatePredictionHandler predicting = handler.startPredicting()) {
+            mc.player.connection.send(new ServerboundUseItemPacket(
+                hand,
+                predicting.currentSequence(),
+                mc.player.getYRot(),
+                mc.player.getXRot()
+            ));
         }
     }
 
     /**
      * 模式 4: 序列垫脚 - 预测方块放置
-     * 在玩家脚下放置方块 → 延迟80-120ms → 破坏方块
-     * 每5次操作有1次不破坏，模拟手动失误
+     *
+     * 在玩家脚下放置方块创造"合法实地"刷新掉落判定，随后拆除。
+     * 拆除延迟 80-120ms 并周期性保留方块，避免"放置后瞬间破坏"的行为特征。
      */
     private void handleSequenceScaffold() {
-        if (tickCounter % 5 != 0) return; // 每5个tick执行一次
+        if (tickCounter % 5 != 0) return;
 
-        scaffoldCounter++;
+        // 主手必须是方块物品，否则放置包会被服务端直接丢弃
+        ItemStack held = mc.player.getMainHandItem();
+        if (!(held.getItem() instanceof BlockItem)) return;
 
-        // 脚下坐标
-        BlockPos feetPos = mc.player.blockPosition();
-        BlockPos belowPos = feetPos.below();
+        BlockPos belowPos = mc.player.blockPosition().below();
+        if (!mc.level.getBlockState(belowPos).isAir()) return;
 
-        // 检查是否需要垫脚
-        if (mc.level.getBlockState(belowPos).getBlock() != Blocks.AIR) {
-            return; // 已经有方块了
-        }
+        // 放置目标格的下方那一格作为命中面，向上放置
+        BlockPos supportPos = belowPos.below();
+        if (mc.level.getBlockState(supportPos).isAir()) return;
 
-        // 发送预测放置包（需要 sequence ID，这里简化为0）
         BlockHitResult hitResult = new BlockHitResult(
-            new Vec3(belowPos.getX() + 0.5, belowPos.getY() + 1.0, belowPos.getZ() + 0.5),
+            new Vec3(supportPos.getX() + 0.5, supportPos.getY() + 1.0, supportPos.getZ() + 0.5),
             Direction.UP,
-            belowPos,
+            supportPos,
             false
         );
 
-        mc.player.connection.send(new ServerboundUseItemOnPacket(
-            InteractionHand.MAIN_HAND,
-            hitResult,
-            0  // sequence (简化实现)
-        ));
+        if (!sendPredictedPlace(belowPos, hitResult)) return;
 
-        // 每5次操作有1次不破坏（模拟手动失误）
-        if (scaffoldCounter % 5 == 0) {
-            return;
+        scaffoldCounter++;
+
+        // 每 5 次保留一次方块不拆，模拟手动操作的失误
+        if (scaffoldCounter % 5 == 0) return;
+
+        // 登记延迟拆除，由主线程 tick 驱动（预测处理器不是线程安全的，不能丢子线程）
+        pendingDestroyPos = belowPos;
+        pendingDestroyAt = System.currentTimeMillis() + scaffoldDelay.get() + random.nextInt(40);
+    }
+
+    /**
+     * 发送带合法 sequence 的方块放置包。
+     *
+     * 26.1.2 服务端会校验每个方块交互包的预测序号，必须经
+     * BlockStatePredictionHandler 取号并登记原状态，序号错乱会被回滚。
+     */
+    private boolean sendPredictedPlace(BlockPos target, BlockHitResult hitResult) {
+        ClientLevel level = mc.level;
+        if (level == null) return false;
+
+        BlockState original = level.getBlockState(target);
+        BlockStatePredictionHandler handler =
+            ((ClientLevelPredictionAccessor) (Object) level).yiyiaddon$getPredictionHandler();
+
+        try (BlockStatePredictionHandler predicting = handler.startPredicting()) {
+            predicting.retainKnownServerState(target, original, mc.player);
+            int sequence = predicting.currentSequence();
+            mc.player.connection.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND, hitResult, sequence));
         }
 
-        // 延迟后破坏方块
-        int delay = scaffoldDelay.get() + random.nextInt(40); // 80-120ms + 随机0-40ms
-        new Thread(() -> {
-            try {
-                Thread.sleep(delay);
-                // 发送破坏包
-                mc.player.connection.send(new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
-                    belowPos,
-                    Direction.UP,
-                    0  // sequence
-                ));
-                mc.player.connection.send(new ServerboundPlayerActionPacket(
-                    ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK,
-                    belowPos,
-                    Direction.UP
-                ));
-            } catch (InterruptedException ignored) {}
-        }, "yiyiaddon-ScaffoldDestroy").start();
+        mc.player.swing(InteractionHand.MAIN_HAND);
+        return true;
+    }
+
+    /**
+     * 拆除垫脚方块，同样需要独立取号。
+     * START 与 STOP 各取一次号，不能复用同一个 sequence。
+     */
+    private void destroyScaffoldBlock(BlockPos pos) {
+        ClientLevel level = mc.level;
+        if (level == null || mc.player == null) return;
+
+        BlockState original = level.getBlockState(pos);
+        if (original.isAir()) return;
+
+        BlockStatePredictionHandler handler =
+            ((ClientLevelPredictionAccessor) (Object) level).yiyiaddon$getPredictionHandler();
+
+        try (BlockStatePredictionHandler predicting = handler.startPredicting()) {
+            predicting.retainKnownServerState(pos, original, mc.player);
+            int sequence = predicting.currentSequence();
+            mc.player.connection.send(new ServerboundPlayerActionPacket(
+                ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, pos, Direction.UP, sequence));
+        }
+
+        try (BlockStatePredictionHandler predicting = handler.startPredicting()) {
+            predicting.retainKnownServerState(pos, level.getBlockState(pos), mc.player);
+            int sequence = predicting.currentSequence();
+            mc.player.connection.send(new ServerboundPlayerActionPacket(
+                ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos, Direction.UP, sequence));
+        }
+
+        mc.player.swing(InteractionHand.MAIN_HAND);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
