@@ -1,141 +1,146 @@
-# Meteor Addon Template
+# yiyiaddon v1.0
 
-A template to allow easy usage of the Meteor Addon API.
+> **Minecraft 26.1.2 | Fabric 0.19.3 | Meteor Client 26.1.2-SNAPSHOT | Java 25**
 
-### How to use
+为 Meteor Client 量身打造的增强插件，专注于**全中文界面**和**自动化工具**，让游戏体验更流畅。
 
-#### Use GitHub Template (Recommended)
+---
 
-- Click the green `Use this template` button in the top right corner of this page.  
-  This will create a new repository with this template and a clean history.
+## ✨ 核心特性
 
-#### Clone Manually
+### 🌐 完整中文化
 
-- Alternatively, clone this repository using these commands for a clean history:
-  ```bash
-  git clone --depth 1 https://github.com/MeteorDevelopment/meteor-addon-template your-addon-name
-  cd your-addon-name
-  rm -rf .git
-  git init
-  git add .
-  git commit -m "Initial commit from template"
-  ```
+- **Meteor Client 界面全中文** — 模块、设置、帮助信息、按钮、提示全部汉化
+- **Baritone 导航系统全中文** — 指令、帮助文档、设置项、聊天反馈全面本地化
+- **统一消息格式** — 所有插件消息使用 `[yiyiaddon]` 前缀，清晰识别
 
-#### Development
+### 🚜 自动物流农场
 
-- Use this template to add custom modules, commands, HUDs, and other features to Meteor Client.
-- To test, run the `Minecraft Client` configuration in your IDE.
-  This will start a Minecraft client with the Meteor Client mod and your addon loaded.
-- To build personal jar, run `gradlew buildPersonal`.
-- To build official obfuscated jar, run `gradlew buildOfficial`.
-- Personal jar: `build/libs/yiyiaddon1.0-personal.jar`
-- Official jar: `build/libs/yiyiaddon1.0.jar`
+全自动收割、补种、卸货、补货循环系统，解放双手：
 
-### Updating to newer Minecraft versions
+- **10 种作物支持**：小麦、甜菜、土豆、胡萝卜、地狱疣、竹子、甘蔗、仙人掌、南瓜、西瓜
+- **蛇形巡逻** — Baritone 自动走位，覆盖整片农田
+- **智能物流** — 自动卸货到指定箱子，自动从补货箱取种子
+- **异常自愈** — 种子不足降级"只收不种"，补货后自动恢复
+- **时运防爆锁** — 工具耐久不足自动切空手，保护贵重工具
+- **可视化辅助** — 农田雷达、边界外框、水源辐射范围渲染
 
-To update this template to a newer Minecraft version, follow these steps:
-
-1. Ensure a Meteor Client snapshot is available for the new Minecraft version.
-2. Update `gradle/libs.versions.toml` (the versions catalog):
-    - Set the version entries to the new versions. Common keys to update are:
-        - `versions.minecraft` - Minecraft version
-        - `versions.yarn-mappings` - Yarn mappings
-        - `versions.fabric-loader` - Fabric loader version
-        - `versions.meteor` - Meteor Client snapshot version
-    - If your addon depends on other libraries listed under the `[libraries]` section, update their versions there as
-      needed.
-    - After editing, refresh Gradle dependencies and rebuild your project in the IDE.
-3. Update Loom:
-    - Change the `loom` version in `gradle/libs.versions.toml` (the `versions.loom` entry) to the latest version
-      compatible with the new Minecraft version.
-4. Update the Gradle wrapper:
-    - Run the wrapper update command for your platform. Examples:
-      - Unix / macOS / Windows (Powershell): `./gradlew wrapper --gradle-version <version> && ./gradlew wrapper`
-      - Windows (cmd.exe): `gradlew.bat wrapper --gradle-version <version> && gradlew.bat wrapper`
-    - This updates and regenerates the Gradle Wrapper scripts (`gradlew`, `gradlew.bat`, etc.) for the specified version.
-5. Update your source code:
-    - Adjust for Minecraft or Yarn mapping changes: method names, imports, mixins, etc.
-    - Check for Meteor Client API changes that may affect your addon by comparing against the
-      [master branch](https://github.com/MeteorDevelopment/meteor-client/tree/master).
-6. Build and test:
-    - Run the gradle `build` task.
-    - Confirm the build succeeds and your addon works with the new Minecraft version.
-
-### Project structure
-
-```text
-.
-│── .github
-│   ╰── workflows
-│       │── dev_build.yml
-│       ╰── pull_request.yml
-│── gradle
-│   │── libs.versions.toml
-│   ╰── wrapper
-│       │── gradle-wrapper.jar
-│       ╰── gradle-wrapper.properties
-│── src
-│   ╰── main
-│       │── java
-│       │   ╰── com
-│       │       ╰── example
-│       │           ╰── addon
-│       │               │── commands
-│       │               │   ╰── CommandExample
-│       │               │── hud
-│       │               │   ╰── HudExample
-│       │               │── modules
-│       │               │   ╰── ModuleExample
-│       │               ╰── AddonTemplate
-│       ╰── resources
-│           │── assets
-│           │   ╰── template
-│           │       ╰── icon.png
-│           │── addon-template.mixins.json
-│           ╰── fabric.mod.json
-│── .editorconfig
-│── .gitignore
-│── build.gradle.kts
-│── gradle.properties
-│── gradlew
-│── gradlew.bat
-│── LICENSE
-│── README.md
-╰── settings.gradle.kts
+**指令**：
+```
+.nongchang set 起点/终点/卸货箱/补货箱   绑定农场锚点
+.nongchang status                      查看配置详情
+.nongchang clear                       一键清空所有锚点
 ```
 
-This is the default project structure. Each folder/file has a specific purpose.  
-Here is a brief explanation of the ones you might need to modify:
+### 📚 Baritone 中文指令手册
 
-- `.github/workflows`: Contains the GitHub Actions configuration files.
-- `gradle`: Contains the Gradle wrapper files and the versions catalog.  
-  - `libs.versions.toml`: Defines version numbers for Minecraft, Loom, Meteor, and other dependencies.
-  - `wrapper`: Contains the Gradle wrapper executable files.  
-    To update the Gradle wrapper executable itself, run the wrapper update command (examples are shown above).
-- `src/main/java/com/example/addon`: Contains the main class of the addon.  
-  Here you can register your custom commands, modules, and HUDs.  
-  Edit the `getPackage` method to reflect the package of your addon.
-- `src/main/resources`: Contains the resources of the addon.
-    - `assets`: Contains the assets of the addon.  
-      You can add your own assets here, separated in subfolders.
-        - `template`: Contains the assets of the template.  
-          You can replace the `icon.png` file with your own addon icon.  
-          Also, rename this folder to reflect the name of your addon.
-    - `addon-template.mixins.json`: Contains the Mixin configuration for the addon.  
-      You can add your own mixins in the `client` array.
-    - `fabric.mod.json`: Contains the metadata of the addon.  
-      Edit the various fields to reflect the metadata of your addon.
-- `build.gradle.kts`: Contains the Gradle build script.  
-  You can manage the dependencies of the addon here.  
-  Remember to keep the `fabric-loom` version up-to-date.
-- `gradle.properties`: Contains additional build properties used by the build script
-  (for example `maven_group` and `archives_base_name`).  
-  Dependency and platform version numbers are stored in `gradle/libs.versions.toml`.
-- `LICENSE`: Contains the license of the addon.  
-  You can edit this file to change the license of your addon.
-- `README.md`: Contains the documentation of the addon.  
-  You can edit this file to reflect the documentation of your addon, and showcase its features.
+内置交互式指令说明面板，打开模块即可查看：
+- 常用指令速查（goto、mine、farm、follow 等）
+- 参数格式详解
+- 实用示例
+- 配置建议
 
-## License
+---
 
-This template is available under the CC0 license. Feel free to use it for your own projects.
+## 📦 安装
+
+1. 下载 `yiyiaddon1.0.jar`
+2. 放入 `.minecraft/mods/` 文件夹
+3. 启动游戏，按 `Right Shift` 打开 Meteor 菜单
+4. 在 `yiyiaddon 工具` 分类中找到所有模块
+
+**注意**：
+- Baritone 已内置在插件中，**无需额外安装** Baritone jar
+- 需要 Fabric Loader 0.19.3 和 Meteor Client 26.1.2-SNAPSHOT
+
+---
+
+## 🎮 使用说明
+
+### 中文化模块
+
+打开 Meteor 菜单后：
+1. 找到 `yiyiaddon 工具` 分类
+2. 启用 `Meteor 与 Baritone 中文翻译`
+3. 所有界面立即切换为中文
+
+### 自动物流农场
+
+**准备**：
+1. 建好农田（耕地）
+2. 放置卸货箱（接漏斗）和补货箱（装种子）
+3. 在配置页面勾选要种的作物
+4. 用指令绑定四个锚点
+
+**运行**：
+- 主手拿时运工具（可选）
+- 背包准备好种子
+- 开启模块，站在农田附近
+- 脚本会自动收割、播种、卸货、补货循环
+
+**推荐配置**：
+- 卸货阈值：20 组
+- 种子安全库存：3 组
+- BPT 限速：10（每 tick 操作格子数）
+- 收割距离：4 格（原版上限约 4.5 格）
+
+---
+
+## ⚙️ 技术特性
+
+- **纯客户端模组** — 无需服务端支持，单人/多人均可使用
+- **标准交互包** — 使用 Minecraft 原生交互协议，兼容性强
+- **分帧扫描** — 512 格/tick，大农场不卡顿
+- **状态机设计** — 六状态循环，看门狗防卡死
+- **容器同步机制** — 正确处理 26.1.2 的容器交互，杜绝幽灵物品
+
+---
+
+## 🔗 链接
+
+- **GitHub**：[https://github.com/fxjcangku/26.1.2](https://github.com/fxjcangku/26.1.2)
+- **Discord**：[https://discord.gg/vwrRCtET](https://discord.gg/vwrRCtET)
+- **问题反馈**：[GitHub Issues](https://github.com/fxjcangku/26.1.2/issues)
+
+---
+
+## 📝 更新日志
+
+### v1.0（2026-08-24）
+
+🎉 **首个公开版本**
+
+**新增**：
+- Meteor Client 完整中文化
+- Baritone 导航系统完整中文化
+- 自动物流农场模块（10 种作物）
+- Baritone 中文指令手册
+
+**优化**：
+- 统一消息格式和配色
+- 模块说明面板重构
+- 指令输出美化
+
+---
+
+## 📄 许可
+
+本项目仅供学习交流使用。
+
+**环境要求**：
+| 依赖 | 版本 |
+|------|------|
+| Minecraft | 26.1.2 |
+| Fabric Loader | 0.19.3 |
+| Meteor Client | 26.1.2-SNAPSHOT |
+| Java | 25 |
+
+---
+
+<div align="center">
+
+**让 Minecraft 更智能，让游戏更轻松**
+
+Made with ❤️ by yiyiaddon team
+
+</div>
