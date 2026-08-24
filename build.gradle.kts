@@ -107,10 +107,36 @@ tasks {
         )
         adaptresourcefilecontents("fabric.mod.json")
         adaptresourcefilecontents("**.mixins.json")
-        keep("public class com.example.addon.AddonTemplate { *; }")
-        keep("public class com.example.addon.mixin.** { *; }")
+        
+        // 只保留绝对必要的入口，翻译类全混淆
+        keep("public class com.example.addon.AddonTemplate { public void onInitialize(); public void onRegisterCategories(); public String getPackage(); }")
+        
+        // Mixin 必须保留类名和方法名（Fabric 需要），但字段和局部变量会混淆
+        keep("@org.spongepowered.asm.mixin.Mixin class * { *; }")
+        keep("@org.spongepowered.asm.mixin.Accessor class * { *; }")
+        
+        // 保留基类的公共 API，但实现细节会混淆
+        keep("public class com.example.addon.YiyiaddonModule { public <methods>; }")
+        keep("public interface com.example.addon.YiyiaddonRefreshable { *; }")
+        
+        // 关闭优化和缩减（保持兼容性），但开启强混淆
         dontoptimize()
         dontshrink()
+        
+        // 混淆配置：使用短名字，重载混淆
+        repackageclasses("")
+        allowaccessmodification()
+        overloadaggressively()
+        
+        // 输出混淆映射文件，用于复原
+        printmapping(layout.buildDirectory.file("obfuscation-mapping.txt").get().asFile)
+        
+        // 字符串加密（ProGuard 不直接支持，但可以让反编译更难读）
+        // 使用自定义字典让混淆名更难识别
+        obfuscationdictionary("proguard-dictionary.txt")
+        classobfuscationdictionary("proguard-dictionary.txt")
+        packageobfuscationdictionary("proguard-dictionary.txt")
+        
         dontwarn("**")
         dontnote("**")
     }

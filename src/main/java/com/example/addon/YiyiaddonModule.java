@@ -26,6 +26,25 @@ import java.util.function.Consumer;
 // ║ 发布顺序：私人仓库同步源码和 Personal，再由同一源码构建 Official   ║
 // ║ 环境：MC 26.1.2 / Fabric 0.19.3 / Meteor 26.1.2-42 / Java 25       ║
 // ║ Baritone 已内嵌，不得额外安装 Baritone JAR                         ║
+// ╠════════════════════════════════════════════════════════════════════╣
+// ║                    混淆与复原规则（重要）                          ║
+// ╠════════════════════════════════════════════════════════════════════╣
+// ║ Official 混淆版保护翻译成果，反编译后类名/方法名/字段名不可读      ║
+// ║ 混淆映射文件：build/obfuscation-mapping.txt                        ║
+// ║ 用途：通过映射文件可以将混淆后的堆栈追踪还原成原始类名/方法名      ║
+// ║                                                                    ║
+// ║ 复原方法（出现崩溃时）：                                           ║
+// ║ 1. 获取崩溃日志中的混淆类名/方法名（如 a.b.c()）                   ║
+// ║ 2. 在 build/obfuscation-mapping.txt 中搜索混淆名                   ║
+// ║ 3. 映射文件格式：原始类名 -> 混淆类名                              ║
+// ║    com.example.addon.translations.BaritoneChatTranslations -> a   ║
+// ║        java.lang.String translate(java.lang.String) -> b          ║
+// ║ 4. 从备份文件夹或 core-source 分支恢复源码调试                     ║
+// ║                                                                    ║
+// ║ 备份位置：                                                         ║
+// ║ - 本地备份：Documents/trae_projects/参考代码/26.1.2-backup-*       ║
+// ║ - Git 分支：core-source（完整源码，不公开）                        ║
+// ║ - 映射文件：每次 buildOfficial 自动生成，妥善保存                  ║
 // ╚════════════════════════════════════════════════════════════════════╝
 
 /**
