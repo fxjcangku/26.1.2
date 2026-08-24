@@ -680,11 +680,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             }
         }
 
-        // 蛇形巡逻：让 Baritone 一直保持移动状态，边走边收
-        if (serpentinePatrol.get() && FarmNav.available()) {
-            advancePatrol();  // 推进航线，Baritone 会自动走向目标
-        }
-
         // 破坏与播种分开计数：两者共用一个 BPT 会互相饿死，
         // 收割快的时候播种永远排不上号
         int breakBudget = bpt.get();
@@ -735,6 +730,19 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                     processedPlant.add(soil);
                     plantBudget--;
                 }
+            }
+        }
+
+        // 当前位置够得到的全处理完了，才走下一个航点
+        int reachableHarvest = reachableCount(workHarvest);
+        int reachablePlant = reachableCount(workPlant);
+        boolean currentDone = reachableHarvest == 0 
+            && (harvestOnly || reachablePlant == 0);
+        
+        if (currentDone) {
+            // 蛇形巡逻：推进到下一个航点
+            if (serpentinePatrol.get() && FarmNav.available()) {
+                advancePatrol();
             }
         }
 
