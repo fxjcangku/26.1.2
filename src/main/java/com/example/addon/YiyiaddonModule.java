@@ -282,21 +282,25 @@ public abstract class YiyiaddonModule extends Module {
 // ║ 仓库地址：https://github.com/fxjcangku/26.1.2                      ║
 // ║                                                                    ║
 // ║ 分支结构：                                                         ║
-// ║ ├─ main (公开)         - README + Release 页面                    ║
-// ║ ├─ 26.1.2 (私密)       - 完整源码（主开发分支，不公开）            ║
-// ║ └─ core-source (私密)  - 备用源码分支                              ║
+// ║ ├─ main (公开)    - 只有 README.md + Release 页面，外界可见       ║
+// ║ └─ source (私密)  - 完整源码，不公开                               ║
 // ║                                                                    ║
 // ║ 重要页面：                                                         ║
-// ║ • 发布页面：https://github.com/fxjcangku/26.1.2/releases           ║
-// ║ • 源码分支（私密）：https://github.com/fxjcangku/26.1.2/tree/26.1.2 ║
-// ║ • 备用分支（私密）：https://github.com/fxjcangku/26.1.2/tree/core-source ║
+// ║ • 发布页面（公开）：https://github.com/fxjcangku/26.1.2/releases   ║
+// ║ • 源码分支（私密）：https://github.com/fxjcangku/26.1.2/tree/source ║
 // ║                                                                    ║
 // ║ 工作流程：                                                         ║
-// ║ 1. 在 26.1.2 分支开发（完整源码）                                  ║
-// ║ 2. gradlew buildOfficial 构建混淆版                                ║
+// ║ 1. 本地切换到 source 分支：git checkout source                     ║
+// ║ 2. 开发完成后构建混淆版：gradlew buildOfficial                     ║
 // ║ 3. 保存映射文件：build/obfuscation-mapping-v{版本}.txt             ║
 // ║ 4. 发布到 Release 页面（只上传 jar，不上传源码）                   ║
-// ║ 5. 用户自动收到更新提示（YiyiaddonWelcomeService）                  ║
+// ║ 5. 如需更新 README：切换到 main 分支编辑并推送                     ║
+// ║ 6. 用户自动收到更新提示（YiyiaddonWelcomeService）                  ║
+// ║                                                                    ║
+// ║ 分支保护：                                                         ║
+// ║ • main 分支：删除了所有源码文件，只保留 README.md + LICENSE        ║
+// ║ • source 分支：完整源码 + Personal jar，永远不公开                 ║
+// ║ • 本地开发：始终在 source 分支工作                                 ║
 // ╠════════════════════════════════════════════════════════════════════╣
 // ║                       开发规范快速参考                             ║
 // ╠════════════════════════════════════════════════════════════════════╣
