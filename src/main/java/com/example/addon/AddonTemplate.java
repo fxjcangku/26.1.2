@@ -1,7 +1,9 @@
 package com.example.addon;
 
 import com.example.addon.commands.CommandExample;
+import com.example.addon.commands.NongChangCommand;
 import com.example.addon.hud.HudExample;
+import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.mojang.logging.LogUtils;
@@ -17,7 +19,7 @@ import org.slf4j.Logger;
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
     public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具");
-    public static final HudGroup HUD_GROUP = new HudGroup("Example");
+    public static final HudGroup HUD_GROUP = new HudGroup("示例");
 
     @Override
     public void onInitialize() {
@@ -31,11 +33,17 @@ public class AddonTemplate extends MeteorAddon {
         BaritoneCommandGuideModule baritoneCommandGuideModule = new BaritoneCommandGuideModule();
         Modules.get().add(baritoneCommandGuideModule);
 
+        AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();
+        Modules.get().add(autoFarmMatrix);
+
         // Commands
         Commands.add(new CommandExample());
+        Commands.add(new NongChangCommand());
 
         // HUD
         Hud.get().register(HudExample.INFO);
+
+        YiyiaddonWelcomeService.register();
     }
 
     @Override
