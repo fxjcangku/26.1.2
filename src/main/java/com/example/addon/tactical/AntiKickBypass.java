@@ -40,6 +40,8 @@ public class AntiKickBypass extends YiyiaddonModule {
     private final SettingGroup sgMasa = settings.createGroup("Masa伪装");
     private final SettingGroup sgChat = settings.createGroup("聊天队列");
     private final SettingGroup sgAntiAfk = settings.createGroup("防挂机");
+    private final SettingGroup sgThrottle = settings.createGroup("过载断流");
+    private final SettingGroup sgPacketLoss = settings.createGroup("丢包伪装");
 
     // Masa伪装设置
     private final Setting<Boolean> fakeBrand = sgMasa.add(new BoolSetting.Builder()
@@ -105,6 +107,78 @@ public class AntiKickBypass extends YiyiaddonModule {
         .build()
     );
 
+    // ── 过载断流：挖掘与交互限频 ──
+    private final Setting<Boolean> limitDigging = sgThrottle.add(new BoolSetting.Builder()
+        .name("挖掘限频")
+        .description("限制每秒破坏方块包数量，超出的排队顺延，防止挖太快被踢")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> maxDigPerSecond = sgThrottle.add(new IntSetting.Builder()
+        .name("每秒挖掘上限")
+        .description("原版极限约 5 个/秒，设太高等于没限")
+        .defaultValue(8)
+        .min(2)
+        .max(20)
+        .sliderRange(2, 20)
+        .visible(limitDigging::get)
+        .build()
+    );
+
+    private final Setting<Boolean> limitInteract = sgThrottle.add(new BoolSetting.Builder()
+        .name("交互限频")
+        .description("限制每秒方块放置与右键包数量，超出部分直接拦截，防止交互太快被踢")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> maxInteractPerSecond = sgThrottle.add(new IntSetting.Builder()
+        .name("每秒交互上限")
+        .description("原版右键极限约 4 个/秒")
+        .defaultValue(8)
+        .min(2)
+        .max(20)
+        .sliderRange(2, 20)
+        .visible(limitInteract::get)
+        .build()
+    );
+
+    private final Setting<Boolean> throttleOnDownload = sgThrottle.add(new BoolSetting.Builder()
+        .name("下载期间降速")
+        .description("资源包下载中把上限压到一半，模拟真实下载卡顿")
+        .defaultValue(true)
+        .build()
+    );
+
+    // ── 丢包：主动丢弃部分出站包 ──
+    private final Setting<Integer> moveDropRate = sgPacketLoss.add(new IntSetting.Builder()
+        .name("移动包丢包率")
+        .description("按百分比随机丢弃移动包，伪造网络抖动。超过 20% 容易触发拉回，谨慎调高")
+        .defaultValue(0)
+        .min(0)
+        .max(60)
+        .sliderRange(0, 60)
+        .build()
+    );
+
+    private final Setting<Integer> interactDropRate = sgPacketLoss.add(new IntSetting.Builder()
+        .name("交互包丢包率")
+        .description("按百分比随机丢弃方块交互包。丢弃会使该次挖掘/放置无效，仅用于压低发包密度")
+        .defaultValue(0)
+        .min(0)
+        .max(60)
+        .sliderRange(0, 60)
+        .build()
+    );
+
+    private final Setting<Boolean> keepCriticalPackets = sgPacketLoss.add(new BoolSetting.Builder()
+        .name("保护关键包")
+        .description("丢包时不碰传送确认包与带序号的交互包，避免坐标错乱与方块回滚")
+        .defaultValue(true)
+        .build()
+    );
+
     // 内部状态
     private final Queue<String> chatQueue = new LinkedList<>();
     private long lastChatSendTime = 0;
@@ -118,6 +192,15 @@ public class AntiKickBypass extends YiyiaddonModule {
 
     // 防挂机计数器
     private int antiAfkTicker = 0;
+
+    // 过载断流：滑动窗口计数（每秒重置）
+    private int digThisSecond = 0;
+    private int interactThisSecond = 0;
+    private long lastThrottleResetTime = System.currentTimeMillis();
+
+    // 统计：本次会话被拦截/丢弃的包数，用于面板回显
+    private int throttledCount = 0;
+    private int droppedCount = 0;
 
     public AntiKickBypass() {
         super(CATEGORY_TACTICAL, "发包防踢", "全方位发包拦截，Masa伪装，聊天队列，拉回断流。");
@@ -185,7 +268,13 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        // 5. 聊天队列：拦截高频聊天并送入队列
+        // 5. 过载断流：挖掘与交互限频，超额直接拦截
+        if (applyThrottle(event, packet)) return;
+
+        // 6. 丢包伪装：按概率丢弃出站包，制造网络抖动的表象
+        if (applyPacketLoss(event, packet)) return;
+
+        // 7. 聊天队列：拦截高频聊天并送入队列
         if (enableChatQueue.get() && packet instanceof ServerboundChatPacket chatPacket) {
             event.setCancelled(true);
             String message = chatPacket.message();
@@ -202,6 +291,104 @@ public class AntiKickBypass extends YiyiaddonModule {
 
             chatQueue.offer(message);
         }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  过载断流 - 挖掘与交互限频
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 挖掘与交互限频。
+     *
+     * 服务端的「超速」判定看的是单位时间内的动作包密度，所以这里按秒开窗计数，
+     * 超额的包直接拦掉。不做排队重发：sequence 在发包前已取号，延后补发会造成
+     * 序号乱序，服务端会回滚方块，比被踢更难排查。
+     *
+     * @return true 表示已拦截，调用方应停止后续处理
+     */
+    private boolean applyThrottle(PacketEvent.Send event, Packet<?> packet) {
+        long now = System.currentTimeMillis();
+        if (now - lastThrottleResetTime >= 1000) {
+            digThisSecond = 0;
+            interactThisSecond = 0;
+            lastThrottleResetTime = now;
+        }
+
+        // 资源包下载期间压到一半，配合服务器检测模块模拟下载卡顿
+        boolean downloading = throttleOnDownload.get() && TacticalFSM.isDownloadingResourcePack();
+
+        if (limitDigging.get() && packet instanceof ServerboundPlayerActionPacket action) {
+            // 只对真正的破坏动作计数，丢弃物品等动作走的是同一个包但不算挖掘
+            ServerboundPlayerActionPacket.Action type = action.getAction();
+            if (type == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
+                || type == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK) {
+
+                int limit = downloading ? Math.max(1, maxDigPerSecond.get() / 2) : maxDigPerSecond.get();
+                if (++digThisSecond > limit) {
+                    event.cancel();
+                    throttledCount++;
+                    return true;
+                }
+            }
+        }
+
+        if (limitInteract.get()
+            && (packet instanceof ServerboundUseItemOnPacket || packet instanceof ServerboundUseItemPacket)) {
+
+            int limit = downloading ? Math.max(1, maxInteractPerSecond.get() / 2) : maxInteractPerSecond.get();
+            if (++interactThisSecond > limit) {
+                event.setCancelled(true);
+                throttledCount++;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  丢包伪装 - 按概率丢弃出站包
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 按概率丢弃出站包，让服务端看到的发包节奏带上网络抖动的痕迹。
+     *
+     * 移动包丢弃是安全的：原版客户端本身就允许丢包，服务端靠下一个包的坐标续算。
+     * 但丢弃率过高会让服务端认为坐标跳变，反而触发拉回，所以上限压在 60%。
+     *
+     * 带 sequence 的交互包在开启「保护关键包」时不参与丢弃，原因同 applyThrottle：
+     * 取过号的包被丢会留下序号空洞，服务端回滚方块。
+     *
+     * @return true 表示已丢弃，调用方应停止后续处理
+     */
+    private boolean applyPacketLoss(PacketEvent.Send event, Packet<?> packet) {
+        // 拉回处理期间不丢包：此刻正需要确认包与静止包准确送达
+        if (rubberBandHandling) return false;
+
+        if (moveDropRate.get() > 0 && packet instanceof ServerboundMovePlayerPacket) {
+            if (random.nextInt(100) < moveDropRate.get()) {
+                event.setCancelled(true);
+                droppedCount++;
+                return true;
+            }
+        }
+
+        if (interactDropRate.get() > 0
+            && (packet instanceof ServerboundUseItemOnPacket
+                || packet instanceof ServerboundUseItemPacket
+                || packet instanceof ServerboundPlayerActionPacket)) {
+
+            // 关键包保护：这些包都携带 sequence，丢弃会导致预测序号空洞
+            if (keepCriticalPackets.get()) return false;
+
+            if (random.nextInt(100) < interactDropRate.get()) {
+                event.setCancelled(true);
+                droppedCount++;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -337,9 +524,30 @@ public class AntiKickBypass extends YiyiaddonModule {
                 "§f  · 清零服务器挂机判定计时器"
             },
             new String[]{
+                "§6§l▌ 过载断流",
+                "§f  · 挖掘上限 §e" + maxDigPerSecond.get() + "§f 个/秒，交互上限 §e" + maxInteractPerSecond.get() + "§f 个/秒",
+                "§f  · 超额的包直接拦掉，不排队补发",
+                "§f    （补发会造成 sequence 空洞，服务端会回滚方块）",
+                "§f  · 资源包下载期间上限自动压到一半",
+                "§f  · 本次已拦截: §e" + throttledCount + "§f 个"
+            },
+            new String[]{
+                "§9§l▌ 丢包伪装",
+                "§f  · 移动包丢包率 §e" + moveDropRate.get() + "%§f，交互包 §e" + interactDropRate.get() + "%",
+                "§f  · 移动包可安全丢弃，服务端靠下一个包续算坐标",
+                "§f  · 丢包率超过 20% 容易触发拉回，建议保守",
+                "§f  · 本次已丢弃: §e" + droppedCount + "§f 个"
+            },
+            new String[]{
                 "§c§l▌ 联动状态",
                 "§f  · 拉回包冷却: " + (rubberBandHandling ? "§c是" : "§a否"),
                 "§f  · 资源包下载: " + (TacticalFSM.isDownloadingResourcePack() ? "§c是" : "§a否")
+            },
+            new String[]{
+                "§c§l▌ 注意",
+                "§f  · 开启「保护关键包」时交互包不参与丢弃",
+                "§f    关掉它会导致挖掘/放置失效，仅在压发包密度时用",
+                "§f  · 挖掘上限调到 15 以上基本等于没限"
             }
         );
     }
