@@ -2,6 +2,7 @@ package com.example.addon;
 
 import com.example.addon.commands.CommandExample;
 import com.example.addon.commands.NongChangCommand;
+import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.BaritoneCommandGuideModule;
@@ -39,6 +40,7 @@ public class AddonTemplate extends MeteorAddon {
         // Commands
         Commands.add(new CommandExample());
         Commands.add(new NongChangCommand());
+        Commands.add(new YiyiaddonUpdateCommand());
 
         // HUD
         Hud.get().register(HudExample.INFO);
