@@ -72,6 +72,9 @@ public class NongChangCommand extends Command {
 
         // 一键清空四个锚点，重设整片农场时省得敲四次 remove
         builder.then(literal("clear").executes(_ -> clearAll()));
+        
+        // status 指令：显示四个锚点的完整信息
+        builder.then(literal("status").executes(_ -> showStatus()));
     }
 
     private int clearAll() {
@@ -158,6 +161,22 @@ public class NongChangCommand extends Command {
     private boolean isContainer(BlockPos pos) {
         BlockEntity blockEntity = mc.level.getBlockEntity(pos);
         return blockEntity instanceof Container;
+    }
+
+    private int showStatus() {
+        AutoFarmMatrix module = module();
+        if (module == null) return SINGLE_SUCCESS;
+
+        info("§b§l——— 农场锚点绑定情况 ———");
+        for (SiteType type : SiteType.values()) {
+            FarmSite site = module.site(type);
+            if (site == null) {
+                info("§7" + type.cn() + "：§c未绑定");
+            } else {
+                info("§7" + type.cn() + "：§a" + site.describe());
+            }
+        }
+        return SINGLE_SUCCESS;
     }
 
     private AutoFarmMatrix module() {
