@@ -5,6 +5,7 @@ import com.example.addon.commands.NongChangCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
+import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.example.addon.tactical.FlightBypass;
@@ -45,6 +46,9 @@ public class AddonTemplate extends MeteorAddon {
         // Modules - 自动化类
         AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();
         Modules.get().add(autoFarmMatrix);
+
+        AutoMinerModule autoMinerModule = new AutoMinerModule();
+        Modules.get().add(autoMinerModule);
 
         // Modules - 反作弊绕过（三个独立模块）
         Modules.get().add(new FlightBypass());
