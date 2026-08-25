@@ -40,3 +40,10 @@ Diagnostics/运行日志/
 # Mojang EULA 禁止「完整且未修改地再分发」官方映射，原文件本地生成即可
 
 Mappings/官方映射原文件/
+
+# 第三方参考资料（内容本地留存，仅说明文档入库）
+# 内含他人 MPL-2.0 项目的完整源码克隆与编译产物，体积大且不应混进本仓库历史
+# README.md 必须入库，否则 clone 之后无人知道这个目录该放什么、怎么重建
+
+Reference/*
+!Reference/README.md

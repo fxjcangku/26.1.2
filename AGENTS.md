@@ -26,15 +26,29 @@
 
 另外：`build.gradle.kts` 里没有 `mappings(loom.officialMojangMappings())` 是正确的——26.1 起官方不混淆，不需要重映射。不要补这行。
 
+映射只回答「这个类存在吗、签名是什么」。想知道实际项目怎么组织代码（Mixin 注入点、包拦截、容器交互），查 `Reference/`——放已完成 26.1.2 迁移的第三方源码。**只读思路，禁止复制代码或嵌套打包第三方 JAR**，理由见 `Reference/README.md`。
+
 ## 目录约定
 
 ```
 Diagnostics/
-├─ 工具/               调试监听服务.js（跨会话复用）
+├─ 工具/               调试监听服务.js  收集证据
+│                      日志分析器.js    分析证据（时间线/调用栈/状态迁移/节律）
 ├─ 会话记录/
 │  ├─ 进行中/          {日期}-{中文会话名}.md
 │  └─ 已修复/          历史修复台账
 └─ 运行日志/           .env 与 .ndjson 证据（不进 Git）
+
+Mappings/              26.1.2 官方映射速查（原文件不进 Git，可一键重建）
+Reference/             第三方参考源码（只有 README.md 进 Git）
+```
+
+排查 Bug 时不要手翻 NDJSON，跑分析器：
+
+```powershell
+node Diagnostics\工具\日志分析器.js            # 最新日志
+node Diagnostics\工具\日志分析器.js <会话> --栈  # 只看调用栈聚合
+node Diagnostics\工具\日志分析器.js --列表
 ```
 
 ## 构建
