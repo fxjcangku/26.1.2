@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=32&pause=1000&color=00D9FF&center=true&vCenter=true&width=600&lines=yiyiaddon+v1.0;Meteor+Client+增强插件;全中文+·+智能农场+·+自动化" alt="Typing SVG" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=32&pause=1000&color=00D9FF&center=true&vCenter=true&width=600&lines=yiyiaddon+v1.1;Meteor+Client+增强插件;全中文+·+智能农场+·+反作弊绕过" alt="Typing SVG" />
+
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=futuristic%20minecraft%20hud%20interface%20with%20chinese%20text%2C%20cyberpunk%20style%2C%20neon%20blue%20and%20cyan%20holographic%20display%2C%20farming%20automation%20system%2C%20high%20tech%20dashboard%2C%20detailed%20digital%20art&image_size=landscape_16_9" alt="yiyiaddon Banner" width="800" />
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-brightgreen?style=for-the-badge&logo=minecraft&logoColor=white)
 ![Fabric](https://img.shields.io/badge/Fabric-0.19.3-orange?style=for-the-badge)
@@ -9,7 +11,7 @@
 ![License](https://img.shields.io/badge/License-Academic-yellow?style=for-the-badge)
 
 **面向 Meteor Client 的企业级增强插件**  
-**生产力工具 · 完整汉化 · 自动化农场 · 智能导航**
+**完整汉化 · 自动化农场 · 反作弊绕过 · 智能导航**
 
 [![下载](https://img.shields.io/github/downloads/fxjcangku/26.1.2/total?style=for-the-badge&logo=github&label=Downloads)](https://github.com/fxjcangku/26.1.2/releases)
 [![Stars](https://img.shields.io/github/stars/fxjcangku/26.1.2?style=for-the-badge&logo=github)](https://github.com/fxjcangku/26.1.2/stargazers)
@@ -27,8 +29,9 @@
 - [快速开始](#-快速开始)
 - [模块详解](#-模块详解)
   - [Meteor & Baritone 中文化](#1-meteor--baritone-中文化)
-  - [自动物流农场](#2-自动物流农场)
-  - [Baritone 指令手册](#3-baritone-指令手册)
+  - [自动农场](#2-自动农场)
+  - [反作弊绕过系统](#3-反作弊绕过系统-新)
+  - [Baritone 指令手册](#4-baritone-指令手册)
 - [技术架构](#-技术架构)
 - [配置指南](#-配置指南)
 - [常见问题](#-常见问题)
@@ -41,7 +44,7 @@
 
 <table>
 <tr>
-<td width="50%">
+<td width="33%">
 
 ### 🌐 完整中文化
 
@@ -61,7 +64,7 @@
   - 清晰的视觉层级
 
 </td>
-<td width="50%">
+<td width="33%">
 
 ### 🚜 智能农场系统
 
@@ -80,6 +83,28 @@
   - 卸货/补货双向循环
   - 安全库存管理
   - 容器状态同步
+
+</td>
+<td width="33%">
+
+### 🛡️ 反作弊绕过 <sup>NEW</sup>
+
+**多层防护的服务器生存工具**
+
+- 🎭 **Masa 伪装**
+  - Brand 改 vanilla
+  - Mod 频道白名单拦截
+  - NBT 限频 + 假潜行拦截
+- 💬 **聊天队列**
+  - 1500ms 间隔防刷屏
+  - 全角空格混淆防重复
+- ✈️ **飞行绕过**
+  - 原版模拟（高频跳跃）
+  - 安全滑翔（微下降）
+  - 烟花火箭 + 序列垫脚
+- 🔄 **拉回断流**
+  - 暂停发包 + 确认包
+  - 静止包防传送
 
 </td>
 </tr>
@@ -130,13 +155,13 @@ graph LR
 2. **安装到 mods 文件夹**
    ```bash
    # Windows
-   %appdata%\.minecraft\mods\yiyiaddon1.0.jar
+   %appdata%\.minecraft\mods\yiyiaddon1.1.jar
    
    # macOS
-   ~/Library/Application Support/minecraft/mods/yiyiaddon1.0.jar
+   ~/Library/Application Support/minecraft/mods/yiyiaddon1.1.jar
    
    # Linux
-   ~/.minecraft/mods/yiyiaddon1.0.jar
+   ~/.minecraft/mods/yiyiaddon1.1.jar
    ```
 
 3. **启动游戏**
@@ -146,8 +171,8 @@ graph LR
 
 4. **验证安装**
    - 按 `Right Shift` 打开 Meteor 菜单
-   - 找到 `yiyiaddon 工具` 分类
-   - 看到 3 个模块即表示安装成功
+   - 找到 `yiyiaddon 工具` 和 `yiyiaddon 战术` 分类
+   - 看到 5+ 个模块即表示安装成功
 
 ---
 
@@ -184,7 +209,7 @@ graph LR
 
 ---
 
-### 2. 自动物流农场
+### 2. 自动农场
 
 **企业级农业自动化系统**
 
@@ -280,7 +305,111 @@ graph LR
 
 ---
 
-### 3. Baritone 指令手册
+### 3. 反作弊绕过系统 <sup>NEW</sup>
+
+**多层防护的服务器生存工具**
+
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cyberpunk%20hacker%20terminal%20with%20network%20packets%2C%20anti%20cheat%20bypass%20visualization%2C%20neon%20green%20matrix%20code%2C%20shield%20protection%20hologram%2C%20dark%20background%2C%20digital%20art&image_size=landscape_16_9" alt="反作弊绕过系统" width="700" />
+
+#### 核心模块
+
+**1. 发包防踢模块 (AntiKickBypass)**
+
+智能的客户端伪装和通信管理系统
+
+- 🎭 **Masa 伪装**
+  - **Brand 伪装**: 客户端标识改为 `vanilla`
+  - **Mod 频道拦截**: 白名单过滤敏感 Mod 通信频道
+  - **NBT 限频**: 限制 NBT 包发送频率，防止服务器检测
+  - **假潜行拦截**: 拦截可疑的潜行包
+
+- 💬 **聊天队列系统**
+  - 1500ms 间隔自动排队，防止刷屏踢出
+  - 全角空格混淆，绕过重复消息检测
+  - 智能队列管理，先进先出
+
+- 🔄 **拉回断流处理**
+  - 检测到拉回时暂停发包
+  - 自动发送确认包和静止包
+  - 防止坐标异常导致的踢出
+
+- 🎲 **活跃欺骗**
+  - 高频发送配方书包伪装正常玩家
+  - 防止挂机检测
+
+**2. 飞行绕过模块 (FlightBypass)**
+
+4 种飞行模式适配不同服务器反作弊
+
+- ✈️ **原版模拟模式**
+  - 高频跳跃伪装正常跳跃
+  - 适用于基础反作弊服务器
+
+- 🪂 **安全滑翔模式**
+  - 微下降 0.03 方块/tick 规避重力检测
+  - 长距离移动推荐
+
+- 🚀 **烟花火箭模式**
+  - 模拟鞘翅加速，发送烟花使用包
+  - 绕过鞘翅飞行检测
+
+- 🧱 **序列垫脚模式**
+  - 预测方块放置（80-120ms 随机延迟）
+  - 每 5 次留一次空隙避免模式检测
+  - 自动同步客户端预测
+
+**3. 服务器检测器 (ServerDetector)**
+
+智能识别服务器反作弊类型
+
+- 🔍 **指纹识别**
+  - 自动检测 Grim、Vulcan、Spartan、Matrix 等主流反作弊
+  - 根据服务器特征自动调整绕过策略
+
+- 📊 **状态监控**
+  - 实时显示检测到的反作弊系统
+  - 警告高风险操作
+
+**4. 战术状态机 (TacticalFSM)**
+
+统一的战术模块协调器
+
+- 🎯 自动根据服务器类型切换策略
+- 🔄 模块间状态同步
+- ⚠️ 风险评估和警告
+
+#### 使用方法
+
+```
+1. Meteor 菜单 → yiyiaddon 战术 → 选择需要的模块
+2. 发包防踢：启用后自动工作，推荐所有服务器开启
+3. 飞行绕过：选择合适的模式，建议从"安全滑翔"开始测试
+4. 服务器检测器：自动识别，无需手动配置
+```
+
+#### 安全说明
+
+⚠️ **重要提醒**
+
+- 本系统仅供学习交流和技术研究
+- 使用前请确认服务器规则是否允许
+- 不建议在竞技服务器使用
+- 使用不当可能导致账号封禁
+- **风险自负，请谨慎使用**
+
+#### 技术亮点
+
+| 特性 | 说明 | 优势 |
+|------|------|------|
+| **智能伪装** | Masa 级别的客户端隐藏 | 通过大部分轻量反作弊 |
+| **包队列管理** | 1500ms 间隔 + 混淆 | 防刷屏踢出 |
+| **多模式飞行** | 4 种策略自适应 | 覆盖不同反作弊系统 |
+| **预测同步** | 客户端方块预测 | 垫脚无延迟感 |
+| **指纹识别** | 自动检测反作弊类型 | 无需手动配置 |
+
+---
+
+### 4. Baritone 指令手册
 
 **内置交互式中文文档**
 
@@ -329,6 +458,12 @@ yiyiaddon/
 │   ├── FarmSite           # 锚点管理
 │   ├── CropProfile        # 作物配置
 │   └── FarmRenderer       # 可视化渲染
+├── tactical/              # 反作弊绕过系统 (NEW)
+│   ├── AntiKickBypass     # 发包防踢（Masa伪装+聊天队列）
+│   ├── FlightBypass       # 飞行绕过（4种模式）
+│   ├── ServerDetector     # 服务器检测器
+│   ├── ServerFingerprints # 反作弊指纹库
+│   └── TacticalFSM        # 战术状态机
 ├── modules/               # 功能模块
 │   ├── YiyiaddonTranslationModule    # 翻译模块
 │   ├── BaritoneCommandGuideModule    # 指令手册
@@ -512,6 +647,62 @@ Baritone 不可用时，农场模块会降级为站桩收割（只收范围内�
 ---
 
 ## 📝 更新日志
+
+### v1.1 (2026-08-25)
+
+🛡️ **反作弊绕过系统上线**
+
+#### ✨ 新增功能
+
+- **反作弊绕过系统（5 个核心模块）**
+  - 🎭 **发包防踢模块 (AntiKickBypass)**
+    - Masa 伪装（Brand + Mod频道拦截 + NBT限频）
+    - 聊天队列系统（1500ms间隔 + 全角空格混淆）
+    - 拉回断流处理（暂停发包 + 确认包 + 静止包）
+    - 活跃欺骗（高频配方书包）
+  
+  - ✈️ **飞行绕过模块 (FlightBypass)**
+    - 原版模拟模式（高频跳跃）
+    - 安全滑翔模式（微下降规避重力检测）
+    - 烟花火箭模式（模拟鞘翅加速）
+    - 序列垫脚模式（预测方块放置 + 随机延迟）
+  
+  - 🔍 **服务器检测器 (ServerDetector)**
+    - 自动识别主流反作弊系统（Grim/Vulcan/Spartan/Matrix）
+    - 根据服务器特征自动调整策略
+  
+  - 📊 **反作弊指纹库 (ServerFingerprints)**
+    - 内置多个反作弊系统特征库
+  
+  - 🎯 **战术状态机 (TacticalFSM)**
+    - 统一战术模块协调
+    - 模块间状态同步
+    - 风险评估和警告
+
+- **新分类：yiyiaddon 战术**
+  - 独立的战术模块分类
+  - 与工具类模块分离
+
+#### 🔧 技术优化
+
+- ProGuard 混淆强度提升
+- 代码结构优化（新增 tactical 目录）
+- 版本号管理规范化
+
+#### 📚 文档更新
+
+- 添加反作弊绕过系统完整说明
+- 更新系统架构图
+- 添加安全使用提醒
+- 更新动态 Banner 图片
+
+#### ⚠️ 安全提醒
+
+- 本版本新增的反作弊绕过功能仅供学习交流
+- 使用前请确认服务器规则
+- 风险自负，请谨慎使用
+
+---
 
 ### v1.0.0 (2026-08-24)
 
