@@ -1,0 +1,79 @@
+# 客户端与玩家
+#
+# 用途：客户端主类、本地玩家、客户端世界、交互管理器。写模块最常用的入口。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：68 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.client.Minecraft
+net.minecraft.client.multiplayer.AccountProfileKeyPairManager
+net.minecraft.client.multiplayer.CacheSlot
+net.minecraft.client.multiplayer.ChunkBatchSizeCalculator
+net.minecraft.client.multiplayer.ClientAdvancements
+net.minecraft.client.multiplayer.ClientChunkCache
+net.minecraft.client.multiplayer.ClientCommonPacketListenerImpl
+net.minecraft.client.multiplayer.ClientConfigurationPacketListenerImpl
+net.minecraft.client.multiplayer.ClientDebugSubscriber
+net.minecraft.client.multiplayer.ClientExplosionTracker
+net.minecraft.client.multiplayer.ClientHandshakePacketListenerImpl
+net.minecraft.client.multiplayer.ClientLevel
+net.minecraft.client.multiplayer.ClientPacketListener
+net.minecraft.client.multiplayer.ClientRecipeContainer
+net.minecraft.client.multiplayer.ClientRegistryLayer
+net.minecraft.client.multiplayer.ClientSuggestionProvider
+net.minecraft.client.multiplayer.CommonListenerCookie
+net.minecraft.client.multiplayer.KnownPacksManager
+net.minecraft.client.multiplayer.LegacyServerPinger
+net.minecraft.client.multiplayer.LevelLoadTracker
+net.minecraft.client.multiplayer.MultiPlayerGameMode
+net.minecraft.client.multiplayer.PingDebugMonitor
+net.minecraft.client.multiplayer.PlayerInfo
+net.minecraft.client.multiplayer.ProfileKeyPairManager
+net.minecraft.client.multiplayer.RegistryDataCollector
+net.minecraft.client.multiplayer.ServerData
+net.minecraft.client.multiplayer.ServerList
+net.minecraft.client.multiplayer.ServerStatusPinger
+net.minecraft.client.multiplayer.SessionSearchTrees
+net.minecraft.client.multiplayer.TransferState
+net.minecraft.client.multiplayer.chat.ChatListener
+net.minecraft.client.multiplayer.chat.ChatLog
+net.minecraft.client.multiplayer.chat.ChatTrustLevel
+net.minecraft.client.multiplayer.chat.LoggedChatEvent
+net.minecraft.client.multiplayer.chat.LoggedChatMessage
+net.minecraft.client.multiplayer.chat.package-info
+net.minecraft.client.multiplayer.chat.report.AbuseReportSender
+net.minecraft.client.multiplayer.chat.report.BanReason
+net.minecraft.client.multiplayer.chat.report.ChatReport
+net.minecraft.client.multiplayer.chat.report.ChatReportContextBuilder
+net.minecraft.client.multiplayer.chat.report.NameReport
+net.minecraft.client.multiplayer.chat.report.Report
+net.minecraft.client.multiplayer.chat.report.ReportEnvironment
+net.minecraft.client.multiplayer.chat.report.ReportReason
+net.minecraft.client.multiplayer.chat.report.ReportType
+net.minecraft.client.multiplayer.chat.report.ReportingContext
+net.minecraft.client.multiplayer.chat.report.SkinReport
+net.minecraft.client.multiplayer.chat.report.package-info
+net.minecraft.client.multiplayer.package-info
+net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler
+net.minecraft.client.multiplayer.prediction.PredictiveAction
+net.minecraft.client.multiplayer.prediction.package-info
+net.minecraft.client.multiplayer.resolver.AddressCheck
+net.minecraft.client.multiplayer.resolver.ResolvedServerAddress
+net.minecraft.client.multiplayer.resolver.ServerAddress
+net.minecraft.client.multiplayer.resolver.ServerAddressResolver
+net.minecraft.client.multiplayer.resolver.ServerNameResolver
+net.minecraft.client.multiplayer.resolver.ServerRedirectHandler
+net.minecraft.client.multiplayer.resolver.package-info
+net.minecraft.client.player.AbstractClientPlayer
+net.minecraft.client.player.ClientInput
+net.minecraft.client.player.KeyboardInput
+net.minecraft.client.player.LocalPlayer
+net.minecraft.client.player.LocalPlayerResolver
+net.minecraft.client.player.RemotePlayer
+net.minecraft.client.player.inventory.Hotbar
+net.minecraft.client.player.inventory.package-info
+net.minecraft.client.player.package-info

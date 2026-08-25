@@ -223,6 +223,199 @@ import java.util.function.Consumer;
 // 调试流程统一遵循上方《用户工作偏好与运行时缺陷排查协议》；本节是具体执行模板。
 //
 // ════════════════════════════════════════════════════════════════════
+//  第三部分 · 26.1.2 API 规范与开发模板（写代码前必读）
+// ════════════════════════════════════════════════════════════════════
+//
+// 【3.1 版本事实】
+//
+//   对外版本号   26.1.2      新的 CalVer 规则：年.批次.修订
+//   内部版本号   1.21.11     Loom 缓存、映射文件都用这个号
+//   映射类型     Mojang 官方映射（不是 Yarn！）
+//   是否混淆     否。26.1 起官方发布不混淆版本，官方名直接编译进 JAR
+//   Fabric Loader 0.19.3     Meteor 26.1.2-SNAPSHOT     JDK 25
+//
+//   注意：`build.gradle.kts` 里没有 `mappings(loom.officialMojangMappings())`
+//   是正确的，不是漏写。26.1 不混淆，不需要重映射步骤。不要"好心"补上这行。
+//
+// 【3.2 绝对禁止：用 Yarn 名或旧官方名】
+//
+//   26.1.2（1.21.11）Mojang 做了大规模改名，Yarn 映射同期退役。
+//   网上大量教程和 AI 记忆里的类名在本版本已不存在，照抄直接编译失败。
+//
+//   以下写法一律编译不过（已用官方映射文件逐个核实）：
+//
+//     ✗ ResourceLocation          ✓ net.minecraft.resources.Identifier
+//     ✗ MinecraftClient           ✓ net.minecraft.client.Minecraft
+//     ✗ ClientPlayerEntity        ✓ net.minecraft.client.player.LocalPlayer
+//     ✗ ClientWorld               ✓ net.minecraft.client.multiplayer.ClientLevel
+//     ✗ PlayerEntity              ✓ net.minecraft.world.entity.player.Player
+//     ✗ Text / MutableText        ✓ Component / MutableComponent
+//     ✗ NbtCompound / NbtList     ✓ CompoundTag / ListTag
+//     ✗ World / ServerWorld       ✓ Level / ServerLevel
+//     ✗ Formatting                ✓ net.minecraft.ChatFormatting
+//     ✗ Box                       ✓ net.minecraft.world.phys.AABB
+//     ✗ Vec3d                     ✓ net.minecraft.world.phys.Vec3
+//     ✗ Hand                      ✓ net.minecraft.world.InteractionHand
+//     ✗ ActionResult              ✓ net.minecraft.world.InteractionResult
+//     ✗ DrawContext               ✓ net.minecraft.client.gui.GuiGraphics
+//     ✗ PlayerInventory           ✓ net.minecraft.world.entity.player.Inventory
+//     ✗ ScreenHandler             ✓ net.minecraft.world.inventory.AbstractContainerMenu
+//     ✗ HungerManager             ✓ net.minecraft.world.food.FoodData
+//     ✗ RegistryKey               ✓ net.minecraft.resources.ResourceKey
+//     ✗ DynamicRegistryManager    ✓ net.minecraft.core.RegistryAccess
+//     ✗ StatusEffects             ✓ net.minecraft.world.effect.MobEffects
+//     ✗ GameMode                  ✓ net.minecraft.world.level.GameType
+//
+//   方法层面同样有改动：
+//
+//     ✗ ResourceKey#location()             ✓ ResourceKey#identifier()
+//     ✗ Level#random（字段）               ✓ Level#getRandom()（方法）
+//     ✗ new ResourceLocation(ns, path)     ✓ Identifier.fromNamespaceAndPath(ns, path)
+//
+// 【3.3 不确定就查，禁止凭记忆猜】
+//
+//   项目内已建好映射速查体系（`Mappings/`，事实来源是官方映射原文件）：
+//
+//     node Mappings/工具/查API.js Identifier           查类的完整路径与全部方法
+//     node Mappings/工具/查API.js LocalPlayer sendSys  在指定类里搜方法
+//     node Mappings/工具/查API.js --找 sendCommand     不确定在哪个类时全局搜
+//
+//     Mappings/易错对照表-26.1.2.txt   39 个高频 API 新旧对照
+//     Mappings/简名对照-26.1.2.txt     简名 → 完整包路径，写 import 时查
+//     Mappings/分类速查/               按功能域分 15 类，带中文用途注释
+//     Mappings/说明.md                 完整用法与版本事实
+//
+//   规则：写任何不在本项目现有代码里出现过的 net.minecraft API 之前，
+//   先用 `查API.js` 确认它在 26.1.2 真实存在。查不到就是不存在，不要硬写。
+//   clone 之后原文件需重建：powershell Mappings/工具/下载官方映射.ps1
+//
+// 【3.4 本项目已验证可用的常用 API】
+//
+//   这些都是当前源码里实际在跑的写法，可直接照抄：
+//
+//   客户端与玩家（基类已提供 protected 的 mc 字段，直接用）
+//     mc.player                          LocalPlayer，用前必须判空
+//     mc.level                           ClientLevel
+//     mc.getConnection()                 ClientPacketListener
+//     mc.gameMode                        MultiPlayerGameMode
+//     mc.hasSingleplayerServer()         是否单人世界
+//
+//   聊天与消息
+//     mc.player.sendSystemMessage(Component.literal("文本"))
+//     mc.getConnection().sendCommand("指令不带斜杠")
+//
+//   玩家状态
+//     mc.player.getMainHandItem()        ItemStack
+//     mc.player.getOffhandItem()         ItemStack
+//     mc.player.getInventory().getItem(i)
+//     mc.player.getFoodData()            FoodData
+//     mc.player.blockPosition()          BlockPos
+//     mc.player.getYRot() / getXRot()    朝向；setYRot / setXRot 设置
+//     mc.player.isDeadOrDying()
+//
+//   方块与世界
+//     mc.level.getBlockState(pos)        BlockState
+//     mc.level.getBlockEntity(pos)       BlockEntity
+//     BuiltInRegistries.BLOCK.getKey(block).toString()   取方块 ID
+//
+//   注册表与标识
+//     Identifier.tryParse("minecraft:stone")
+//     Identifier.fromNamespaceAndPath("minecraft", "stone")
+//     ResourceKey.create(Registries.DIMENSION, identifier)
+//
+//   Meteor 事件（用 meteordevelopment.orbit.EventHandler）
+//     @EventHandler private void onTick(TickEvent.Pre event)
+//     @EventHandler private void onGameJoined(GameJoinedEvent event)
+//     @EventHandler private void onPacketReceive(PacketEvent.Receive event)
+//     @EventHandler(priority = -100) 可控制优先级
+//     事件回调第一行统一写 `if (!isActive()) return;`
+//
+//   Meteor 设置项
+//     private final SettingGroup sgX = settings.createGroup("组名");
+//     sgX.add(new BoolSetting.Builder().name("名").description("说明")
+//         .defaultValue(true).build());
+//     可用类型：BoolSetting / IntSetting / DoubleSetting / StringSetting /
+//               EnumSetting / BlockListSetting / KeybindSetting
+//     条件显示用 .visible(() -> 条件)，变更回调用 .onChanged(v -> ...)
+//
+// 【3.5 新模块标准模板】
+//
+//   package com.example.addon.modules;
+//
+//   import com.example.addon.core.YiyiaddonModule;
+//   import meteordevelopment.meteorclient.events.world.TickEvent;
+//   import meteordevelopment.meteorclient.gui.GuiTheme;
+//   import meteordevelopment.meteorclient.gui.widgets.WWidget;
+//   import meteordevelopment.meteorclient.settings.*;
+//   import meteordevelopment.orbit.EventHandler;
+//
+//   import static com.example.addon.core.AddonTemplate.CATEGORY;
+//
+//   public class 示例Module extends YiyiaddonModule {
+//
+//       private final SettingGroup sgGeneral = settings.getDefaultGroup();
+//
+//       private final Setting<Boolean> 开关 = sgGeneral.add(new BoolSetting.Builder()
+//           .name("开关名")
+//           .description("这个开关做什么。")
+//           .defaultValue(true)
+//           .build()
+//       );
+//
+//       public 示例Module() {
+//           // 描述必须以「。详细参考下面使用说明。」结尾
+//           super(CATEGORY, "模块中文名", "一句话功能说明。详细参考下面使用说明。");
+//       }
+//
+//       @Override
+//       public void onActivate() {
+//           // 初始化状态；需要世界的操作先判空
+//       }
+//
+//       @Override
+//       public void onDeactivate() {
+//           // 清理状态，恢复被改动的玩家数据
+//       }
+//
+//       @EventHandler
+//       private void onTick(TickEvent.Pre event) {
+//           if (!isActive() || mc.player == null || mc.level == null) return;
+//           // 主逻辑
+//       }
+//
+//       @Override
+//       public WWidget getWidget(GuiTheme theme) {
+//           return buildInfoWidget(theme,
+//               new String[]{ "§l模块名 · 使用说明" },
+//               new String[]{
+//                   "§e§l▌ 准备",
+//                   "§f  1. 第一步",
+//                   "§f  2. 第二步"
+//               },
+//               new String[]{
+//                   "§a§l▌ 功能原理",
+//                   "§f  · 做什么",
+//                   "§f  · 怎么做"
+//               }
+//           );
+//       }
+//   }
+//
+//   新模块写完后必须在 AddonTemplate.onInitialize() 里注册：
+//     Modules.get().add(new 示例Module());
+//
+// 【3.6 覆写基类方法的注意事项】
+//
+//   基类已覆写 toggle() / sendToggledMsg() / info() / warning() / error() / fromTag()，
+//   子类如需再覆写，必须调 super，否则会破坏统一消息格式或配置修正逻辑。
+//
+//   子类输出消息统一用 notify() / notifyError()，不要直接调 mc.player.sendSystemMessage，
+//   否则丢掉 [yiyiaddon][模块名] 前缀。
+//
+//   涉及可序列化字段（会写进 modules.nbt 的），改内存值的同时必须处理 fromTag，
+//   否则旧存档会把值读回来——这是 2026-08-25 那次 Bug 的根因。
+//
+// ════════════════════════════════════════════════════════════════════
 
 /**
  * yiyiaddon 模块基类

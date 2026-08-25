@@ -1,0 +1,73 @@
+# 文本与聊天
+#
+# 用途：聊天消息、文本组件、样式、点击/悬浮事件。发消息、改显示文本用。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：62 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.network.chat.ChatDecorator
+net.minecraft.network.chat.ChatType
+net.minecraft.network.chat.ChatTypeDecoration
+net.minecraft.network.chat.ClickEvent
+net.minecraft.network.chat.CommonComponents
+net.minecraft.network.chat.Component
+net.minecraft.network.chat.ComponentContents
+net.minecraft.network.chat.ComponentSerialization
+net.minecraft.network.chat.ComponentUtils
+net.minecraft.network.chat.FilterMask
+net.minecraft.network.chat.FontDescription
+net.minecraft.network.chat.FormattedText
+net.minecraft.network.chat.HoverEvent
+net.minecraft.network.chat.LastSeenMessages
+net.minecraft.network.chat.LastSeenMessagesTracker
+net.minecraft.network.chat.LastSeenMessagesValidator
+net.minecraft.network.chat.LastSeenTrackedEntry
+net.minecraft.network.chat.LocalChatSession
+net.minecraft.network.chat.MessageSignature
+net.minecraft.network.chat.MessageSignatureCache
+net.minecraft.network.chat.MutableComponent
+net.minecraft.network.chat.OutgoingChatMessage
+net.minecraft.network.chat.PlayerChatMessage
+net.minecraft.network.chat.RemoteChatSession
+net.minecraft.network.chat.SignableCommand
+net.minecraft.network.chat.SignedMessageBody
+net.minecraft.network.chat.SignedMessageChain
+net.minecraft.network.chat.SignedMessageLink
+net.minecraft.network.chat.SignedMessageValidator
+net.minecraft.network.chat.Style
+net.minecraft.network.chat.SubStringSource
+net.minecraft.network.chat.TextColor
+net.minecraft.network.chat.ThrowingComponent
+net.minecraft.network.chat.contents.KeybindContents
+net.minecraft.network.chat.contents.KeybindResolver
+net.minecraft.network.chat.contents.NbtContents
+net.minecraft.network.chat.contents.ObjectContents
+net.minecraft.network.chat.contents.PlainTextContents
+net.minecraft.network.chat.contents.ScoreContents
+net.minecraft.network.chat.contents.SelectorContents
+net.minecraft.network.chat.contents.TranslatableContents
+net.minecraft.network.chat.contents.TranslatableFormatException
+net.minecraft.network.chat.contents.data.BlockDataSource
+net.minecraft.network.chat.contents.data.DataSource
+net.minecraft.network.chat.contents.data.DataSources
+net.minecraft.network.chat.contents.data.EntityDataSource
+net.minecraft.network.chat.contents.data.StorageDataSource
+net.minecraft.network.chat.contents.data.package-info
+net.minecraft.network.chat.contents.objects.AtlasSprite
+net.minecraft.network.chat.contents.objects.ObjectInfo
+net.minecraft.network.chat.contents.objects.ObjectInfos
+net.minecraft.network.chat.contents.objects.PlayerSprite
+net.minecraft.network.chat.contents.objects.package-info
+net.minecraft.network.chat.contents.package-info
+net.minecraft.network.chat.numbers.BlankFormat
+net.minecraft.network.chat.numbers.FixedFormat
+net.minecraft.network.chat.numbers.NumberFormat
+net.minecraft.network.chat.numbers.NumberFormatType
+net.minecraft.network.chat.numbers.NumberFormatTypes
+net.minecraft.network.chat.numbers.StyledFormat
+net.minecraft.network.chat.numbers.package-info
+net.minecraft.network.chat.package-info

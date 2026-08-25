@@ -1,0 +1,59 @@
+# 声音
+#
+# 用途：声音事件、音源。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：48 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.client.resources.sounds.AbstractSoundInstance
+net.minecraft.client.resources.sounds.AbstractTickableSoundInstance
+net.minecraft.client.resources.sounds.AmbientSoundHandler
+net.minecraft.client.resources.sounds.BeeAggressiveSoundInstance
+net.minecraft.client.resources.sounds.BeeFlyingSoundInstance
+net.minecraft.client.resources.sounds.BeeSoundInstance
+net.minecraft.client.resources.sounds.BiomeAmbientSoundsHandler
+net.minecraft.client.resources.sounds.BubbleColumnAmbientSoundHandler
+net.minecraft.client.resources.sounds.DirectionalSoundInstance
+net.minecraft.client.resources.sounds.ElytraOnPlayerSoundInstance
+net.minecraft.client.resources.sounds.EntityBoundSoundInstance
+net.minecraft.client.resources.sounds.GuardianAttackSoundInstance
+net.minecraft.client.resources.sounds.MinecartSoundInstance
+net.minecraft.client.resources.sounds.RidingEntitySoundInstance
+net.minecraft.client.resources.sounds.RidingMinecartSoundInstance
+net.minecraft.client.resources.sounds.SimpleSoundInstance
+net.minecraft.client.resources.sounds.SnifferSoundInstance
+net.minecraft.client.resources.sounds.Sound
+net.minecraft.client.resources.sounds.SoundEventRegistration
+net.minecraft.client.resources.sounds.SoundEventRegistrationSerializer
+net.minecraft.client.resources.sounds.SoundInstance
+net.minecraft.client.resources.sounds.TickableSoundInstance
+net.minecraft.client.resources.sounds.UnderwaterAmbientSoundHandler
+net.minecraft.client.resources.sounds.UnderwaterAmbientSoundInstances
+net.minecraft.client.resources.sounds.package-info
+net.minecraft.client.sounds.AudioStream
+net.minecraft.client.sounds.ChannelAccess
+net.minecraft.client.sounds.ChunkedSampleByteBuf
+net.minecraft.client.sounds.FiniteAudioStream
+net.minecraft.client.sounds.FloatSampleSource
+net.minecraft.client.sounds.JOrbisAudioStream
+net.minecraft.client.sounds.LoopingAudioStream
+net.minecraft.client.sounds.MusicManager
+net.minecraft.client.sounds.SoundBufferLibrary
+net.minecraft.client.sounds.SoundEngine
+net.minecraft.client.sounds.SoundEngineExecutor
+net.minecraft.client.sounds.SoundEventListener
+net.minecraft.client.sounds.SoundManager
+net.minecraft.client.sounds.SoundPreviewHandler
+net.minecraft.client.sounds.WeighedSoundEvents
+net.minecraft.client.sounds.Weighted
+net.minecraft.client.sounds.package-info
+net.minecraft.sounds.Music
+net.minecraft.sounds.Musics
+net.minecraft.sounds.SoundEvent
+net.minecraft.sounds.SoundEvents
+net.minecraft.sounds.SoundSource
+net.minecraft.sounds.package-info

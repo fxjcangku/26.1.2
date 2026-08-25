@@ -1,0 +1,95 @@
+# 26.1.2 易错 API 对照表（Yarn / 旧官方名 → 26.1.2 官方映射）
+#
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）
+# 事实来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成命令：node Mappings/工具/验证易错API.js
+#
+# 图例：
+#   X  该名称在 26.1.2 中不存在，必须改用右侧名称（最容易踩的坑）
+#   =  名称未改变，可直接使用
+#   ?  需要人工复查
+#
+# 统计：已改名 28 个，未改名 11 个，待复查 0 个
+#
+# ⚠ 本项目使用 Mojang 官方映射，不是 Yarn。
+#   任何以 MinecraftClient / Text / NbtCompound / ResourceLocation 开头的代码
+#   都是错的，会直接编译失败。
+
+X  MinecraftClient                    不存在！请改用：net.minecraft.client.Minecraft
+   └─ 客户端主类
+X  ClientPlayerEntity                 不存在！请改用：net.minecraft.client.player.LocalPlayer
+   └─ 本地玩家
+X  ClientWorld                        不存在！请改用：net.minecraft.client.multiplayer.ClientLevel
+   └─ 客户端世界
+X  PlayerEntity                       不存在！请改用：net.minecraft.world.entity.player.Player
+   └─ 玩家基类
+=  LivingEntity                       net.minecraft.world.entity.LivingEntity
+   └─ 未改名，可直接使用。生物实体（未改名）
+X  Text                               不存在！请改用：net.minecraft.network.chat.Component
+   └─ 文本组件
+X  MutableText                        不存在！请改用：net.minecraft.network.chat.MutableComponent
+   └─ 可变文本
+X  ResourceLocation                   不存在！请改用：net.minecraft.resources.Identifier
+   └─ 资源标识符（1.21.11 改名重点）
+X  NbtCompound                        不存在！请改用：net.minecraft.nbt.CompoundTag
+   └─ NBT 复合标签
+X  NbtList                            不存在！请改用：net.minecraft.nbt.ListTag
+   └─ NBT 列表
+X  NbtElement                         不存在！请改用：net.minecraft.nbt.Tag
+   └─ NBT 基类
+X  Formatting                         不存在！请改用：net.minecraft.ChatFormatting
+   └─ 颜色格式枚举
+X  ActionResult                       不存在！请改用：net.minecraft.world.InteractionResult
+   └─ 交互结果
+X  Hand                               不存在！请改用：net.minecraft.world.InteractionHand
+   └─ 手（主手/副手）
+X  Box                                不存在！请改用：net.minecraft.world.phys.AABB
+   └─ 碰撞箱
+X  DrawContext                        不存在！请改用：net.minecraft.client.gui.GuiGraphics
+   └─ GUI 绘制上下文
+=  Screen                             net.minecraft.client.gui.screens.Screen
+   └─ 未改名，可直接使用。界面基类（未改名）
+=  ItemStack                          net.minecraft.world.item.ItemStack
+   └─ 未改名，可直接使用。物品堆（未改名）
+X  PlayerInventory                    不存在！请改用：net.minecraft.world.entity.player.Inventory
+   └─ 玩家背包
+X  ScreenHandler                      不存在！请改用：net.minecraft.world.inventory.AbstractContainerMenu
+   └─ 容器菜单
+=  BlockPos                           net.minecraft.core.BlockPos
+   └─ 未改名，可直接使用。方块坐标（未改名）
+X  Vec3d                              不存在！请改用：net.minecraft.world.phys.Vec3
+   └─ 三维向量
+=  Vec3i                              net.minecraft.core.Vec3i
+   └─ 未改名，可直接使用。整数向量（未改名）
+X  World                              不存在！请改用：net.minecraft.world.level.Level
+   └─ 世界
+X  ServerWorld                        不存在！请改用：net.minecraft.server.level.ServerLevel
+   └─ 服务端世界
+=  BlockState                         net.minecraft.world.level.block.state.BlockState
+   └─ 未改名，可直接使用。方块状态（未改名）
+X  ClientPlayNetworkHandler           不存在！请改用：net.minecraft.client.multiplayer.ClientPacketListener
+   └─ 客户端网络处理器
+X  ClientPlayerInteractionManager     不存在！请改用：net.minecraft.client.multiplayer.MultiPlayerGameMode
+   └─ 交互管理器
+X  HungerManager                      不存在！请改用：net.minecraft.world.food.FoodData
+   └─ 饥饿值
+=  SoundEvent                         net.minecraft.sounds.SoundEvent
+   └─ 未改名，可直接使用。声音事件（未改名）
+=  Registries                         net.minecraft.core.registries.Registries
+   └─ 未改名，可直接使用。注册表键（未改名）
+=  Registry                           net.minecraft.core.Registry
+   └─ 未改名，可直接使用。注册表（未改名）
+X  RegistryKey                        不存在！请改用：net.minecraft.resources.ResourceKey
+   └─ 注册表键引用
+X  DynamicRegistryManager             不存在！请改用：net.minecraft.core.RegistryAccess
+   └─ 动态注册表管理
+X  StatusEffects                      不存在！请改用：net.minecraft.world.effect.MobEffects
+   └─ 状态效果
+X  EntityAttributes                   不存在！请改用：net.minecraft.world.entity.ai.attributes.Attributes
+   └─ 实体属性
+X  GameMode                           不存在！请改用：net.minecraft.world.level.GameType
+   └─ 游戏模式
+=  ClickEvent                         net.minecraft.network.chat.ClickEvent
+   └─ 未改名，可直接使用。点击事件（未改名）
+=  Style                              net.minecraft.network.chat.Style
+   └─ 未改名，可直接使用。文本样式（未改名）
