@@ -302,6 +302,13 @@ public class AntiKickBypass extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
+        // 单人世界自动关闭
+        if (mc.hasSingleplayerServer()) {
+            warning("§c单人世界无需防踢，已自动关闭");
+            toggle();
+            return;
+        }
+        
         lastChatSendTime = 0;
         antiAfkTicker = 0;
         digThisSecond.set(0);

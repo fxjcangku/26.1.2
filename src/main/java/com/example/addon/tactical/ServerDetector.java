@@ -149,6 +149,13 @@ public class ServerDetector extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
+        // 单人世界自动关闭
+        if (mc.hasSingleplayerServer()) {
+            warning("§c单人世界无需检测，已自动关闭");
+            toggle();
+            return;
+        }
+        
         if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
     }
 

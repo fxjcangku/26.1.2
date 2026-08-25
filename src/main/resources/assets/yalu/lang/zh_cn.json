@@ -3414,5 +3414,12 @@
     "module.bow-aimbot.general.entities": "实体",
     "module.bow-aimbot.general.priority": "优先级",
     "module.bow-aimbot.general.babies": "幼崽",
-    "module.infinity-miner.when-full": "背包满时"
+    "module.infinity-miner.when-full": "背包满时",
+    "category.yiyiaddon-tactical": "绕过",
+    "module.anti-kick-bypass": "终极防踢",
+    "module.anti-kick-bypass.description": "7合1防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟",
+    "module.flight-bypass": "飞行绕过",
+    "module.flight-bypass.description": "四种模式绕过GrimAC/Matrix等高级反作弊",
+    "module.server-detector": "服务器检测",
+    "module.server-detector.description": "多层指纹识别核心与反作弊，自动白嫖资源包"
 }

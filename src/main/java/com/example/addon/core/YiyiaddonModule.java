@@ -117,6 +117,8 @@ public abstract class YiyiaddonModule extends Module {
      */
     protected void notify(String message) {
         if (mc.player == null) return;
+        // 单人世界不发送通知
+        if (mc.hasSingleplayerServer()) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§f" + message)));
     }
 
@@ -126,6 +128,8 @@ public abstract class YiyiaddonModule extends Module {
      */
     protected void notifyError(String message) {
         if (mc.player == null) return;
+        // 单人世界不发送通知
+        if (mc.hasSingleplayerServer()) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§6§l" + message)));
     }
 
