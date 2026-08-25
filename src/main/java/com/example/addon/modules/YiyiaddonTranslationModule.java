@@ -23,7 +23,7 @@ public final class YiyiaddonTranslationModule extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "🌐 §l界面汉化 · 使用说明" },
+            new String[]{ "§l界面汉化 · 使用说明" },
             new String[]{
                 "§e§l▌ 使用方法",
                 "§f  · 首次安装默认开启简体中文汉化。",

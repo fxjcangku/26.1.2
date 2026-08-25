@@ -556,7 +556,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             new String[]{
-                "⛏️ §l自动挖矿 · 使用说明"
+                "§l自动挖矿 · 使用说明"
             },
             new String[]{
                 "§e§l▌ 准备工作",
