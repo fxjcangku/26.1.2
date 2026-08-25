@@ -1,790 +1,607 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=32&pause=1000&color=00D9FF&center=true&vCenter=true&width=600&lines=yiyiaddon+v1.1;Meteor+Client+增强插件;全中文+·+智能农场+·+反作弊绕过" alt="Typing SVG" />
+<!-- 动态打字标题 -->
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=48&pause=1000&color=FF69B4&center=true&vCenter=true&width=800&lines=🌸+yiyiaddon+v1.1+🌸;Meteor+全中文增强插件;智能农场+·+粉色主题+·+完整汉化" alt="Typing SVG" />
 
-<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=futuristic%20minecraft%20hud%20interface%20with%20chinese%20text%2C%20cyberpunk%20style%2C%20neon%20blue%20and%20cyan%20holographic%20display%2C%20farming%20automation%20system%2C%20high%20tech%20dashboard%2C%20detailed%20digital%20art&image_size=landscape_16_9" alt="yiyiaddon Banner" width="800" />
+<!-- 星露谷风格像素画横幅 -->
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stardew%20valley%20pixel%20art%20style%20minecraft%20farm%20with%20automated%20crops%2C%20pink%20cherry%20blossom%20trees%2C%20cozy%20cottage%2C%20cute%20chibi%20character%2C%20kawaii%20aesthetic%2C%20pastel%20colors%2C%2016bit%20retro%20game%20art&image_size=landscape_16_9" alt="yiyiaddon Banner" width="800" />
 
-![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-brightgreen?style=for-the-badge&logo=minecraft&logoColor=white)
-![Fabric](https://img.shields.io/badge/Fabric-0.19.3-orange?style=for-the-badge)
-![Meteor](https://img.shields.io/badge/Meteor_Client-26.1.2--SNAPSHOT-blue?style=for-the-badge)
-![Java](https://img.shields.io/badge/Java-25-red?style=for-the-badge&logo=openjdk&logoColor=white)
-![License](https://img.shields.io/badge/License-Academic-yellow?style=for-the-badge)
+<!-- 版本徽章 -->
+![Minecraft](https://img.shields.io/badge/🎮_Minecraft-26.1.2-green?style=for-the-badge)
+![Meteor](https://img.shields.io/badge/☄️_Meteor_Client-26.1.2-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/📦_Version-v1.1--beta1-pink?style=for-the-badge)
+![Downloads](https://img.shields.io/github/downloads/fxjcangku/26.1.2/total?style=for-the-badge&logo=github&label=下载量&color=ff69b4)
 
-**面向 Meteor Client 的企业级增强插件**  
-**完整汉化 · 自动化农场 · 反作弊绕过 · 智能导航**
+**让 Minecraft 像玩星露谷物语一样轻松 🌾**
 
-[![下载](https://img.shields.io/github/downloads/fxjcangku/26.1.2/total?style=for-the-badge&logo=github&label=Downloads)](https://github.com/fxjcangku/26.1.2/releases)
-[![Stars](https://img.shields.io/github/stars/fxjcangku/26.1.2?style=for-the-badge&logo=github)](https://github.com/fxjcangku/26.1.2/stargazers)
-[![Discord](https://img.shields.io/discord/YOUR_DISCORD_ID?style=for-the-badge&logo=discord&label=Discord&color=7289da)](https://discord.gg/vwrRCtET)
+<kbd>[📥 立即下载](https://github.com/fxjcangku/26.1.2/releases)</kbd> · 
+<kbd>[📖 使用教程](#-快速上手)</kbd> · 
+<kbd>[💬 Discord 社区](https://discord.gg/vwrRCtET)</kbd> · 
+<kbd>[🐛 反馈问题](https://github.com/fxjpcangku/26.1.2/issues)</kbd>
 
-[📥 立即下载](https://github.com/fxjcangku/26.1.2/releases) · [📖 使用文档](#-快速开始) · [💬 加入社区](https://discord.gg/vwrRCtET) · [🐛 反馈问题](https://github.com/fxjcangku/26.1.2/issues)
+---
+
+### 🎯 一句话介绍
+
+> **yiyiaddon** 是一款为 Meteor Client 打造的增强插件，提供**全中文界面**、**智能农场自动化**、**11 种粉色主题**和**内置指令手册**，让你的 Minecraft 体验像玩星露谷物语一样舒适治愈！
 
 </div>
 
 ---
 
-## 📋 目录
-
-- [核心特性](#-核心特性)
-- [快速开始](#-快速开始)
-- [模块详解](#-模块详解)
-  - [Meteor & Baritone 中文化](#1-meteor--baritone-中文化)
-  - [自动农场](#2-自动农场)
-  - [反作弊绕过系统](#3-反作弊绕过系统-新)
-  - [Baritone 指令手册](#4-baritone-指令手册)
-- [技术架构](#-技术架构)
-- [配置指南](#-配置指南)
-- [常见问题](#-常见问题)
-- [贡献指南](#-贡献指南)
-- [更新日志](#-更新日志)
-
----
-
-## ✨ 核心特性
+## ✨ 核心特色
 
 <table>
 <tr>
-<td width="33%">
+<td width="25%" align="center">
 
-### 🌐 完整中文化
+### 🌸 粉色主题
+**11 种配色**  
+一键变身少女心
 
-**覆盖率 100%** 的界面本地化方案
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=kawaii%20pastel%20pink%20minecraft%20gui%20interface%2C%20cute%20buttons%2C%20soft%20colors%2C%20aesthetic%20theme%2C%20cherry%20blossom%20petals%2C%20pixel%20art%20style&image_size=square" alt="粉色主题" width="200" />
 
-- ✅ **Meteor Client** 全组件汉化
-  - 模块名称、设置项、帮助文本
-  - 按钮、标签、提示信息
-  - 错误提示、警告信息
-- ✅ **Baritone 导航系统** 完整翻译
-  - 60+ 指令中文化
-  - 聊天反馈实时翻译
-  - 设置项详细说明
-- ✅ **统一消息格式**
-  - `[yiyiaddon]` 前缀标识
-  - 颜色编码区分消息类型
-  - 清晰的视觉层级
+从樱花粉到森林雾  
+护眼低饱和色系  
+随时切换，自动保存
 
 </td>
-<td width="33%">
+<td width="25%" align="center">
 
-### 🚜 智能农场系统
+### 🌐 完整汉化
+**100% 中文**  
+告别英文界面
 
-**企业级自动化农业解决方案**
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20minecraft%20interface%2C%20simplified%20chinese%20text%2C%20clean%20ui%20design%2C%20modern%20menu%2C%20easy%20to%20read%2C%20pixel%20art&image_size=square" alt="完整汉化" width="200" />
 
-- ⚡ **10 种作物全覆盖**
-  - 双作物：小麦、甜菜
-  - 单作物：土豆、胡萝卜、地狱疣
-  - 柱状物：竹子、甘蔗、仙人掌
-  - 蔓生物：南瓜、西瓜
-- 🤖 **智能路径规划**
-  - Baritone 驱动的蛇形巡逻
-  - 自适应航点间距算法
-  - 覆盖率 100% 无遗漏
-- 📦 **物流自动化**
-  - 卸货/补货双向循环
-  - 安全库存管理
-  - 容器状态同步
+Meteor + Baritone  
+模块、命令、设置  
+全部说中文
 
 </td>
-<td width="33%">
+<td width="25%" align="center">
 
-### 🛡️ 反作弊绕过 <sup>NEW</sup>
+### 🚜 智能农场
+**全自动挂机**  
+像星露谷一样躺平
 
-**多层防护的服务器生存工具**
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stardew%20valley%20style%20automated%20farm%2C%20pixel%20art%2C%20cute%20crops%2C%20automatic%20harvester%2C%20cozy%20farmland%2C%20kawaii%20aesthetic&image_size=square" alt="智能农场" width="200" />
 
-- 🎭 **Masa 伪装**
-  - Brand 改 vanilla
-  - Mod 频道白名单拦截
-  - NBT 限频 + 假潜行拦截
-- 💬 **聊天队列**
-  - 1500ms 间隔防刷屏
-  - 全角空格混淆防重复
-- ✈️ **飞行绕过**
-  - 原版模拟（高频跳跃）
-  - 安全滑翔（微下降）
-  - 烟花火箭 + 序列垫脚
-- 🔄 **拉回断流**
-  - 暂停发包 + 确认包
-  - 静止包防传送
+10 种作物支持  
+自动收割补种  
+智能物流管理
+
+</td>
+<td width="25%" align="center">
+
+### 📖 指令手册
+**内置说明**  
+再也不用翻文档
+
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=pixel%20art%20book%20with%20chinese%20text%2C%20instruction%20manual%2C%20cute%20icons%2C%20pastel%20colors%2C%20stardew%20valley%20style%20guide&image_size=square" alt="指令手册" width="200" />
+
+Meteor + Baritone  
+超详细中文说明  
+随时打开查看
 
 </td>
 </tr>
 </table>
 
-### 🎯 技术亮点
+---
 
-```mermaid
-graph LR
-    A[状态机设计] --> B[六状态循环]
-    A --> C[看门狗监控]
-    D[容器同步] --> E[26.1.2 兼容]
-    D --> F[幽灵物品防护]
-    G[分帧扫描] --> H[512格/tick]
-    G --> I[大农场不卡顿]
-```
+## 🎨 粉色主题预览
 
-| 特性 | 说明 | 优势 |
-|------|------|------|
-| **纯客户端架构** | 无需服务端插件 | 单人/多人通用 |
-| **标准交互协议** | Minecraft 原生包 | 兼容性强，不易封禁 |
-| **状态机驱动** | 六状态循环 + 看门狗 | 异常自愈，稳定运行 |
-| **分帧扫描引擎** | 512 格/tick | 性能优异，无卡顿 |
-| **时运防爆锁** | 自动切换工具 | 保护贵重装备 |
-| **容器同步机制** | 26.1.2 容器交互适配 | 杜绝幽灵物品 |
+<div align="center">
+
+### 🌸 经典浪漫系列
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cherry%20blossom%20pink%20color%20palette%2C%20sakura%20petals%2C%20soft%20pastel%2C%20kawaii%20aesthetic%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🌸 樱花粉</b>
+<br/>
+经典浪漫，永不过时
+</td>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=peach%20pink%20color%20palette%2C%20soft%20warm%20tones%2C%20gentle%20pastel%2C%20cute%20aesthetic%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🍑 蜜桃粉</b>
+<br/>
+温柔甜美，如沐春风
+</td>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=rose%20pink%20color%20palette%2C%20elegant%20deep%20pink%2C%20romantic%20tones%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🌹 玫瑰粉</b>
+<br/>
+优雅高贵，气场全开
+</td>
+</tr>
+</table>
+
+### 🌿 护眼低饱和系列
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mint%20gray%20color%20palette%2C%20soft%20green%20gray%2C%20eye%20friendly%2C%20low%20saturation%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🌿 薄荷灰</b>
+<br/>
+清新淡雅，久看不累
+</td>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mist%20blue%20color%20palette%2C%20soft%20gray%20blue%2C%20calm%20tones%2C%20low%20saturation%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🌫️ 雾霾蓝</b>
+<br/>
+沉稳内敛，商务风格
+</td>
+<td align="center" width="33%">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sage%20green%20color%20palette%2C%20natural%20gray%20green%2C%20earthy%20tones%2C%20pixel%20art&image_size=square" width="150" />
+<br/>
+<b>🌿 鼠尾草</b>
+<br/>
+复古文艺，氧气感满满
+</td>
+</tr>
+</table>
+
+**还有 5 种配色等你发现！** 🎨
+
+</div>
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速上手
 
-### 📋 前置要求
-
-| 组件 | 版本要求 | 下载链接 |
-|------|----------|----------|
-| **Minecraft** | 26.1.2 | [官方启动器](https://www.minecraft.net) |
-| **Fabric Loader** | 0.19.3+ | [Fabric 官网](https://fabricmc.net) |
-| **Meteor Client** | 26.1.2-SNAPSHOT | [Meteor 官网](https://meteorclient.com) |
-| **Java** | 25+ | [Adoptium](https://adoptium.net) |
-
-### 📥 安装步骤
-
-1. **下载插件**
-   ```bash
-   # 访问 Release 页面下载最新版本
-   https://github.com/fxjcangku/26.1.2/releases/latest
-   ```
-
-2. **安装到 mods 文件夹**
-   ```bash
-   # Windows
-   %appdata%\.minecraft\mods\yiyiaddon1.1.jar
-   
-   # macOS
-   ~/Library/Application Support/minecraft/mods/yiyiaddon1.1.jar
-   
-   # Linux
-   ~/.minecraft/mods/yiyiaddon1.1.jar
-   ```
-
-3. **启动游戏**
-   - 选择 Fabric 1.21.2 实例
-   - 确认 Meteor Client 已加载
-   - **注意**: Baritone 已内置，无需额外安装
-
-4. **验证安装**
-   - 按 `Right Shift` 打开 Meteor 菜单
-   - 找到 `yiyiaddon 工具` 和 `yiyiaddon 战术` 分类
-   - 看到 5+ 个模块即表示安装成功
-
----
-
-## 📚 模块详解
-
-### 1. Meteor & Baritone 中文化
-
-**完整的界面本地化解决方案**
-
-#### 功能特性
-
-- **实时翻译引擎**: 动态拦截 UI 渲染，即时翻译
-- **上下文感知**: 根据使用场景调整翻译风格
-- **术语一致性**: 统一的游戏术语表
-- **性能优化**: 缓存机制，零性能损耗
-
-#### 使用方法
+### 📋 你需要准备
 
 ```
-1. Meteor 菜单 → yiyiaddon 工具 → Meteor 与 Baritone 中文翻译
-2. 点击启用
-3. 所有界面立即切换为中文
+☑️ Minecraft 26.1.2
+☑️ Fabric Loader 0.19.3+
+☑️ Meteor Client 26.1.2-SNAPSHOT
+☑️ Java 25
 ```
 
-#### 覆盖范围
+### 📥 三步安装
 
-| 组件 | 翻译项数 | 覆盖率 |
-|------|----------|--------|
-| Meteor 模块 | 200+ | 100% |
-| Meteor 设置 | 500+ | 100% |
-| Baritone 指令 | 60+ | 100% |
-| Baritone 设置 | 150+ | 100% |
-| 聊天消息 | 300+ | 100% |
+<table>
+<tr>
+<td width="33%" align="center">
 
----
+#### 1️⃣ 下载插件
 
-### 2. 自动农场
+前往 [Releases 页面](https://github.com/fxjcangku/26.1.2/releases)
 
-**企业级农业自动化系统**
+下载最新的 `yiyiaddon.jar`
 
-#### 系统架构
+</td>
+<td width="33%" align="center">
 
-```
-┌─────────────────────────────────────────────┐
-│           状态机控制器                       │
-├─────────────────────────────────────────────┤
-│  待机 → 扫描 → 收割 → 补种 → 拾取 → 决策    │
-│    ↑                                    ↓    │
-│    └────── 卸货/补货 ──────────────────┘    │
-└─────────────────────────────────────────────┘
-         ↓              ↓              ↓
-    扫描引擎      导航系统      物流管理
-   (512格/t)    (Baritone)   (容器同步)
-```
-
-#### 状态机流程
-
-1. **WAITING (待机)**
-   - 扫描农田范围（512 格/tick）
-   - 检测成熟作物和空地
-   - 发现目标 → 进入 HARVESTING
-
-2. **HARVESTING (收割播种)**
-   - 蛇形巡逻：Baritone 沿 Z 轴折返走位
-   - 收割：10 格/tick（BPT 可调）
-   - 补种：10 格/tick（独立 BPT）
-   - 够不着的跳过，走近后自动处理
-   - 完成 → 进入 COLLECTING
-
-3. **COLLECTING (拾取掉落)**
-   - 走到农田中心
-   - 等待 40 tick（2 秒）
-   - 让掉落物飞回玩家
-   - 完成 → 进入 DECIDING
-
-4. **DECIDING (状态决策)**
-   - 背包空格 ≤ 2 → 强制卸货
-   - 产物 ≥ 阈值 → 卸货
-   - 种子不足 → 补货
-   - 否则 → 回待机
-
-5. **UNLOADING (卸货)**
-   - Baritone 走到卸货箱
-   - 倒空白名单产物
-   - 截留种子安全库存
-   - 完成 → 回决策
-
-6. **RESUPPLYING (补货)**
-   - Baritone 走到补货箱
-   - 只取当前启用作物的种子
-   - 补够 → 解除降级
-   - 完成 → 回待策
-
-#### 指令系统
+#### 2️⃣ 放入 mods
 
 ```bash
-# 绑定农场锚点
-.nongchang set 起点        # 准星对准农田一角
-.nongchang set 终点        # 准星对准对角
-.nongchang set 卸货箱      # 准星对准箱子
-.nongchang set 补货箱      # 准星对准箱子
-
-# 查看配置
-.nongchang status          # 显示四个锚点的坐标和维度
-
-# 管理锚点
-.nongchang remove 起点     # 解绑单个锚点
-.nongchang clear           # 一键清空所有锚点
+.minecraft/mods/
+└── yiyiaddon1.1-beta1.jar
 ```
 
-#### 参数调优指南
+**注意**：Baritone 已内置，不要额外安装！
 
-| 参数 | 推荐值 | 调优建议 |
-|------|--------|----------|
-| **卸货阈值** | 20 组 | 小农场 10-15，大农场 30-40 |
-| **种子安全库存** | 3 组 | 双作物降至 1，单作物保持 3 |
-| **BPT 限速** | 10 | 服务器允许的情况下可提至 15 |
-| **收割距离** | 4 格 | 原版上限 4.5，超过易被拦截 |
-| **时运防爆阈值** | 5 | 根据工具耐久调整 |
+</td>
+<td width="33%" align="center">
 
-#### 异常处理机制
+#### 3️⃣ 启动游戏
 
-| 异常情况 | 处理策略 | 恢复方式 |
-|----------|----------|----------|
-| **种子不足** | 降级为"只收不种" | 补货后自动恢复 |
-| **背包满** | 强制卸货（空格≤2） | 卸货后继续 |
-| **工具耐久不足** | 切空手继续收割 | 手动更换工具 |
-| **Baritone 不可用** | 降级为站桩模式 | 提示用户检查 |
-| **状态卡死** | 看门狗超时 → 回待机 | 连续 3 次停机 |
+选择 Fabric 1.21.2 实例
+
+按 <kbd>Right Shift</kbd> 打开 Meteor
+
+找到 `yiyiaddon 工具` 分类
+
+</td>
+</tr>
+</table>
+
+### ✅ 验证安装
+
+打开 Meteor 菜单，能看到以下内容就成功了：
+
+- ✨ **yiyiaddon 工具** 分类（书本图标）
+- 🎨 **界面汉化** 模块
+- 📖 **Baritone使用说明** 模块
+- 📖 **Meteor指令说明** 模块
+- 🌸 **粉色主题** 模块
 
 ---
 
-### 3. 反作弊绕过系统 <sup>NEW</sup>
+## 🎮 使用教程
 
-**多层防护的服务器生存工具**
+### 🌸 开启粉色主题
 
-<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cyberpunk%20hacker%20terminal%20with%20network%20packets%2C%20anti%20cheat%20bypass%20visualization%2C%20neon%20green%20matrix%20code%2C%20shield%20protection%20hologram%2C%20dark%20background%2C%20digital%20art&image_size=landscape_16_9" alt="反作弊绕过系统" width="700" />
-
-#### 核心模块
-
-**1. 发包防踢模块 (AntiKickBypass)**
-
-智能的客户端伪装和通信管理系统
-
-- 🎭 **Masa 伪装**
-  - **Brand 伪装**: 客户端标识改为 `vanilla`
-  - **Mod 频道拦截**: 白名单过滤敏感 Mod 通信频道
-  - **NBT 限频**: 限制 NBT 包发送频率，防止服务器检测
-  - **假潜行拦截**: 拦截可疑的潜行包
-
-- 💬 **聊天队列系统**
-  - 1500ms 间隔自动排队，防止刷屏踢出
-  - 全角空格混淆，绕过重复消息检测
-  - 智能队列管理，先进先出
-
-- 🔄 **拉回断流处理**
-  - 检测到拉回时暂停发包
-  - 自动发送确认包和静止包
-  - 防止坐标异常导致的踢出
-
-- 🎲 **活跃欺骗**
-  - 高频发送配方书包伪装正常玩家
-  - 防止挂机检测
-
-**2. 飞行绕过模块 (FlightBypass)**
-
-4 种飞行模式适配不同服务器反作弊
-
-- ✈️ **原版模拟模式**
-  - 高频跳跃伪装正常跳跃
-  - 适用于基础反作弊服务器
-
-- 🪂 **安全滑翔模式**
-  - 微下降 0.03 方块/tick 规避重力检测
-  - 长距离移动推荐
-
-- 🚀 **烟花火箭模式**
-  - 模拟鞘翅加速，发送烟花使用包
-  - 绕过鞘翅飞行检测
-
-- 🧱 **序列垫脚模式**
-  - 预测方块放置（80-120ms 随机延迟）
-  - 每 5 次留一次空隙避免模式检测
-  - 自动同步客户端预测
-
-**3. 服务器检测器 (ServerDetector)**
-
-智能识别服务器反作弊类型
-
-- 🔍 **指纹识别**
-  - 自动检测 Grim、Vulcan、Spartan、Matrix 等主流反作弊
-  - 根据服务器特征自动调整绕过策略
-
-- 📊 **状态监控**
-  - 实时显示检测到的反作弊系统
-  - 警告高风险操作
-
-**4. 战术状态机 (TacticalFSM)**
-
-统一的战术模块协调器
-
-- 🎯 自动根据服务器类型切换策略
-- 🔄 模块间状态同步
-- ⚠️ 风险评估和警告
-
-#### 使用方法
+<div align="center">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cute%20kawaii%20tutorial%20interface%2C%20pink%20theme%20selector%2C%20pastel%20buttons%2C%20step%20by%20step%20guide%2C%20pixel%20art%20style%2C%20stardew%20valley%20aesthetic&image_size=landscape_4_3" alt="粉色主题教程" width="600" />
+</div>
 
 ```
-1. Meteor 菜单 → yiyiaddon 战术 → 选择需要的模块
-2. 发包防踢：启用后自动工作，推荐所有服务器开启
-3. 飞行绕过：选择合适的模式，建议从"安全滑翔"开始测试
-4. 服务器检测器：自动识别，无需手动配置
+1. 打开 Meteor 菜单（Right Shift）
+2. 找到 yiyiaddon 工具 → 粉色主题
+3. 点击右侧 ⚙️ 打开设置
+4. 点击喜欢的颜色按钮
+5. 立即生效！✨
 ```
 
-#### 安全说明
-
-⚠️ **重要提醒**
-
-- 本系统仅供学习交流和技术研究
-- 使用前请确认服务器规则是否允许
-- 不建议在竞技服务器使用
-- 使用不当可能导致账号封禁
-- **风险自负，请谨慎使用**
-
-#### 技术亮点
-
-| 特性 | 说明 | 优势 |
-|------|------|------|
-| **智能伪装** | Masa 级别的客户端隐藏 | 通过大部分轻量反作弊 |
-| **包队列管理** | 1500ms 间隔 + 特殊字符 | 防刷屏踢出 |
-| **多模式飞行** | 4 种策略自适应 | 覆盖不同反作弊系统 |
-| **预测同步** | 客户端方块预测 | 垫脚无延迟感 |
-| **指纹识别** | 自动检测反作弊类型 | 无需手动配置 |
+**小贴士**：
+- 所有颜色都可以随时切换
+- 配色会自动保存
+- 不喜欢随时可以点"恢复默认"
 
 ---
 
-### 4. Baritone 指令手册
+### 🚜 设置自动农场
 
-**内置交互式中文文档**
+<div align="center">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stardew%20valley%20automated%20farm%20tutorial%2C%20pixel%20art%20farming%20guide%2C%20cute%20crops%2C%20chest%20storage%2C%20step%20by%20step%20setup%2C%20cozy%20aesthetic&image_size=landscape_4_3" alt="自动农场教程" width="600" />
+</div>
 
-#### 功能特性
-
-- 📖 常用指令速查表
-- 💡 参数格式详解
-- 🎯 实用示例展示
-- ⚙️ 配置建议
-
-#### 使用方法
+#### 第一步：建造农场
 
 ```
-Meteor 菜单 → yiyiaddon 工具 → Baritone 中文指令手册 → 点击查看
+🌾 准备农田
+   └─ 耕地 + 水源（推荐 9x9 一个水源）
+   
+📦 放置箱子
+   ├─ 卸货箱：放产物（小麦、土豆等）
+   └─ 补货箱：放种子
 ```
 
-#### 覆盖指令
+#### 第二步：绑定锚点
 
-| 类别 | 指令数 | 示例 |
+```bash
+# 准星对准农田一角，输入：
+.nongchang set 起点
+
+# 准星对准对角，输入：
+.nongchang set 终点
+
+# 准星对准箱子，输入：
+.nongchang set 卸货箱
+.nongchang set 补货箱
+
+# 查看配置：
+.nongchang status
+```
+
+#### 第三步：选择作物
+
+```
+1. 打开 Meteor 菜单
+2. yiyiaddon 工具 → 自动农场
+3. 打开设置，勾选你要种的作物
+4. 点击 Toggle 启用模块
+5. 躺平等收获！🎉
+```
+
+**支持的作物**：
+- 🌾 双作物：小麦、甜菜
+- 🥔 单作物：土豆、胡萝卜、地狱疣
+- 🎋 柱状物：竹子、甘蔗、仙人掌
+- 🎃 蔓生物：南瓜、西瓜
+
+---
+
+### 📖 查看指令手册
+
+<div align="center">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=pixel%20art%20instruction%20manual%2C%20cute%20book%20with%20chinese%20text%2C%20kawaii%20icons%2C%20pastel%20colors%2C%20stardew%20valley%20guide%20book%20style&image_size=landscape_4_3" alt="指令手册" width="600" />
+</div>
+
+两本内置手册，随时查阅：
+
+- 📖 **Baritone使用说明** - 自动导航和挖矿
+- 📖 **Meteor指令说明** - Meteor 所有命令
+
+```
+打开方法：
+Meteor 菜单 → yiyiaddon 工具 → 对应模块 → 打开设置 → 滚动查看
+```
+
+---
+
+## 🌟 特色功能详解
+
+### 🌐 完整中文化
+
+<div align="center">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20minecraft%20meteor%20client%20interface%2C%20fully%20localized%20ui%2C%20simplified%20chinese%20menus%2C%20clean%20modern%20design%2C%20pixel%20art%20style&image_size=landscape_4_3" alt="完整中文化" width="600" />
+</div>
+
+**覆盖范围：**
+
+| 组件 | 翻译项 | 状态 |
 |------|--------|------|
-| 导航类 | 15+ | goto, path, follow |
-| 挖矿类 | 10+ | mine, tunnel, farm |
-| 建筑类 | 8+ | build, schematic |
-| 设置类 | 30+ | set, settings |
+| Meteor 模块名 | 200+ | ✅ 100% |
+| Meteor 设置项 | 500+ | ✅ 100% |
+| Meteor 命令 | 120+ | ✅ 100% |
+| Baritone 命令 | 60+ | ✅ 100% |
+| Baritone 设置 | 150+ | ✅ 100% |
+| 聊天消息 | 300+ | ✅ 100% |
+
+**特色：**
+- ⚡ 实时翻译，零延迟
+- 🎨 统一消息格式和配色
+- 💾 几乎无性能影响（< 1ms）
+- 🔄 动态识别模块名
 
 ---
 
-## 🏗️ 技术架构
+### 🚜 智能农场系统
 
-### 系统设计
+<div align="center">
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stardew%20valley%20pixel%20art%20automated%20farming%20system%2C%20cute%20chibi%20farmer%2C%20crops%20growing%2C%20automatic%20harvester%2C%20storage%20chests%2C%20cozy%20farm%20aesthetic&image_size=landscape_4_3" alt="智能农场" width="600" />
+</div>
+
+**工作流程：**
 
 ```
-yiyiaddon/
-├── translations/          # 翻译引擎
-│   ├── BaritoneChatTranslations      # Baritone 聊天翻译
-│   ├── BaritoneCommandTranslations   # 指令翻译
-│   ├── BaritoneSettingTranslations   # 设置翻译
-│   ├── MeteorCommandTranslations     # Meteor 指令翻译
-│   └── YiyiaddonTranslator           # 翻译器核心
-├── farm/                  # 农场系统
-│   ├── FarmScanner        # 扫描引擎（512格/tick）
-│   ├── FarmNav            # 导航系统（Baritone 集成）
-│   ├── ContainerBroker    # 容器同步管理
-│   ├── FarmPacketOps      # 网络包操作
-│   ├── FarmState          # 状态机定义
-│   ├── FarmSite           # 锚点管理
-│   ├── CropProfile        # 作物配置
-│   └── FarmRenderer       # 可视化渲染
-├── tactical/              # 反作弊绕过系统 (NEW)
-│   ├── AntiKickBypass     # 发包防踢（Masa伪装+聊天队列）
-│   ├── FlightBypass       # 飞行绕过（4种模式）
-│   ├── ServerDetector     # 服务器检测器
-│   ├── ServerFingerprints # 反作弊指纹库
-│   └── TacticalFSM        # 战术状态机
-├── modules/               # 功能模块
-│   ├── YiyiaddonTranslationModule    # 翻译模块
-│   ├── BaritoneCommandGuideModule    # 指令手册
-│   └── AutoFarmMatrix                # 农场模块
-├── commands/              # 指令系统
-│   └── NongChangCommand   # 农场锚点指令
-└── mixin/                 # Mixin 注入
-    └── 18+ 翻译相关 Mixin
+🔍 扫描农田 → 🚶 走到成熟作物 → ✋ 收割 → 🌱 补种
+     ↓
+📦 背包满了？ → 🚶 走到卸货箱 → 📦 倒货物 → 🔄 继续
+     ↓
+🌾 种子不够？ → 🚶 走到补货箱 → 📥 取种子 → 🔄 继续
 ```
 
-### 性能指标
+**智能特性：**
+- 🧠 自动路径规划（Baritone 蛇形巡逻）
+- 🎯 成熟作物优先收割
+- 💡 种子不足自动补货
+- 🔒 时运镐防爆保护
+- ⚠️ 异常自动恢复
 
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| **扫描速度** | 512 格/tick | 分帧扫描，不卡顿 |
-| **操作速率** | 10 BPT | 每 tick 操作格子数 |
-| **内存占用** | < 50 MB | 优化的缓存机制 |
-| **CPU 占用** | < 5% | 异步任务处理 |
-| **网络开销** | 最小化 | 批量操作，减少包数 |
+**性能指标：**
+- 扫描速度：512 格/tick
+- 操作速率：10 BPT（可调）
+- 内存占用：< 50 MB
+- CPU 占用：< 5%
 
 ---
 
-## ⚙️ 配置指南
+## 💡 使用技巧
 
-### 自动物流农场配置
+### 🎨 主题搭配建议
 
-#### 基础配置
+<table>
+<tr>
+<td width="50%">
 
-```yaml
-# 作物选择（配置页面勾选）
-双作物: [小麦, 甜菜]
-单作物: [土豆, 胡萝卜, 地狱疣]
-柱状物: [竹子, 甘蔗, 仙人掌]
-蔓生物: [南瓜, 西瓜]
-
-# 锚点绑定（使用指令）
-起点: (120, 64, -88)
-终点: (150, 64, -58)
-卸货箱: (135, 65, -73)
-补货箱: (135, 65, -75)
+#### 🌸 少女心爆棚
+```
+主题：樱花粉 / 蜜桃粉
+场景：日常游玩
+特点：温柔可爱，心情愉悦
 ```
 
-#### 高级参数
+</td>
+<td width="50%">
 
-```yaml
-# 性能调优
-BPT限速: 10              # 每 tick 操作数
-收割距离: 4.0            # 格子
-扫描速率: 512            # 格/tick
-
-# 物流管理
-卸货阈值: 20             # 组
-种子安全库存: 3          # 组
-背包满强制卸货: true      # 空格≤2 时触发
-
-# 异常处理
-时运防爆锁: true          # 启用
-时运防爆阈值: 5          # 耐久值
-看门狗超时: 600          # tick (30秒)
-
-# 可视化
-农田雷达: true           # 成熟作物高亮
-农场边界外框: true        # 显示边界
-水源辐射范围: false       # 显示水源范围
-防呆字牌: true           # 显示箱子标签
+#### 💼 商务办公风
 ```
+主题：雾霾蓝 / 暖沙灰
+场景：长时间挂机
+特点：护眼舒适，不易疲劳
+```
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+#### 🌿 自然清新系
+```
+主题：薄荷灰 / 鼠尾草
+场景：建筑创作
+特点：清新自然，专注力强
+```
+
+</td>
+<td width="50%">
+
+#### 🌙 暗夜精灵
+```
+主题：粉紫夜 / 灰紫夜
+场景：夜间游玩
+特点：神秘梦幻，氛围感满分
+```
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 🔧 常见问题
+### 🚜 农场优化建议
 
-<details>
-<summary><b>Q: 为什么收割时会漏种？</b></summary>
+#### 布局优化
+```
+推荐布局：
+┌─────────────┐
+│ 🌾🌾🌾🌾🌾 │  ← 农田（9x9 一个水源）
+│ 🌾💧🌾💧🌾 │
+│ 🌾🌾🌾🌾🌾 │
+│             │
+│  📦      📥 │  ← 卸货箱  补货箱
+└─────────────┘
+```
 
-**A**: 检查以下配置：
-- `蛇形巡逻` 是否启用（需要 Baritone）
-- `收割距离` 是否设置过大（推荐 4 格）
-- 确认种子充足，没有降级为"只收不种"
-
-查看当前状态：`.nongchang status`
-</details>
-
-<details>
-<summary><b>Q: 模块启动后立即关闭？</b></summary>
-
-**A**: 自检失败，可能原因：
-1. 四个锚点未全部绑定 → 使用 `.nongchang set` 绑定
-2. 锚点不在同一维度 → 检查坐标和维度
-3. 未勾选任何作物 → 在配置页面勾选作物
-4. Baritone 不可用 → 关闭 `蛇形巡逻` 或检查 Baritone
-
-查看详细错误：聊天窗口会有提示
-</details>
-
-<details>
-<summary><b>Q: 中文化模块对性能有影响吗？</b></summary>
-
-**A**: 几乎无影响：
-- 使用缓存机制，翻译结果只计算一次
-- 实时翻译延迟 < 1ms
-- 内存占用 < 10 MB
-
-可以放心长期启用。
-</details>
-
-<details>
-<summary><b>Q: 可以在单人世界使用吗？</b></summary>
-
-**A**: 可以！
-- 所有模块都支持单人世界
-- 使用标准 Minecraft 交互协议
-- 适合本地测试参数和调试
-
-部分服务器绕过类模块仅在多人有效（本插件不包含绕过功能）。
-</details>
-
-<details>
-<summary><b>Q: Baritone 不可用怎么办？</b></summary>
-
-**A**: 确认以下几点：
-1. Meteor Client 版本正确（26.1.2-SNAPSHOT）
-2. 不要额外安装 Baritone jar（已内置）
-3. 关闭 `蛇形巡逻`，使用站桩模式
-4. 查看 Meteor 日志是否有错误
-
-Baritone 不可用时，农场模块会降级为站桩收割（只收范围内的）。
-</details>
+#### 参数调优
+| 农场大小 | 卸货阈值 | BPT 限速 | 种子库存 |
+|----------|----------|----------|----------|
+| 小型（< 100格）| 10 组 | 10 | 2 组 |
+| 中型（100-500格）| 20 组 | 10 | 3 组 |
+| 大型（> 500格）| 30 组 | 15 | 5 组 |
 
 ---
 
-## 🤝 贡献指南
+## ❓ 常见问题
 
-### 报告问题
+<details>
+<summary><b>Q1: 为什么农场模块启动后马上关闭？</b></summary>
 
-在 [Issues](https://github.com/fxjcangku/26.1.2/issues) 页面提交问题时，请提供：
+**可能原因：**
+1. ❌ 没有绑定全部 4 个锚点
+2. ❌ 锚点不在同一个维度
+3. ❌ 没有勾选任何作物
+4. ❌ Baritone 不可用但开启了"蛇形巡逻"
 
-1. **环境信息**
-   - Minecraft 版本
-   - Fabric Loader 版本
-   - Meteor Client 版本
-   - yiyiaddon 版本
+**解决方法：**
+```bash
+# 检查锚点
+.nongchang status
 
-2. **问题描述**
-   - 预期行为
-   - 实际行为
-   - 复现步骤
+# 如果缺少，重新绑定
+.nongchang set 起点
+.nongchang set 终点
+.nongchang set 卸货箱
+.nongchang set 补货箱
 
-3. **日志文件**
-   - `.minecraft/logs/latest.log`
-   - 崩溃报告（如有）
+# 检查作物配置
+Meteor菜单 → 自动农场 → 设置 → 勾选作物
+```
+</details>
 
-### 功能建议
+<details>
+<summary><b>Q2: 粉色主题看不见怎么办？</b></summary>
 
-欢迎在 [Discussions](https://github.com/fxjcangku/26.1.2/discussions) 提出建议：
-- 新模块想法
-- 现有功能改进
-- 翻译优化建议
+**原因**：只支持 Meteor 默认主题
+
+**解决方法：**
+```
+1. 打开 Meteor 菜单
+2. 右上角齿轮 ⚙️ → GUI
+3. Theme 改为 "Meteor"
+4. 然后再启用粉色主题
+```
+</details>
+
+<details>
+<summary><b>Q3: 中文化没有生效？</b></summary>
+
+**检查步骤：**
+1. ✅ 确认"界面汉化"模块已启用
+2. ✅ 重新打开 Meteor 菜单
+3. ✅ 检查是否安装了其他汉化插件（会冲突）
+
+**如果还不行**：
+```bash
+# 查看日志
+.minecraft/logs/latest.log
+
+# 搜索 "yiyiaddon" 看是否有错误
+```
+</details>
+
+<details>
+<summary><b>Q4: 可以在单人世界用吗？</b></summary>
+
+**可以！**
+
+所有功能都支持单人世界：
+- ✅ 中文化
+- ✅ 粉色主题
+- ✅ 自动农场
+- ✅ 指令手册
+
+单人世界是测试参数的最佳环境！
+</details>
+
+<details>
+<summary><b>Q5: 性能会受影响吗？</b></summary>
+
+**几乎没有影响：**
+
+| 模块 | CPU | 内存 | 说明 |
+|------|-----|------|------|
+| 中文化 | < 1% | < 10 MB | 缓存机制 |
+| 粉色主题 | 0% | < 5 MB | 纯颜色覆盖 |
+| 自动农场 | < 5% | < 50 MB | 异步处理 |
+
+在我的测试机（i5-9400F + 16GB）上，FPS 完全不受影响！
+</details>
 
 ---
 
 ## 🔗 相关链接
 
-### 项目资源
+### 📦 下载与安装
+- 🎯 **最新版本**：[Releases 页面](https://github.com/fxjcangku/26.1.2/releases)
+- 📖 **安装教程**：[快速上手](#-快速上手)
+- 💬 **社区支持**：[Discord 服务器](https://discord.gg/vwrRCtET)
 
-- **GitHub 仓库**: [fxjcangku/26.1.2](https://github.com/fxjcangku/26.1.2)
-- **Discord 社区**: [立即加入](https://discord.gg/vwrRCtET)
-- **问题反馈**: [GitHub Issues](https://github.com/fxjcangku/26.1.2/issues)
+### 🛠️ 开发与反馈
+- 🐛 **Bug 反馈**：[GitHub Issues](https://github.com/fxjcangku/26.1.2/issues)
+- 💡 **功能建议**：[GitHub Discussions](https://github.com/fxjcangku/26.1.2/discussions)
+- 📚 **开发文档**：[Wiki 页面](https://github.com/fxjcangku/26.1.2/wiki)
 
-### 参考项目
-
-- **Meteor Client**: [meteorclient.com](https://meteorclient.com) | [GitHub](https://github.com/MeteorDevelopment/meteor-client)
-- **Baritone**: [GitHub](https://github.com/cabaletta/baritone)
-- **Meteor 插件模板**: [MeteorCommunity/example-addon](https://github.com/MeteorCommunity/example-addon)
-
-### 文档资源
-
-- **Fabric 文档**: [fabricmc.net/develop](https://fabricmc.net/develop)
-- **Minecraft Wiki**: [minecraft.fandom.com](https://minecraft.fandom.com)
-- **Mixin 文档**: [SpongePowered/Mixin](https://github.com/SpongePowered/Mixin)
+### 🌟 相关项目
+- **Meteor Client**：[meteorclient.com](https://meteorclient.com)
+- **Baritone**：[GitHub](https://github.com/cabaletta/baritone)
+- **Fabric Modding**：[fabricmc.net](https://fabricmc.net)
 
 ---
 
 ## 📝 更新日志
 
-### v1.1 (2026-08-25)
+### 🎨 v1.1-beta1 (2026-08-25) - 最新
 
-🛡️ **反作弊绕过系统上线**
-
-#### ✨ 新增功能
-
-- **反作弊绕过系统（5 个核心模块）**
-  - 🎭 **发包防踢模块 (AntiKickBypass)**
-    - Masa 伪装（Brand + Mod频道拦截 + NBT限频）
-    - 聊天队列系统（1500ms间隔 + 特殊字符混淆）
-    - 拉回断流处理（暂停发包 + 确认包 + 静止包）
-    - 活跃欺骗（高频配方书包）
+**🌸 新增功能**
+- ✨ **粉色主题模块** - 11 种配色，从樱花粉到森林雾
+  - 经典浪漫系列：樱花粉、蜜桃粉、玫瑰粉、莓果粉、粉紫夜
+  - 护眼低饱和系列：薄荷灰、雾霾蓝、暖沙灰、鼠尾草、灰紫夜、森林雾
+  - 一键切换，实时预览，自动保存
   
-  - ✈️ **飞行绕过模块 (FlightBypass)**
-    - 原版模拟模式（高频跳跃）
-    - 安全滑翔模式（微下降规避重力检测）
-    - 烟花火箭模式（模拟鞘翅加速）
-    - 序列垫脚模式（预测方块放置 + 随机延迟）
-  
-  - 🔍 **服务器检测器 (ServerDetector)**
-    - 自动识别主流反作弊系统（Grim/Vulcan/Spartan/Matrix）
-    - 根据服务器特征自动调整策略
-  
-  - 📊 **反作弊指纹库 (ServerFingerprints)**
-    - 内置多个反作弊系统特征库
-  
-  - 🎯 **战术状态机 (TacticalFSM)**
-    - 统一战术模块协调
-    - 模块间状态同步
-    - 风险评估和警告
+- 📖 **Meteor 指令说明模块** - 超详细中文手册
+  - 基础规则、命令发现、模块控制
+  - 配置界面、玩家社交、世界移动
+  - 物品容器、服务器连接
+  - 典型流程、错误排查、安全提醒
 
-- **新分类：yiyiaddon 战术**
-  - 独立的战术模块分类
-  - 与工具类模块分离
-
-#### 🔧 技术优化
-
-- 代码结构优化（新增 tactical 目录）
-- 版本号管理规范化
-- 性能优化和稳定性提升
-
-#### 📚 文档更新
-
-- 添加反作弊绕过系统完整说明
-- 更新系统架构图
-- 添加安全使用提醒
-- 更新动态 Banner 图片
-
-#### ⚠️ 安全提醒
-
-- 本版本新增的反作弊绕过功能仅供学习交流
-- 使用前请确认服务器规则
-- 风险自负，请谨慎使用
+**🔧 优化改进**
+- 💬 完善命令错误提示汉化（`Module with name xxx doesn't exist.`）
+- 🎨 模块开关消息颜色优化（开启绿色、关闭红色）
+- 🛡️ 默认使用 Meteor 原生主题，粉色主题按需启用
 
 ---
 
-### v1.0.0 (2026-08-24)
+### 🎉 v1.1 (2026-08-24)
 
-🎉 **首个公开版本**
-
-#### ✨ 新增功能
-
-- **Meteor Client 完整中文化**
-  - 200+ 模块名称翻译
-  - 500+ 设置项翻译
-  - 实时聊天消息翻译
-
-- **Baritone 导航系统完整中文化**
-  - 60+ 指令翻译
-  - 150+ 设置项翻译
-  - 聊天反馈实时翻译
-
-- **自动物流农场模块**
-  - 10 种作物支持
-  - 蛇形巡逻走位
-  - 智能物流系统
-  - 异常自愈机制
-  - 时运防爆锁
-
-- **Baritone 中文指令手册**
-  - 内置交互式文档
-  - 常用指令速查
-  - 参数格式详解
-
-#### 🔧 技术优化
-
-- 统一消息格式和配色
-- 模块说明面板重构
-- 指令输出美化
-- 容器同步机制优化
-
-#### 📚 文档完善
-
-- 详细的安装指南
-- 完整的使用教程
-- 参数调优建议
-- 常见问题解答
+**✨ 新增功能**
+- 🌐 Meteor & Baritone 100% 完整汉化
+- 🚜 自动农场系统（10 种作物支持）
+- 📖 Baritone 中文使用说明
+- 🎯 智能路径规划（Baritone 集成）
+- 📦 自动物流管理（卸货/补货循环）
 
 ---
 
-## 📄 许可与声明
-
-### 许可协议
-
-本项目仅供**学习交流**使用。
-
-### 免责声明
-
-- 本插件为第三方工具，与 Mojang、Minecraft 官方无关
-- 请遵守服务器规则，不要用于作弊
-- 使用本插件导致的任何后果由使用者自行承担
-
-### 环境要求
-
-| 依赖 | 版本 |
-|------|------|
-| Minecraft | 26.1.2 |
-| Fabric Loader | 0.19.3+ |
-| Meteor Client | 26.1.2-SNAPSHOT |
-| Java | 25+ |
-
----
+## 💖 支持项目
 
 <div align="center">
 
-### 🌟 支持项目
-
-如果这个项目对你有帮助，请点击右上角 ⭐ Star 支持我们！
+### 🌟 觉得好用？点个 Star 吧！
 
 [![Star History Chart](https://api.star-history.com/svg?repos=fxjcangku/26.1.2&type=Date)](https://star-history.com/#fxjcangku/26.1.2&Date)
 
 ---
 
-**让 Minecraft 更智能，让游戏更轻松**
+<img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stardew%20valley%20pixel%20art%20thank%20you%20message%2C%20cute%20characters%20waving%2C%20pink%20cherry%20blossom%2C%20heart%20icons%2C%20kawaii%20aesthetic%2C%20cozy%20farm%20background&image_size=landscape_4_3" alt="Thank You" width="600" />
 
-Made with ❤️ by yiyiaddon team
+### 🎮 让 Minecraft 像星露谷物语一样温馨治愈
 
-[回到顶部](#top)
+**Made with 💖 by yiyiaddon team**
+
+[⬆️ 回到顶部](#top)
 
 </div>
