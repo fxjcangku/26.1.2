@@ -69,7 +69,7 @@ tasks {
     }
 
     jar {
-        archiveFileName.set("yiyiaddon1.0-personal.jar")
+        archiveFileName.set("yiyiaddon1.1-personal.jar")
         inputs.property("archivesName", project.base.archivesName.get())
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         from("libs/baritone-fabric-26.1.2.jar") {
@@ -94,7 +94,7 @@ tasks {
         dependsOn(jar)
 
         val inputJar = jar.get().archiveFile.get().asFile
-        val outputJar = layout.buildDirectory.file("libs/yiyiaddon1.0.jar").get().asFile
+        val outputJar = layout.buildDirectory.file("libs/yiyiaddon1.1.jar").get().asFile
 
         injars(inputJar)
         outjars(outputJar)
