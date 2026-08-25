@@ -372,15 +372,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 不加单人世界守卫：本模块走的是标准 C2S 交互包，
         // 单人世界的内置服务端一样能正常处理，方便在本地开创造测试
 
-        // 开机四重自检
-        String error = selfCheck();
-        if (error != null) {
-            chatFeedback = false; // 禁用开关消息
-            if (isActive()) toggle(); // 关闭模块
-            chatFeedback = true; // 恢复开关消息
-            notifyError("自检失败：" + error);
-            return;
-        }
+        // 开机四重自检：缺项一次列全，配好一项下次就少一条
+        if (!reportSelfCheck(selfCheck())) return;
 
         // 重置状态机
         state = FarmState.STANDBY;
@@ -416,12 +409,17 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     }
 
     /**
-     * 开机四重自检，任一失败返回错误原因
+     * 开机四重自检，收集全部缺项
+     *
+     * 收集全部而不是遇到第一个就返回，这样用户一次就能看到还差什么，
+     * 配好一项下次启动就少一条，不用反复开关模块试错。
      */
-    private String selfCheck() {
+    private List<String> selfCheck() {
+        List<String> missing = new ArrayList<>();
+
         // 1. 至少勾选一种作物
         if (getEnabledCrops().isEmpty()) {
-            return "未勾选任何作物，请在「作物图鉴」里至少勾选一种";
+            missing.add("未勾选作物 — 在「作物图鉴」里至少勾选一种");
         }
 
         // 2. 四锚点全部绑定
@@ -430,24 +428,34 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         FarmSite dump = site(SiteType.DUMP);
         FarmSite supply = site(SiteType.SUPPLY);
 
-        if (start == null) return "起点未绑定";
-        if (end == null) return "终点未绑定";
-        if (dump == null) return "卸货箱未绑定";
-        if (supply == null) return "补货箱未绑定";
-
-        // 3. 四锚点都在当前维度
-        if (!start.inCurrentDimension()) return "起点不在当前维度";
-        if (!end.inCurrentDimension()) return "终点不在当前维度";
-        if (!dump.inCurrentDimension()) return "卸货箱不在当前维度";
-        if (!supply.inCurrentDimension()) return "补货箱不在当前维度";
-
-        // 4. 农田范围有效（体积 > 0）
-        scanner.setBounds(start.pos(), end.pos());
-        if (scanner.volume() == 0) {
-            return "农田范围无效（起点终点重合）";
+        if (start == null) {
+            missing.add("起点未绑定 — 准星对准农田一角，输入 " + highlightCommand(".nongchang set 起点"));
+        }
+        if (end == null) {
+            missing.add("终点未绑定 — 准星对准对角，输入 " + highlightCommand(".nongchang set 终点"));
+        }
+        if (dump == null) {
+            missing.add("卸货箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".nongchang set 卸货箱"));
+        }
+        if (supply == null) {
+            missing.add("补货箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".nongchang set 补货箱"));
         }
 
-        return null;
+        // 3. 已绑定的锚点必须在当前维度（未绑定的上面已经报过，不重复报）
+        if (start != null && !start.inCurrentDimension()) missing.add("起点不在当前维度 — 回到绑定时的维度，或重新绑定");
+        if (end != null && !end.inCurrentDimension()) missing.add("终点不在当前维度 — 回到绑定时的维度，或重新绑定");
+        if (dump != null && !dump.inCurrentDimension()) missing.add("卸货箱不在当前维度 — 回到绑定时的维度，或重新绑定");
+        if (supply != null && !supply.inCurrentDimension()) missing.add("补货箱不在当前维度 — 回到绑定时的维度，或重新绑定");
+
+        // 4. 农田范围有效（体积 > 0）
+        if (start != null && end != null) {
+            scanner.setBounds(start.pos(), end.pos());
+            if (scanner.volume() == 0) {
+                missing.add("农田范围无效 — 起点和终点重合了，重新绑定其中一个");
+            }
+        }
+
+        return missing;
     }
 
     // ═══════════════════════════════════════════════════════════════════

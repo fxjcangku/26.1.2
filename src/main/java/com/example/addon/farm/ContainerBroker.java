@@ -209,11 +209,19 @@ public final class ContainerBroker {
         mc.gameMode.handleContainerInput(menu.containerId, slotIndex, 0, ContainerInput.QUICK_MOVE, player);
     }
 
-    /** 关闭当前容器界面 */
+    /**
+     * 关闭当前容器界面。
+     *
+     * 必须先确认当前 Screen 真的是容器界面：player.closeContainer() 会无条件
+     * 关掉当前打开的任意 Screen，若在 Meteor GUI 打开时调用（例如点击模块开关
+     * 触发 onDeactivate），会把 Meteor 面板一起关掉。
+     */
     public static void closeContainer() {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null) return;
+        // 不是容器界面就不关，避免误伤 Meteor GUI
+        if (!(mc.screen instanceof AbstractContainerScreen<?>)) return;
         player.closeContainer();
     }
 }

@@ -383,14 +383,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
-        String error = selfCheck();
-        if (error != null) {
-            chatFeedback = false; // 禁用开关消息
-            if (isActive()) toggle(); // 关闭模块
-            chatFeedback = true; // 恢复开关消息
-            notifyError("启动失败：" + error);
-            return;
-        }
+        // 启动自检：缺项一次列全，配好一项下次就少一条
+        if (!reportSelfCheck(selfCheck())) return;
 
         // 应用 Baritone 设置
         baritone.applySettings(
@@ -433,44 +427,48 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     /**
      * 启动自检：目标单选、三个WK坐标、五条指令
+     *
+     * 收集全部缺项而不是遇到第一个就返回，这样用户一次就能看到还差什么，
+     * 配好一项下次启动就少一条，不用反复试错。
      */
-    private String selfCheck() {
+    private List<String> selfCheck() {
+        List<String> missing = new ArrayList<>();
+
         // 1. 目标单选
         Block overworld = overworldOreTarget.get();
         Block nether = netherOreTarget.get();
         Block block = blockTarget.get();
-        
+
         int selectedCount = 0;
         if (overworld != null && !overworld.equals(Blocks.AIR)) selectedCount++;
         if (nether != null && !nether.equals(Blocks.AIR)) selectedCount++;
         if (block != null && !block.equals(Blocks.AIR)) selectedCount++;
-        
+
         if (selectedCount == 0) {
-            return "必须选择一个目标（主世界矿石/下界矿石/普通方块）";
-        }
-        if (selectedCount > 1) {
-            return "只能选择一个目标，当前选择了 " + selectedCount + " 个";
+            missing.add("未选择目标 — 在「主世界矿石/下界矿石/普通方块」里选一个");
+        } else if (selectedCount > 1) {
+            missing.add("目标选了 " + selectedCount + " 个 — 只能选一个，取消多余的");
         }
 
         // 2. 三个 WK 坐标
         if (WKCommand.getMineralChest() == null) {
-            return "矿物箱未绑定，请用 .wk set 矿物箱 绑定";
+            missing.add("矿物箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".wk set 矿物箱"));
         }
         if (WKCommand.getFoodChest() == null) {
-            return "食物箱未绑定，请用 .wk set 食物箱 绑定";
+            missing.add("食物箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".wk set 食物箱"));
         }
         if (WKCommand.getAFKPoint() == null) {
-            return "挂机点未绑定，请用 .wk set 挂机点 绑定";
+            missing.add("挂机点未绑定 — 站到挂机位置，输入 " + highlightCommand(".wk set 挂机点"));
         }
 
         // 3. 五条指令
-        if (wildCommand.get().isEmpty()) return "去野外指令未填写";
-        if (unloadCommand.get().isEmpty()) return "满载卸货指令未填写";
-        if (supplyCommand.get().isEmpty()) return "补给指令未填写";
-        if (afkCommand.get().isEmpty()) return "挂机点指令未填写";
-        if (respawnCommand.get().isEmpty()) return "死亡重返指令未填写";
+        if (wildCommand.get().isEmpty()) missing.add("「去野外指令」未填写 — 填传送到矿区的服务器指令");
+        if (unloadCommand.get().isEmpty()) missing.add("「满载卸货指令」未填写 — 填传送到矿物箱的指令");
+        if (supplyCommand.get().isEmpty()) missing.add("「补给指令」未填写 — 填传送到食物箱的指令");
+        if (afkCommand.get().isEmpty()) missing.add("「挂机点指令」未填写 — 填传送到挂机点的指令");
+        if (respawnCommand.get().isEmpty()) missing.add("「死亡重返指令」未填写 — 填复活后回矿区的指令");
 
-        return null;
+        return missing;
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -136,9 +136,13 @@ public final class ContainerHelper {
 
     /**
      * 关闭容器
+     *
+     * 只在当前 Screen 确实是容器界面时才关：player.closeContainer() 会无条件关掉
+     * 当前打开的任意 Screen，若在 Meteor GUI 打开时调用会把面板一起关掉。
+     * 注意 containerMenu 判空没用——玩家自身背包菜单始终非 null。
      */
     public void closeContainer() {
-        if (mc.player != null && mc.player.containerMenu != null) {
+        if (mc.player != null && mc.screen instanceof AbstractContainerScreen<?>) {
             mc.player.closeContainer();
         }
         openAttempts = 0;

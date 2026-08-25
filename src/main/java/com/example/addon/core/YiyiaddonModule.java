@@ -493,11 +493,41 @@ import java.util.function.Consumer;
 //     addUniformButton 用 minWidth(BUTTON_MIN_WIDTH) 统一列宽
 //     + expandWidgetX() 让按钮填满单元格，才能真正等宽。
 //
-//   ── 四、自检 ──────────────────────────────────────────────
+//   ── 四、启动自检的缺项播报 ────────────────────────────────
 //
-//   改完任意模块，先跑这两条确认没有漏网的写法：
-//     Grep "\[yiyiaddon\] "  → 应只在基类注释里出现（说明文字），不应出现在字符串里
-//     Grep "expandX\(\)"     → 只允许 buildInfoWidget 内部的 label 使用，按钮不许用
+//   需要前置配置才能跑的模块（绑坐标、填指令、勾作物那类），selfCheck() 必须
+//   返回 List<String> 收集全部缺项，然后交给 reportSelfCheck(missing) 播报。
+//
+//   ✗ 禁止「遇到第一个缺项就 return 一条错误」。
+//     那样用户得反复开关模块，配一项试一次，挤牙膏式试错。
+//     正确的做法是一次列全，用户配好一项下次启动就少一条，剩几项一目了然。
+//
+//   ✗ 禁止在 onActivate() 里直接调 toggle() 自我关闭。
+//     Module.toggle() 的字节码顺序是「先 addActive 再调 onActivate」，
+//     在 onActivate 内部再走一遍完整 toggle() 会造成状态机重入。
+//     reportSelfCheck 已用 mc.execute 把关闭推迟到下一帧，直接用它就行。
+//
+//   ── 五、关闭容器界面的守卫 ────────────────────────────────
+//
+//   凡是要调 player.closeContainer() 的地方，必须先确认当前 Screen 真的是容器界面：
+//     if (!(mc.screen instanceof AbstractContainerScreen<?>)) return;
+//
+//   player.closeContainer() 会无条件关掉当前打开的任意 Screen。若在 onDeactivate()
+//   里无守卫地调用，用户从 Meteor GUI 点击开关模块时，Meteor 面板会被一起关掉
+//   （AutoFarmMatrix 的 onDeactivate 原来就是这个毛病，表现为「点一下面板就没了」）。
+//
+//   ✗ 判断 mc.player.containerMenu != null 没用——玩家自身背包菜单始终非 null，
+//     这个条件永远为真，等于没加守卫。必须判断 Screen 类型。
+//
+//   ── 六、自检 ──────────────────────────────────────────────
+//
+//   改完任意模块，先跑这几条确认没有漏网的写法：
+//     Grep "\[yiyiaddon\] "        → 应只在基类注释里出现，不应出现在字符串里
+//     Grep "expandX\(\)"           → 只允许 buildInfoWidget 内部的 label 使用
+//     Grep "onActivate" 内是否有 toggle() → onActivate 里一律不许自我 toggle
+//       （事件回调里的 if (isActive()) toggle() 是合法的，比如离开世界、
+//        看门狗连续超时停机，那些不在 toggle() 调用栈内，不会重入）
+//     Grep "closeContainer\(\)"     → 每处调用点都要有 Screen 类型守卫
 //
 // ════════════════════════════════════════════════════════════════════
 
@@ -615,6 +645,38 @@ public abstract class YiyiaddonModule extends Module {
     protected void notifyError(String message) {
         if (mc.player == null) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§6§l" + message)));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  启动自检 - 需要前置配置的模块使用
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 报告自检缺项并关闭模块
+     *
+     * 一次列出所有缺失项，用户配好一项下次启动就少一条，不用挤牙膏式反复试。
+     * 只报第一个错会让用户来回开关模块，配一项试一次，体验很差。
+     *
+     * 关闭走 mc.execute 延后到下一帧：Module.toggle() 是先 addActive 再调
+     * onActivate，在 onActivate 里直接 toggle() 会造成状态机重入。
+     *
+     * @param missing 缺项清单，为空表示自检通过
+     * @return true 表示自检通过可以继续启动，false 表示已中止
+     */
+    protected boolean reportSelfCheck(java.util.List<String> missing) {
+        if (missing.isEmpty()) return true;
+
+        chatFeedback = false;
+        mc.execute(() -> {
+            if (isActive()) toggle();
+            chatFeedback = true;
+        });
+
+        notifyError("还差 " + missing.size() + " 项没配好，配完再开：");
+        for (int i = 0; i < missing.size(); i++) {
+            notify("§6  " + (i + 1) + ". §f" + missing.get(i));
+        }
+        return false;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
