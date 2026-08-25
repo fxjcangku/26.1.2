@@ -144,6 +144,7 @@ public class ServerDetector extends YiyiaddonModule {
 
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。");
+        this.toggleOnBindRelease = true;
     }
 
     @Override
@@ -239,9 +240,12 @@ public class ServerDetector extends YiyiaddonModule {
             if (fromVersion != null) return fromVersion;
         }
 
-        // brand 是 vanilla 又没有任何插件指令，基本可以认为是原版服或已被刻意清洗
+        // brand 精确匹配 vanilla，避免 "vanilla+custom" 误判
+        if ("vanilla".equals(brand)) {
+            return "原版";
+        }
         if (brand != null && brand.toLowerCase(Locale.ROOT).contains("vanilla")) {
-            return "原版（或已清洗 brand）";
+            return "原版（已改 brand）";
         }
         return "未知";
     }
@@ -417,6 +421,13 @@ public class ServerDetector extends YiyiaddonModule {
                 HttpURLConnection conn = openConnection(urlStr, offset);
                 int code = conn.getResponseCode();
 
+                // 416 = Range 无效（文件已完整），直接删除重下
+                if (code == 416) {
+                    conn.disconnect();
+                    partFile.delete();
+                    continue;
+                }
+
                 // 206 = 接受续传；200 = 不支持续传，从头下
                 boolean append = code == HttpURLConnection.HTTP_PARTIAL;
                 if (code != HttpURLConnection.HTTP_OK && !append) {
@@ -531,7 +542,8 @@ public class ServerDetector extends YiyiaddonModule {
                 if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
                     Desktop.getDesktop().open(RESOURCE_PACK_DIR);
                 } else {
-                    new ProcessBuilder("explorer.exe", RESOURCE_PACK_DIR.getAbsolutePath()).start();
+                    // Windows 路径含空格需用 /select 避免解析错误
+                    new ProcessBuilder("explorer.exe", "/select," + RESOURCE_PACK_DIR.getAbsolutePath()).start();
                 }
             } catch (Exception e) {
                 mc.execute(() -> notifyError("打开资源库失败：" + e.getMessage()));

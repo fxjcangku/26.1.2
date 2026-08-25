@@ -72,11 +72,22 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // ─── Baritone 设置 ───
     private final Setting<Boolean> avoidLava;
     private final Setting<Boolean> mobAvoidance;
+    private final Setting<Integer> mobAvoidanceRadius;
     private final Setting<Boolean> allowBreak;
     private final Setting<Boolean> allowPlace;
     private final Setting<Integer> maxFallHeight;
-    private final Setting<Integer> miningRange;
+    private final Setting<Boolean> pauseMiningForFallingBlocks;
+    private final Setting<Boolean> itemSaver;
+    private final Setting<Integer> itemSaverThreshold;
+    private final Setting<Boolean> allowOnlyExposedOres;
+    private final Setting<Integer> allowOnlyExposedOresDistance;
+    private final Setting<Integer> minYLevelWhileMining;
+    private final Setting<Integer> maxYLevelWhileMining;
+    private final Setting<Integer> mineMaxOreLocationsCount;
+    private final Setting<Boolean> blacklistClosestOnFailure;
     private final Setting<Boolean> legitMine;
+    private final Setting<Integer> legitMineYLevel;
+    private final Setting<Boolean> legitMineIncludeDiagonals;
 
     // ─── 显示设置 ───
     private final Setting<Double> espScale;
@@ -198,16 +209,25 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // ─── Baritone 设置 ───
         avoidLava = sgBaritone.add(new BoolSetting.Builder()
             .name("避开岩浆")
-            .description("Baritone 避免在岩浆附近挖掘")
+            .description("禁止 Baritone 将岩浆作为正常寻路路径")
             .defaultValue(true)
             .onChanged(value -> baritone.updateSetting("avoidLava", value))
             .build());
 
         mobAvoidance = sgBaritone.add(new BoolSetting.Builder()
             .name("怪物规避")
-            .description("Baritone 遇到怪物时暂停寻路")
+            .description("提高怪物附近路径代价，尽量绕开危险区域")
             .defaultValue(true)
-            .onChanged(value -> baritone.updateSetting("mobAvoidance", value))
+            .onChanged(value -> baritone.updateSetting("avoidance", value))
+            .build());
+
+        mobAvoidanceRadius = sgBaritone.add(new IntSetting.Builder()
+            .name("怪物规避半径")
+            .description("计算怪物危险区域的半径")
+            .defaultValue(8)
+            .min(1)
+            .sliderMax(16)
+            .onChanged(value -> baritone.updateSetting("mobAvoidanceRadius", value))
             .build());
 
         allowBreak = sgBaritone.add(new BoolSetting.Builder()
@@ -233,13 +253,77 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("maxFallHeightNoWater", value))
             .build());
 
-        miningRange = sgBaritone.add(new IntSetting.Builder()
-            .name("挖掘范围")
-            .description("搜索矿石的最大距离（格）")
-            .defaultValue(130)
-            .min(32)
+        pauseMiningForFallingBlocks = sgBaritone.add(new BoolSetting.Builder()
+            .name("掉落方块暂停")
+            .description("遇到沙子、沙砾等掉落方块时暂停挖掘")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("pauseMiningForFallingBlocks", value))
+            .build());
+
+        itemSaver = sgBaritone.add(new BoolSetting.Builder()
+            .name("工具保护")
+            .description("工具耐久不足时避免继续使用该工具")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("itemSaver", value))
+            .build());
+
+        itemSaverThreshold = sgBaritone.add(new IntSetting.Builder()
+            .name("Baritone工具耐久阈值")
+            .description("Baritone 停止使用工具的剩余耐久")
+            .defaultValue(50)
+            .min(1)
+            .sliderMax(500)
+            .onChanged(value -> baritone.updateSetting("itemSaverThreshold", value))
+            .build());
+
+        allowOnlyExposedOres = sgBaritone.add(new BoolSetting.Builder()
+            .name("仅挖暴露矿石")
+            .description("只挖掘能从指定距离看到的矿石，减少无效挖掘")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("allowOnlyExposedOres", value))
+            .build());
+
+        allowOnlyExposedOresDistance = sgBaritone.add(new IntSetting.Builder()
+            .name("暴露矿石检测距离")
+            .description("判断矿石是否暴露时使用的检测距离")
+            .defaultValue(1)
+            .min(1)
+            .sliderMax(8)
+            .onChanged(value -> baritone.updateSetting("allowOnlyExposedOresDistance", value))
+            .build());
+
+        minYLevelWhileMining = sgBaritone.add(new IntSetting.Builder()
+            .name("最低挖掘高度")
+            .description("Baritone 挖矿时不会低于此高度")
+            .defaultValue(-64)
+            .min(-64)
+            .sliderMax(320)
+            .onChanged(value -> baritone.updateSetting("minYLevelWhileMining", value))
+            .build());
+
+        maxYLevelWhileMining = sgBaritone.add(new IntSetting.Builder()
+            .name("最高挖掘高度")
+            .description("Baritone 挖矿时不会高于此高度")
+            .defaultValue(320)
+            .min(-64)
+            .sliderMax(320)
+            .onChanged(value -> baritone.updateSetting("maxYLevelWhileMining", value))
+            .build());
+
+        mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
+            .name("矿点缓存数量")
+            .description("Baritone 一次缓存的最大矿点数量")
+            .defaultValue(64)
+            .min(1)
             .sliderMax(256)
-            .onChanged(value -> baritone.updateSetting("legitMineYLevel", value))
+            .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
+            .build());
+
+        blacklistClosestOnFailure = sgBaritone.add(new BoolSetting.Builder()
+            .name("失败目标暂时跳过")
+            .description("矿点无法到达时跳过最近目标，避免反复卡住")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("blacklistClosestOnFailure", value))
             .build());
 
         legitMine = sgBaritone.add(new BoolSetting.Builder()
@@ -247,6 +331,22 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("启用合法挖掘限制（关闭可提升效率但可能被检测）")
             .defaultValue(false)
             .onChanged(value -> baritone.updateSetting("legitMine", value))
+            .build());
+
+        legitMineYLevel = sgBaritone.add(new IntSetting.Builder()
+            .name("合法挖掘高度")
+            .description("合法挖掘模式进行条带探索时使用的高度")
+            .defaultValue(12)
+            .min(-64)
+            .sliderMax(320)
+            .onChanged(value -> baritone.updateSetting("legitMineYLevel", value))
+            .build());
+
+        legitMineIncludeDiagonals = sgBaritone.add(new BoolSetting.Builder()
+            .name("合法挖掘检测对角矿石")
+            .description("合法挖掘时检测与已发现矿石对角相邻的矿石")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("legitMineIncludeDiagonals", value))
             .build());
 
         // ─── 显示设置 ───
@@ -292,13 +392,24 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         // 应用 Baritone 设置
         baritone.applySettings(
-            avoidLava.get(), 
+            avoidLava.get(),
             mobAvoidance.get(),
+            mobAvoidanceRadius.get(),
             allowBreak.get(),
             allowPlace.get(),
             maxFallHeight.get(),
-            miningRange.get(),
-            legitMine.get()
+            pauseMiningForFallingBlocks.get(),
+            itemSaver.get(),
+            itemSaverThreshold.get(),
+            allowOnlyExposedOres.get(),
+            allowOnlyExposedOresDistance.get(),
+            minYLevelWhileMining.get(),
+            maxYLevelWhileMining.get(),
+            mineMaxOreLocationsCount.get(),
+            blacklistClosestOnFailure.get(),
+            legitMine.get(),
+            legitMineYLevel.get(),
+            legitMineIncludeDiagonals.get()
         );
 
         // 重置状态机

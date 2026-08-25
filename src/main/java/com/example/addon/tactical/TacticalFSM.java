@@ -34,6 +34,10 @@ public class TacticalFSM {
     /** 拉回包冷却状态 */
     private static volatile boolean rubberBandCooldown = false;
 
+    /** 服务器卡顿状态 */
+    private static volatile boolean serverLagging = false;
+    private static volatile double currentTps = 20.0;
+
     /** 正在下载的资源包记录 */
     private static final ConcurrentHashMap<UUID, ResourcePackDownload> downloadingPacks = new ConcurrentHashMap<>();
 
@@ -61,6 +65,14 @@ public class TacticalFSM {
         return rubberBandCooldown;
     }
 
+    public static boolean isServerLagging() {
+        return serverLagging;
+    }
+
+    public static double getCurrentTps() {
+        return currentTps;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  状态更新方法
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,6 +96,12 @@ public class TacticalFSM {
     /** 设置拉回包冷却状态 */
     public static void setRubberBandCooldown(boolean cooldown) {
         rubberBandCooldown = cooldown;
+    }
+
+    /** 设置服务器卡顿状态 */
+    public static void setServerLagging(boolean lagging, double tps) {
+        serverLagging = lagging;
+        currentTps = tps;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -130,6 +148,15 @@ public class TacticalFSM {
         MeteorClient.EVENT_BUS.post(ResourcePackDownloadingEvent.get(packId, false));
     }
 
+    /**
+     * 发布服务器卡顿事件
+     * 网络层伪装模块会监听此事件并降低发包频率
+     */
+    public static void publishServerLagging(double tps) {
+        setServerLagging(tps < 18.0, tps);
+        MeteorClient.EVENT_BUS.post(ServerLaggingEvent.get(tps));
+    }
+
     /** 重置所有状态（离开服务器时调用） */
     public static void reset() {
         detectedServerCore = "未知";
@@ -137,6 +164,8 @@ public class TacticalFSM {
         hasAdvancedAntiCheat = false;
         isDownloadingResourcePack = false;
         rubberBandCooldown = false;
+        serverLagging = false;
+        currentTps = 20.0;
         downloadingPacks.clear();
     }
 
@@ -209,6 +238,19 @@ public class TacticalFSM {
         ResourcePackDownload(UUID id, long startTime) {
             this.id = id;
             this.startTime = startTime;
+        }
+    }
+
+    /** 服务器卡顿事件 */
+    public static class ServerLaggingEvent {
+        private static final ServerLaggingEvent INSTANCE = new ServerLaggingEvent();
+        public double tps;
+
+        private ServerLaggingEvent() {}
+
+        public static ServerLaggingEvent get(double currentTps) {
+            INSTANCE.tps = currentTps;
+            return INSTANCE;
         }
     }
 }

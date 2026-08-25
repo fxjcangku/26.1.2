@@ -1,88 +1,98 @@
 package com.example.addon.tactical;
 
 import com.example.addon.core.YiyiaddonModule;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.ServerboundKeepAlivePacket;
 import net.minecraft.network.protocol.common.custom.BrandPayload;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.inventory.RecipeBookType;
+import net.minecraft.world.phys.Vec3;
 
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
- * 发包防踢模块（完整实现）
+ * 终极防踢模块（全功能整合版）
  * 
- * 功能：
- * 1. Masa伪装（Brand改vanilla + 白名单拦截Mod频道 + NBT限频 + 假潜行拦截）
- * 2. 聊天队列（1500ms间隔 + 全角空格混淆）
- * 3. 拉回断流（暂停 + 确认包 + 静止包）
- * 4. 活跃欺骗（高频发配方书包）
+ * 包含 7 大功能：
+ * 1. 伪装客户端 - 改 Brand、拦截 Mod 频道
+ * 2. 聊天排队 - 自动排队防刷屏
+ * 3. 防挂机 - 假装在操作
+ * 4. 限制发包 - 防止挖太快/放太快被踢
+ * 5. 拉回处理 - 被拉回时自动断流
+ * 6. 拉回分析 - 记录什么操作容易被拉回
+ * 7. 模拟真人 - 视角抖动、网络延迟
  * 
  * @author yiyijia
  */
 public class AntiKickBypass extends YiyiaddonModule {
 
-    private final SettingGroup sgMasa = settings.createGroup("Masa伪装");
-    private final SettingGroup sgChat = settings.createGroup("聊天队列");
-    private final SettingGroup sgAntiAfk = settings.createGroup("防挂机");
-    private final SettingGroup sgThrottle = settings.createGroup("过载断流");
-    private final SettingGroup sgPacketLoss = settings.createGroup("丢包伪装");
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  设置分组
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // Masa伪装设置
-    private final Setting<Boolean> fakeBrand = sgMasa.add(new BoolSetting.Builder()
-        .name("伪装Brand")
-        .description("将客户端Brand改为vanilla")
+    private final SettingGroup sg1 = settings.createGroup("① 伪装客户端");
+    private final SettingGroup sg2 = settings.createGroup("② 聊天排队");
+    private final SettingGroup sg3 = settings.createGroup("③ 防挂机");
+    private final SettingGroup sg4 = settings.createGroup("④ 限制发包");
+    private final SettingGroup sg5 = settings.createGroup("⑤ 拉回处理");
+    private final SettingGroup sg6 = settings.createGroup("⑥ 拉回分析");
+    private final SettingGroup sg7 = settings.createGroup("⑦ 模拟真人");
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ① 伪装客户端 - 让服务器认为你是原版玩家
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private final Setting<Boolean> fakeBrand = sg1.add(new BoolSetting.Builder()
+        .name("改客户端名字")
+        .description("服务器问你用什么客户端时回答 vanilla（原版），不让它知道你用外挂")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Boolean> blockModChannels = sgMasa.add(new BoolSetting.Builder()
-        .name("拦截Mod频道")
-        .description("白名单拦截所有非minecraft:命名空间的CustomPayload包")
+    private final Setting<Boolean> blockModChannels = sg1.add(new BoolSetting.Builder()
+        .name("拦截 Mod 通信")
+        .description("阻止你的 Mod 列表发给服务器，避免被检测到")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Boolean> limitNbtQueries = sgMasa.add(new BoolSetting.Builder()
-        .name("限制NBT查询")
-        .description("限制QueryBlockNbtC2SPacket频率（每秒最多2个）")
-        .defaultValue(true)
-        .build()
-    );
-
-    private final Setting<Boolean> blockFakeSneak = sgMasa.add(new BoolSetting.Builder()
+    private final Setting<Boolean> blockFakeSneak = sg1.add(new BoolSetting.Builder()
         .name("拦截假潜行")
-        .description("检测潜行时速度>0.3则拦截（Tweakeroo指纹）")
+        .description("你在用 Tweakeroo 假潜行时，服务器会发现你潜行但跑很快，这个功能会帮你拦掉")
         .defaultValue(true)
         .build()
     );
 
-    // 聊天队列设置
-    private final Setting<Boolean> enableChatQueue = sgChat.add(new BoolSetting.Builder()
-        .name("启用聊天队列")
-        .description("高频聊天送入队列，按1500ms间隔发送")
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ② 聊天排队 - 防止发消息太快被踢
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private final Setting<Boolean> enableChatQueue = sg2.add(new BoolSetting.Builder()
+        .name("开启聊天排队")
+        .description("你发消息太快时自动排队，慢慢发，防止被踢")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Integer> chatInterval = sgChat.add(new IntSetting.Builder()
-        .name("发送间隔（ms）")
-        .description("队列中两条消息的发送间隔")
+    private final Setting<Integer> chatInterval = sg2.add(new IntSetting.Builder()
+        .name("每条消息间隔（毫秒）")
+        .description("两条消息之间等多久，1500 毫秒 = 1.5 秒")
         .defaultValue(1500)
         .min(1000)
         .max(3000)
@@ -91,33 +101,31 @@ public class AntiKickBypass extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Boolean> obfuscateChat = sgChat.add(new BoolSetting.Builder()
-        .name("混淆字符")
-        .description("在消息末尾随机插入全角空格（\u3000）")
-        .defaultValue(true)
-        .visible(() -> enableChatQueue.get())
-        .build()
-    );
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ③ 防挂机 - 假装你在玩游戏
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // 防挂机设置
-    private final Setting<Boolean> antiAfk = sgAntiAfk.add(new BoolSetting.Builder()
+    private final Setting<Boolean> antiAfk = sg3.add(new BoolSetting.Builder()
         .name("防挂机检测")
-        .description("每10秒发送配方书假包清零挂机判定")
+        .description("每 10 秒假装你在翻配方书，让服务器以为你在玩")
         .defaultValue(true)
         .build()
     );
 
-    // ── 过载断流：挖掘与交互限频 ──
-    private final Setting<Boolean> limitDigging = sgThrottle.add(new BoolSetting.Builder()
-        .name("挖掘限频")
-        .description("限制每秒破坏方块包数量，超出的排队顺延，防止挖太快被踢")
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ④ 限制发包 - 防止挖太快/放太快被踢
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private final Setting<Boolean> limitDigging = sg4.add(new BoolSetting.Builder()
+        .name("限制挖掘速度")
+        .description("挖方块太快会被踢，这个功能帮你限速")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Integer> maxDigPerSecond = sgThrottle.add(new IntSetting.Builder()
-        .name("每秒挖掘上限")
-        .description("原版极限约 5 个/秒，设太高等于没限")
+    private final Setting<Integer> maxDigPerSecond = sg4.add(new IntSetting.Builder()
+        .name("每秒最多挖几个")
+        .description("原版最快 5 个/秒，调太高等于没限制")
         .defaultValue(8)
         .min(2)
         .max(20)
@@ -126,16 +134,16 @@ public class AntiKickBypass extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Boolean> limitInteract = sgThrottle.add(new BoolSetting.Builder()
-        .name("交互限频")
-        .description("限制每秒方块放置与右键包数量，超出部分直接拦截，防止交互太快被踢")
+    private final Setting<Boolean> limitInteract = sg4.add(new BoolSetting.Builder()
+        .name("限制放置速度")
+        .description("放方块/右键太快会被踢，这个功能帮你限速")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Integer> maxInteractPerSecond = sgThrottle.add(new IntSetting.Builder()
-        .name("每秒交互上限")
-        .description("原版右键极限约 4 个/秒")
+    private final Setting<Integer> maxInteractPerSecond = sg4.add(new IntSetting.Builder()
+        .name("每秒最多放几个")
+        .description("原版最快 4 个/秒")
         .defaultValue(8)
         .min(2)
         .max(20)
@@ -144,90 +152,202 @@ public class AntiKickBypass extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Boolean> throttleOnDownload = sgThrottle.add(new BoolSetting.Builder()
-        .name("下载期间降速")
-        .description("资源包下载中把上限压到一半，模拟真实下载卡顿")
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ⑤ 拉回处理 - 被拉回时自动处理
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // 无设置项，自动运行
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ⑥ 拉回分析 - 记录什么操作容易被拉回
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private final Setting<Boolean> enableAnalysis = sg6.add(new BoolSetting.Builder()
+        .name("开启拉回分析")
+        .description("记录你每次被拉回时在做什么，累积 10 次后告诉你哪个操作最容易被拉回")
         .defaultValue(true)
         .build()
     );
 
-    // ── 丢包：主动丢弃部分出站包 ──
-    private final Setting<Integer> moveDropRate = sgPacketLoss.add(new IntSetting.Builder()
-        .name("移动包丢包率")
-        .description("按百分比随机丢弃移动包，伪造网络抖动。超过 20% 容易触发拉回，谨慎调高")
-        .defaultValue(0)
-        .min(0)
-        .max(60)
-        .sliderRange(0, 60)
+    private final Setting<Integer> analysisThreshold = sg6.add(new IntSetting.Builder()
+        .name("累积几次后分析")
+        .description("被拉回多少次后给你一份分析报告")
+        .defaultValue(10)
+        .min(5)
+        .max(50)
+        .sliderRange(5, 50)
+        .visible(() -> enableAnalysis.get())
         .build()
     );
 
-    private final Setting<Integer> interactDropRate = sgPacketLoss.add(new IntSetting.Builder()
-        .name("交互包丢包率")
-        .description("按百分比随机丢弃方块交互包。丢弃会使该次挖掘/放置无效，仅用于压低发包密度")
-        .defaultValue(0)
-        .min(0)
-        .max(60)
-        .sliderRange(0, 60)
-        .build()
-    );
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  ⑦ 模拟真人 - 让你的操作看起来像真人
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private final Setting<Boolean> keepCriticalPackets = sgPacketLoss.add(new BoolSetting.Builder()
-        .name("保护关键包")
-        .description("丢包时不碰传送确认包与带序号的交互包，避免坐标错乱与方块回滚")
+    private final Setting<Boolean> enableViewShake = sg7.add(new BoolSetting.Builder()
+        .name("视角抖动")
+        .description("移动时视角会轻微抖动，模拟手抖，看起来更像真人")
         .defaultValue(true)
         .build()
     );
 
-    // 内部状态
+    private final Setting<Double> shakeIntensity = sg7.add(new DoubleSetting.Builder()
+        .name("抖动幅度")
+        .description("抖多厉害，2° 刚好，太大会被识别成机器人")
+        .defaultValue(2.0)
+        .min(0.5)
+        .max(5.0)
+        .sliderMax(5.0)
+        .visible(() -> enableViewShake.get())
+        .build()
+    );
+
+    private final Setting<Boolean> enableNetworkDelay = sg7.add(new BoolSetting.Builder()
+        .name("网络延迟")
+        .description("发包时随机延迟 20-80 毫秒，模拟网络卡顿")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> minDelay = sg7.add(new IntSetting.Builder()
+        .name("最小延迟（毫秒）")
+        .description("延迟下限")
+        .defaultValue(20)
+        .min(0)
+        .max(100)
+        .sliderRange(0, 100)
+        .visible(() -> enableNetworkDelay.get())
+        .build()
+    );
+
+    private final Setting<Integer> maxDelay = sg7.add(new IntSetting.Builder()
+        .name("最大延迟（毫秒）")
+        .description("延迟上限，不要超过 100 毫秒，会卡")
+        .defaultValue(80)
+        .min(0)
+        .max(200)
+        .sliderRange(0, 200)
+        .visible(() -> enableNetworkDelay.get())
+        .build()
+    );
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  内部数据
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // 聊天队列
     private final Queue<String> chatQueue = new LinkedList<>();
     private long lastChatSendTime = 0;
-    private final AtomicInteger nbtQueriesThisSecond = new AtomicInteger(0);
-    private long lastNbtResetTime = System.currentTimeMillis();
-    private final Random random = new Random();
-
-    // 拉回包冷却状态
-    private boolean rubberBandHandling = false;
-    private int rubberBandCooldownTicks = 0;
 
     // 防挂机计数器
     private int antiAfkTicker = 0;
 
-    // 过载断流：滑动窗口计数（每秒重置）
-    private int digThisSecond = 0;
-    private int interactThisSecond = 0;
+    // 限制发包计数器
+    private final AtomicInteger digThisSecond = new AtomicInteger(0);
+    private final AtomicInteger interactThisSecond = new AtomicInteger(0);
     private long lastThrottleResetTime = System.currentTimeMillis();
+    private final AtomicInteger throttledCount = new AtomicInteger(0);
 
-    // 统计：本次会话被拦截/丢弃的包数，用于面板回显
-    private int throttledCount = 0;
-    private int droppedCount = 0;
+    // 拉回处理状态
+    private boolean rubberBandHandling = false;
+    private int rubberBandCooldownTicks = 0;
+
+    // 拉回分析记录
+    private static class RubberBandRecord {
+        final boolean flying;
+        final boolean digging;
+        final boolean placing;
+        final double speed;
+
+        RubberBandRecord(boolean flying, boolean digging, boolean placing, double speed) {
+            this.flying = flying;
+            this.digging = digging;
+            this.placing = placing;
+            this.speed = speed;
+        }
+    }
+    private final List<RubberBandRecord> rubberBandHistory = Collections.synchronizedList(new ArrayList<>());
+    private boolean currentlyDigging = false;
+    private boolean currentlyPlacing = false;
+
+    // 视角抖动
+    private int shakeTickCounter = 0;
+    private int nextShakeAt = 5;
+    private Vec3 lastPosition = Vec3.ZERO;
+
+    // 网络延迟
+    private final PriorityQueue<DelayedPacket> delayQueue = new PriorityQueue<>(
+        Comparator.comparingLong(p -> p.sendAt)
+    );
+    private static class DelayedPacket {
+        final Packet<?> packet;
+        final long sendAt;
+        DelayedPacket(Packet<?> packet, long sendAt) {
+            this.packet = packet;
+            this.sendAt = sendAt;
+        }
+    }
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "yiyiaddon-NetworkDelay");
+        t.setDaemon(true);
+        return t;
+    });
+    private ScheduledFuture<?> delayTask;
+
+    private final Random random = new Random();
 
     public AntiKickBypass() {
-        super(CATEGORY_TACTICAL, "发包防踢", "全方位发包拦截，Masa伪装，聊天队列，拉回断流。");
+        super(CATEGORY_TACTICAL, "anti-kick-bypass", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。");
+    }
+
+    @Override
+    public void onActivate() {
+        lastChatSendTime = 0;
+        antiAfkTicker = 0;
+        digThisSecond.set(0);
+        interactThisSecond.set(0);
+        throttledCount.set(0);
+        rubberBandHandling = false;
+        rubberBandCooldownTicks = 0;
+        shakeTickCounter = 0;
+        nextShakeAt = 3 + random.nextInt(6);
+        lastPosition = mc.player != null ? mc.player.position() : Vec3.ZERO;
+
+        if (enableNetworkDelay.get()) {
+            delayTask = scheduler.scheduleAtFixedRate(this::processDelayQueue, 0, 5, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    @Override
+    public void onDeactivate() {
+        if (delayTask != null) {
+            delayTask.cancel(false);
+            delayTask = null;
+        }
+        synchronized (delayQueue) {
+            delayQueue.clear();
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Masa伪装 - 拦截发送的包
+    //  发包拦截 - 伪装+聊天+限速+网络延迟
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @EventHandler
+    @EventHandler(priority = -100)
     private void onPacketSend(PacketEvent.Send event) {
         if (!isActive()) return;
-
         Packet<?> packet = event.packet;
 
-        // 1. Brand伪装：拦截并改写为vanilla
+        // ① 伪装客户端
         if (fakeBrand.get() && packet instanceof ServerboundCustomPayloadPacket customPayload) {
             CustomPacketPayload payload = customPayload.payload();
             if (payload instanceof BrandPayload) {
-                // 改写为vanilla
                 event.setCancelled(true);
                 event.connection.send(new ServerboundCustomPayloadPacket(new BrandPayload("vanilla")));
                 return;
             }
         }
 
-        // 2. Mod频道拦截：只放行minecraft:命名空间
         if (blockModChannels.get() && packet instanceof ServerboundCustomPayloadPacket customPayload) {
             CustomPacketPayload payload = customPayload.payload();
             String namespace = payload.type().id().getNamespace();
@@ -237,214 +357,68 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        // 3. NBT查询限频：每秒最多2个
-        if (limitNbtQueries.get() && packet instanceof ServerboundBlockEntityTagQueryPacket) {
-            // 每秒重置计数器
-            long now = System.currentTimeMillis();
-            if (now - lastNbtResetTime > 1000) {
-                nbtQueriesThisSecond.set(0);
-                lastNbtResetTime = now;
-            }
-
-            // 检查是否超过限制
-            if (nbtQueriesThisSecond.incrementAndGet() > 2) {
-                event.setCancelled(true);
-                return;
-            }
-        }
-
-        // 4. 假潜行拦截：26.1.2 的潜行状态在 PlayerInput 包的 shift 位里
-        //    Tweakeroo 的假潜行会出现「shift=true 但水平速度仍是正常行走速度」的组合，
-        //    这里把 shift 位抹掉重发，服务端只会看到一次普通移动。
         if (blockFakeSneak.get() && packet instanceof ServerboundPlayerInputPacket inputPacket) {
             Input input = inputPacket.input();
-            if (input.shift() && mc.player != null && mc.player.getDeltaMovement().horizontalDistance() > 0.3) {
-                event.setCancelled(true);
-                event.connection.send(new ServerboundPlayerInputPacket(new Input(
-                    input.forward(), input.backward(), input.left(), input.right(),
-                    input.jump(), false, input.sprint()
-                )));
-                return;
+            if (input.shift() && mc.player != null) {
+                double speed = mc.player.getDeltaMovement().horizontalDistance();
+                boolean onIce = mc.level.getBlockState(mc.player.blockPosition().below()).getBlock() 
+                    instanceof net.minecraft.world.level.block.IceBlock;
+                if (speed > 0.16 && !onIce && !mc.player.isSprinting()) {
+                    event.setCancelled(true);
+                    return;
+                }
             }
         }
 
-        // 5. 过载断流：挖掘与交互限频，超额直接拦截
-        if (applyThrottle(event, packet)) return;
-
-        // 6. 丢包伪装：按概率丢弃出站包，制造网络抖动的表象
-        if (applyPacketLoss(event, packet)) return;
-
-        // 7. 聊天队列：拦截高频聊天并送入队列
+        // ② 聊天排队
         if (enableChatQueue.get() && packet instanceof ServerboundChatPacket chatPacket) {
             event.setCancelled(true);
-            String message = chatPacket.message();
+            chatQueue.offer(chatPacket.message());
+            return;
+        }
 
-            // 混淆：随机插入全角空格
-            if (obfuscateChat.get()) {
-                int insertCount = random.nextInt(3) + 1; // 1-3个全角空格
-                StringBuilder sb = new StringBuilder(message);
-                for (int i = 0; i < insertCount; i++) {
-                    sb.append("\u3000"); // 全角空格
-                }
-                message = sb.toString();
-            }
+        // ④ 限制发包
+        if (applyThrottle(event, packet)) return;
 
-            chatQueue.offer(message);
+        // ⑦ 网络延迟
+        if (enableNetworkDelay.get() && shouldDelay(packet)) {
+            event.setCancelled(true);
+            enqueueDelayed(packet);
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  过载断流 - 挖掘与交互限频
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 挖掘与交互限频。
-     *
-     * 服务端的「超速」判定看的是单位时间内的动作包密度，所以这里按秒开窗计数，
-     * 超额的包直接拦掉。不做排队重发：sequence 在发包前已取号，延后补发会造成
-     * 序号乱序，服务端会回滚方块，比被踢更难排查。
-     *
-     * @return true 表示已拦截，调用方应停止后续处理
-     */
-    private boolean applyThrottle(PacketEvent.Send event, Packet<?> packet) {
-        long now = System.currentTimeMillis();
-        if (now - lastThrottleResetTime >= 1000) {
-            digThisSecond = 0;
-            interactThisSecond = 0;
-            lastThrottleResetTime = now;
-        }
-
-        // 资源包下载期间压到一半，配合服务器检测模块模拟下载卡顿
-        boolean downloading = throttleOnDownload.get() && TacticalFSM.isDownloadingResourcePack();
-
-        if (limitDigging.get() && packet instanceof ServerboundPlayerActionPacket action) {
-            // 只对真正的破坏动作计数，丢弃物品等动作走的是同一个包但不算挖掘
-            ServerboundPlayerActionPacket.Action type = action.getAction();
-            if (type == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
-                || type == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK) {
-
-                int limit = downloading ? Math.max(1, maxDigPerSecond.get() / 2) : maxDigPerSecond.get();
-                if (++digThisSecond > limit) {
-                    event.cancel();
-                    throttledCount++;
-                    return true;
-                }
-            }
-        }
-
-        if (limitInteract.get()
-            && (packet instanceof ServerboundUseItemOnPacket || packet instanceof ServerboundUseItemPacket)) {
-
-            int limit = downloading ? Math.max(1, maxInteractPerSecond.get() / 2) : maxInteractPerSecond.get();
-            if (++interactThisSecond > limit) {
-                event.setCancelled(true);
-                throttledCount++;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  丢包伪装 - 按概率丢弃出站包
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 按概率丢弃出站包，让服务端看到的发包节奏带上网络抖动的痕迹。
-     *
-     * 移动包丢弃是安全的：原版客户端本身就允许丢包，服务端靠下一个包的坐标续算。
-     * 但丢弃率过高会让服务端认为坐标跳变，反而触发拉回，所以上限压在 60%。
-     *
-     * 带 sequence 的交互包在开启「保护关键包」时不参与丢弃，原因同 applyThrottle：
-     * 取过号的包被丢会留下序号空洞，服务端回滚方块。
-     *
-     * @return true 表示已丢弃，调用方应停止后续处理
-     */
-    private boolean applyPacketLoss(PacketEvent.Send event, Packet<?> packet) {
-        // 拉回处理期间不丢包：此刻正需要确认包与静止包准确送达
-        if (rubberBandHandling) return false;
-
-        if (moveDropRate.get() > 0 && packet instanceof ServerboundMovePlayerPacket) {
-            if (random.nextInt(100) < moveDropRate.get()) {
-                event.setCancelled(true);
-                droppedCount++;
-                return true;
-            }
-        }
-
-        if (interactDropRate.get() > 0
-            && (packet instanceof ServerboundUseItemOnPacket
-                || packet instanceof ServerboundUseItemPacket
-                || packet instanceof ServerboundPlayerActionPacket)) {
-
-            // 关键包保护：这些包都携带 sequence，丢弃会导致预测序号空洞
-            if (keepCriticalPackets.get()) return false;
-
-            if (random.nextInt(100) < interactDropRate.get()) {
-                event.setCancelled(true);
-                droppedCount++;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  拉回断流 - 监听拉回事件并执行断流
+    //  收包监听 - 拉回处理
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @EventHandler
-    private void onRubberBand(TacticalFSM.RubberBandEvent event) {
-        if (!isActive() || mc.player == null) return;
-
-        // 1. 立即发送确认包
-        mc.player.connection.send(new ServerboundAcceptTeleportationPacket(event.getTeleportId()));
-
-        // 2. 设置冷却状态（2秒 = 40 ticks）
-        rubberBandHandling = true;
-        rubberBandCooldownTicks = 40;
-        TacticalFSM.setRubberBandCooldown(true);
-
-        // 3. 发送3个静止状态的移动包（模拟"玩家愣住了"）
-        for (int i = 0; i < 3; i++) {
-            mc.player.connection.send(new ServerboundMovePlayerPacket.PosRot(
-                event.getX(), event.getY(), event.getZ(),
-                mc.player.getYRot(), mc.player.getXRot(),
-                true,  // onGround
-                false  // horizontalCollision
-            ));
-        }
-
-        notify("§e拉回包已处理（发送确认包 + 静止包 + 2秒冷却）");
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  资源包下载期间降低发包速率
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @EventHandler
-    private void onResourcePackDownloading(TacticalFSM.ResourcePackDownloadingEvent event) {
+    private void onReceivePacket(PacketEvent.Receive event) {
         if (!isActive()) return;
 
-        if (event.isDownloading) {
-            notify("§e资源包下载中，已降低发包速率");
-            // 这里可以实现发包限速逻辑（简化版不实现）
-        } else {
-            notify("§a资源包下载完成，已恢复正常发包速率");
+        if (event.packet instanceof ClientboundPlayerPositionPacket packet) {
+            handleRubberBand(packet);
+        }
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        if (!isActive()) return;
+
+        long sessionDuration = System.currentTimeMillis() - lastThrottleResetTime;
+        if (sessionDuration < 60_000 && enableAnalysis.get()) {
+            notifyError("§c存活不到 1 分钟，可能被踢了");
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Tick处理：聊天队列 + 拉回冷却 + 防挂机
+    //  Tick 处理 - 聊天+防挂机+拉回冷却+视角抖动
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (!isActive() || mc.player == null) return;
 
-        // 1. 处理拉回包冷却
+        // 拉回冷却倒计时
         if (rubberBandHandling) {
             rubberBandCooldownTicks--;
             if (rubberBandCooldownTicks <= 0) {
@@ -453,101 +427,267 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        // 2. 处理聊天队列（按间隔发送）
+        // ② 聊天排队
         if (enableChatQueue.get() && !chatQueue.isEmpty()) {
             long now = System.currentTimeMillis();
             if (now - lastChatSendTime >= chatInterval.get()) {
                 String message = chatQueue.poll();
                 if (message != null) {
-                    // 重新构造聊天包并发送（简化版：直接用原生API）
                     mc.player.connection.sendChat(message);
                     lastChatSendTime = now;
                 }
             }
         }
 
-        // 3. 防挂机：每10秒（200 ticks）发送配方书假包
+        // ③ 防挂机
         if (antiAfk.get()) {
             antiAfkTicker++;
             if (antiAfkTicker >= 200) {
                 antiAfkTicker = 0;
-                sendAntiAfkPacket();
+                mc.player.connection.send(new ServerboundRecipeBookChangeSettingsPacket(
+                    RecipeBookType.CRAFTING, false, false
+                ));
             }
+        }
+
+        // ⑦ 视角抖动
+        if (enableViewShake.get()) {
+            handleViewShake();
         }
     }
 
-    /**
-     * 发送防挂机假包（配方书设置包）
-     */
-    private void sendAntiAfkPacket() {
-        if (mc.player == null || mc.player.connection == null) return;
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  限制发包实现
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        // 发送配方书设置变更包（服务器会认为客户端在操作）
-        mc.player.connection.send(new ServerboundRecipeBookChangeSettingsPacket(
-            RecipeBookType.CRAFTING,
-            false,  // isOpen
-            false   // isFiltering
-        ));
+    private boolean applyThrottle(PacketEvent.Send event, Packet<?> packet) {
+        long now = System.currentTimeMillis();
+        if (now - lastThrottleResetTime >= 1000) {
+            digThisSecond.set(0);
+            interactThisSecond.set(0);
+            lastThrottleResetTime = now;
+        }
+
+        if (limitDigging.get() && packet instanceof ServerboundPlayerActionPacket action) {
+            ServerboundPlayerActionPacket.Action type = action.getAction();
+            if (type == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
+                || type == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK) {
+                
+                currentlyDigging = true;
+                if (digThisSecond.get() >= maxDigPerSecond.get()) {
+                    event.cancel();
+                    throttledCount.incrementAndGet();
+                    return true;
+                }
+                digThisSecond.incrementAndGet();
+            }
+        }
+
+        if (limitInteract.get() && (packet instanceof ServerboundUseItemOnPacket 
+            || packet instanceof ServerboundUseItemPacket)) {
+            
+            currentlyPlacing = true;
+            if (interactThisSecond.get() >= maxInteractPerSecond.get()) {
+                event.setCancelled(true);
+                throttledCount.incrementAndGet();
+                return true;
+            }
+            interactThisSecond.incrementAndGet();
+        }
+
+        return false;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  UI 面板
+    //  拉回处理实现
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void handleRubberBand(ClientboundPlayerPositionPacket packet) {
+        // ⑤ 拉回处理
+        mc.player.connection.send(new ServerboundAcceptTeleportationPacket(packet.id()));
+        rubberBandHandling = true;
+        rubberBandCooldownTicks = 40;
+        TacticalFSM.setRubberBandCooldown(true);
+
+        for (int i = 0; i < 3; i++) {
+            mc.player.connection.send(new ServerboundMovePlayerPacket.PosRot(
+                packet.change().position().x,
+                packet.change().position().y,
+                packet.change().position().z,
+                mc.player.getYRot(),
+                mc.player.getXRot(),
+                true, false
+            ));
+        }
+
+        // ⑥ 拉回分析
+        if (enableAnalysis.get()) {
+            boolean flying = !mc.player.onGround() && mc.player.getDeltaMovement().y > -0.08;
+            double speed = mc.player.getDeltaMovement().horizontalDistance();
+
+            rubberBandHistory.add(new RubberBandRecord(flying, currentlyDigging, currentlyPlacing, speed));
+            currentlyDigging = false;
+            currentlyPlacing = false;
+
+            if (rubberBandHistory.size() >= analysisThreshold.get()) {
+                analyzeRubberBands();
+                rubberBandHistory.clear();
+            }
+        }
+
+        notify("§e被拉回！已自动处理（发确认包 + 静止包 + 2 秒冷却）");
+    }
+
+    private void analyzeRubberBands() {
+        int total = rubberBandHistory.size();
+        int flyingCount = 0, diggingCount = 0, placingCount = 0, speedCount = 0;
+
+        for (RubberBandRecord r : rubberBandHistory) {
+            if (r.flying) flyingCount++;
+            if (r.digging) diggingCount++;
+            if (r.placing) placingCount++;
+            if (r.speed > 0.3) speedCount++;
+        }
+
+        notify("§e§l拉回分析报告（" + total + " 次）");
+        notify("§f飞行时被拉：§c" + flyingCount + "§f 次（" + percent(flyingCount, total) + "%）");
+        notify("§f挖掘时被拉：§c" + diggingCount + "§f 次（" + percent(diggingCount, total) + "%）");
+        notify("§f放置时被拉：§c" + placingCount + "§f 次（" + percent(placingCount, total) + "%）");
+        notify("§f高速时被拉：§c" + speedCount + "§f 次（" + percent(speedCount, total) + "%）");
+
+        if (flyingCount > total * 0.5) notify("§a建议：去「飞行绕过」模块切换到安全滑翔");
+        if (diggingCount > total * 0.4) notify("§a建议：降低「每秒最多挖几个」的值");
+        if (placingCount > total * 0.4) notify("§a建议：降低「每秒最多放几个」的值");
+    }
+
+    private int percent(int part, int total) {
+        return total == 0 ? 0 : (int) ((double) part / total * 100);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  视角抖动实现
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void handleViewShake() {
+        Vec3 currentPos = mc.player.position();
+        boolean isMoving = currentPos.distanceTo(lastPosition) > 0.01;
+        lastPosition = currentPos;
+
+        if (!isMoving) return;
+
+        shakeTickCounter++;
+        if (shakeTickCounter >= nextShakeAt) {
+            shakeTickCounter = 0;
+            nextShakeAt = 3 + random.nextInt(6);
+
+            float intensity = shakeIntensity.get().floatValue();
+            float deltaYaw = (random.nextFloat() - 0.5f) * 2 * intensity;
+            float deltaPitch = (random.nextFloat() - 0.5f) * 2 * intensity;
+
+            float newYaw = mc.player.getYRot() + deltaYaw;
+            float newPitch = Math.max(-90, Math.min(90, mc.player.getXRot() + deltaPitch));
+
+            mc.player.connection.send(new ServerboundMovePlayerPacket.Rot(
+                newYaw, newPitch, mc.player.onGround(), mc.player.horizontalCollision
+            ));
+            mc.player.setYRot(newYaw);
+            mc.player.setXRot(newPitch);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  网络延迟实现
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private boolean shouldDelay(Packet<?> packet) {
+        return !(packet instanceof ServerboundKeepAlivePacket 
+            || packet instanceof ServerboundAcceptTeleportationPacket);
+    }
+
+    private void enqueueDelayed(Packet<?> packet) {
+        int delay = minDelay.get() + random.nextInt(maxDelay.get() - minDelay.get() + 1);
+        long sendAt = System.currentTimeMillis() + delay;
+        synchronized (delayQueue) {
+            delayQueue.offer(new DelayedPacket(packet, sendAt));
+        }
+    }
+
+    private void processDelayQueue() {
+        if (mc.player == null || mc.player.connection == null) return;
+        long now = System.currentTimeMillis();
+        List<Packet<?>> toSend = new ArrayList<>();
+
+        synchronized (delayQueue) {
+            while (!delayQueue.isEmpty() && delayQueue.peek().sendAt <= now) {
+                toSend.add(delayQueue.poll().packet);
+            }
+        }
+
+        if (!toSend.isEmpty()) {
+            mc.execute(() -> {
+                if (mc.player != null && mc.player.connection != null) {
+                    for (Packet<?> p : toSend) {
+                        mc.player.connection.send(p);
+                    }
+                }
+            });
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  UI 界面
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "§l发包防踢 · 功能说明" },
+            table -> {
+                WButton clearData = theme.button("清空拉回分析数据");
+                clearData.action = () -> {
+                    rubberBandHistory.clear();
+                    notify("§a已清空");
+                };
+                table.add(clearData).expandX();
+                table.row();
+            },
+            new String[]{ "§l终极防踢 · 使用说明" },
             new String[]{
-                "§e§l▌ Masa伪装",
-                "§f  · §aBrand伪装§r: 将客户端标识改为vanilla",
-                "§f  · §a拦截Mod频道§r: 白名单拦截非minecraft:频道",
-                "§f  · §aNBT限频§r: 每秒最多2个查询包（防Litematica指纹）",
-                "§f  · §a假潜行拦截§r: 速度>0.3时拦截潜行包（防Tweakeroo指纹）"
+                "§e§l▌ 快速开始",
+                "§f  1. 打开这个模块（终极防踢）",
+                "§f  2. 打开「服务器检测」模块",
+                "§f  3. 打开「飞行绕过」模块",
+                "§f  4. 进服务器，自动运行"
             },
             new String[]{
-                "§a§l▌ 聊天队列",
-                "§f  · 高频聊天自动送入队列",
-                "§f  · 按 " + chatInterval.get() + "ms 间隔发送",
-                "§f  · 末尾随机插入全角空格混淆（绕过复读机检测）",
-                "§f  · 当前队列长度: §e" + chatQueue.size()
+                "§a§l▌ 7 大功能",
+                "§f  ① 伪装客户端 - 让服务器以为你是原版玩家",
+                "§f  ② 聊天排队 - 发消息太快时自动排队",
+                "§f  ③ 防挂机 - 假装你在操作",
+                "§f  ④ 限制发包 - 防止挖/放太快被踢",
+                "§f  ⑤ 拉回处理 - 被拉回时自动发确认包",
+                "§f  ⑥ 拉回分析 - 记录什么操作容易被拉回",
+                "§f  ⑦ 模拟真人 - 视角抖动 + 网络延迟"
             },
             new String[]{
-                "§b§l▌ 拉回断流",
-                "§f  · 收到拉回包立即发送确认包",
-                "§f  · 发送3个静止状态的移动包（模拟愣住）",
-                "§f  · 2秒冷却期间暂停飞行模块"
+                "§b§l▌ 当前状态",
+                "§f  · 聊天队列：§e" + chatQueue.size() + "§f 条排队中",
+                "§f  · 本次拦截：§e" + throttledCount.get() + "§f 个包",
+                "§f  · 拉回记录：§e" + rubberBandHistory.size() + "§f 次",
+                "§f  · 延迟队列：§e" + delayQueue.size() + "§f 个包"
             },
             new String[]{
-                "§d§l▌ 防挂机",
-                "§f  · 每10秒发送配方书假包",
-                "§f  · 清零服务器挂机判定计时器"
+                "§c§l▌ 推荐设置",
+                "§f  · 挖掘上限：§e8§f 个/秒（原版 5，留点余量）",
+                "§f  · 放置上限：§e8§f 个/秒（原版 4，留点余量）",
+                "§f  · 视角抖动：§e2°§f（太大会被识别）",
+                "§f  · 网络延迟：§e默认关闭§f（开了会卡，慎用）"
             },
             new String[]{
-                "§6§l▌ 过载断流",
-                "§f  · 挖掘上限 §e" + maxDigPerSecond.get() + "§f 个/秒，交互上限 §e" + maxInteractPerSecond.get() + "§f 个/秒",
-                "§f  · 超额的包直接拦掉，不排队补发",
-                "§f    （补发会造成 sequence 空洞，服务端会回滚方块）",
-                "§f  · 资源包下载期间上限自动压到一半",
-                "§f  · 本次已拦截: §e" + throttledCount + "§f 个"
-            },
-            new String[]{
-                "§9§l▌ 丢包伪装",
-                "§f  · 移动包丢包率 §e" + moveDropRate.get() + "%§f，交互包 §e" + interactDropRate.get() + "%",
-                "§f  · 移动包可安全丢弃，服务端靠下一个包续算坐标",
-                "§f  · 丢包率超过 20% 容易触发拉回，建议保守",
-                "§f  · 本次已丢弃: §e" + droppedCount + "§f 个"
-            },
-            new String[]{
-                "§c§l▌ 联动状态",
-                "§f  · 拉回包冷却: " + (rubberBandHandling ? "§c是" : "§a否"),
-                "§f  · 资源包下载: " + (TacticalFSM.isDownloadingResourcePack() ? "§c是" : "§a否")
-            },
-            new String[]{
-                "§c§l▌ 注意",
-                "§f  · 开启「保护关键包」时交互包不参与丢弃",
-                "§f    关掉它会导致挖掘/放置失效，仅在压发包密度时用",
-                "§f  · 挖掘上限调到 15 以上基本等于没限"
+                "§d§l▌ 注意事项",
+                "§f  · 「网络延迟」会让你操作变卡，不建议开",
+                "§f  · 被拉回 10 次后会自动给你分析报告",
+                "§f  · 如果一直被拉回，去「飞行绕过」换模式",
+                "§f  · 高级反作弊服务器建议全部开启"
             }
         );
     }

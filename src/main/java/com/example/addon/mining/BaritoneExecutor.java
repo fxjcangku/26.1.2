@@ -7,6 +7,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Baritone 寻路中间件
@@ -100,25 +104,42 @@ public final class BaritoneExecutor {
      * - legitMine (Boolean) - 不存在，跳过
      * - maxFallHeightNoWater (Integer) - 不存在，使用其他参数
      */
-    public void applySettings(boolean avoidLava, boolean mobAvoidance, 
-                              boolean allowBreak, boolean allowPlace,
-                              int maxFallHeight, int miningRange, boolean legitMine) {
+    public void applySettings(boolean avoidLava, boolean mobAvoidance, int mobAvoidanceRadius,
+                              boolean allowBreak, boolean allowPlace, int maxFallHeight,
+                              boolean pauseMiningForFallingBlocks, boolean itemSaver,
+                              int itemSaverThreshold, boolean allowOnlyExposedOres,
+                              int allowOnlyExposedOresDistance, int minYLevelWhileMining,
+                              int maxYLevelWhileMining, int mineMaxOreLocationsCount,
+                              boolean blacklistClosestOnFailure, boolean legitMine,
+                              int legitMineYLevel, boolean legitMineIncludeDiagonals) {
         if (disabled) return;
 
         try {
             var settings = BaritoneAPI.getSettings();
+            List<Block> blocksToAvoid = new ArrayList<>(settings.blocksToAvoid.value);
+            if (avoidLava && !blocksToAvoid.contains(Blocks.LAVA)) blocksToAvoid.add(Blocks.LAVA);
+            if (!avoidLava) blocksToAvoid.removeIf(block -> block == Blocks.LAVA);
+            settings.blocksToAvoid.value = blocksToAvoid;
             
             // ✅ 确认存在的设置
             settings.allowSprint.value = true;           // 启用疾跑
             settings.allowBreak.value = allowBreak;      // 是否破坏方块
             settings.allowPlace.value = allowPlace;      // 是否放置方块
-            
-            // ❌ 这些设置在Settings.java中不存在，跳过
-            // - avoidLava (不存在)
-            // - mobAvoidance (不存在)
-            // - maxFallHeightNoWater (不存在)
-            // - legitMine (不存在)
-            // - legitMineYLevel (不存在)
+            settings.avoidance.value = mobAvoidance;
+            settings.mobAvoidanceRadius.value = mobAvoidanceRadius;
+            settings.maxFallHeightNoWater.value = maxFallHeight;
+            settings.pauseMiningForFallingBlocks.value = pauseMiningForFallingBlocks;
+            settings.itemSaver.value = itemSaver;
+            settings.itemSaverThreshold.value = itemSaverThreshold;
+            settings.allowOnlyExposedOres.value = allowOnlyExposedOres;
+            settings.allowOnlyExposedOresDistance.value = allowOnlyExposedOresDistance;
+            settings.minYLevelWhileMining.value = minYLevelWhileMining;
+            settings.maxYLevelWhileMining.value = maxYLevelWhileMining;
+            settings.mineMaxOreLocationsCount.value = mineMaxOreLocationsCount;
+            settings.blacklistClosestOnFailure.value = blacklistClosestOnFailure;
+            settings.legitMine.value = legitMine;
+            settings.legitMineYLevel.value = legitMineYLevel;
+            settings.legitMineIncludeDiagonals.value = legitMineIncludeDiagonals;
             
         } catch (Throwable e) {
             disabled = true;
@@ -134,9 +155,29 @@ public final class BaritoneExecutor {
         try {
             var settings = BaritoneAPI.getSettings();
             
-            // 只更新确认存在的设置
             if (key.equals("allowBreak")) settings.allowBreak.value = (Boolean) value;
             else if (key.equals("allowPlace")) settings.allowPlace.value = (Boolean) value;
+            else if (key.equals("avoidLava")) {
+                List<Block> blocksToAvoid = new ArrayList<>(settings.blocksToAvoid.value);
+                if ((Boolean) value && !blocksToAvoid.contains(Blocks.LAVA)) blocksToAvoid.add(Blocks.LAVA);
+                if (!(Boolean) value) blocksToAvoid.removeIf(block -> block == Blocks.LAVA);
+                settings.blocksToAvoid.value = blocksToAvoid;
+            }
+            else if (key.equals("avoidance")) settings.avoidance.value = (Boolean) value;
+            else if (key.equals("mobAvoidanceRadius")) settings.mobAvoidanceRadius.value = (Integer) value;
+            else if (key.equals("maxFallHeightNoWater")) settings.maxFallHeightNoWater.value = (Integer) value;
+            else if (key.equals("pauseMiningForFallingBlocks")) settings.pauseMiningForFallingBlocks.value = (Boolean) value;
+            else if (key.equals("itemSaver")) settings.itemSaver.value = (Boolean) value;
+            else if (key.equals("itemSaverThreshold")) settings.itemSaverThreshold.value = (Integer) value;
+            else if (key.equals("allowOnlyExposedOres")) settings.allowOnlyExposedOres.value = (Boolean) value;
+            else if (key.equals("allowOnlyExposedOresDistance")) settings.allowOnlyExposedOresDistance.value = (Integer) value;
+            else if (key.equals("minYLevelWhileMining")) settings.minYLevelWhileMining.value = (Integer) value;
+            else if (key.equals("maxYLevelWhileMining")) settings.maxYLevelWhileMining.value = (Integer) value;
+            else if (key.equals("mineMaxOreLocationsCount")) settings.mineMaxOreLocationsCount.value = (Integer) value;
+            else if (key.equals("blacklistClosestOnFailure")) settings.blacklistClosestOnFailure.value = (Boolean) value;
+            else if (key.equals("legitMine")) settings.legitMine.value = (Boolean) value;
+            else if (key.equals("legitMineYLevel")) settings.legitMineYLevel.value = (Integer) value;
+            else if (key.equals("legitMineIncludeDiagonals")) settings.legitMineIncludeDiagonals.value = (Boolean) value;
             
         } catch (Throwable e) {
             disabled = true;

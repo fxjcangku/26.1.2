@@ -98,7 +98,7 @@ public class FlightBypass extends YiyiaddonModule {
     private long pendingDestroyAt = 0L;
 
     public FlightBypass() {
-        super(CATEGORY_TACTICAL, "飞行绕过", "四种模式绕过 GrimAC/Matrix 顶级反作弊。");
+        super(CATEGORY_TACTICAL, "flight-bypass", "Four modes to bypass GrimAC/Matrix advanced anti-cheat.");
     }
 
     @Override
@@ -239,8 +239,11 @@ public class FlightBypass extends YiyiaddonModule {
             return;
         }
 
-        // 必须处于滑翔状态，否则烟花不会产生推进，只是白白消耗
-        if (!mc.player.isFallFlying()) return;
+        // 必须处于滑翔状态且鞘翅有耐久，否则服务端会拒绝
+        if (!mc.player.isFallFlying() || mc.player.onGround()) return;
+        
+        ItemStack elytra = mc.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST);
+        if (elytra.isEmpty() || elytra.getDamageValue() >= elytra.getMaxDamage()) return;
 
         ClientLevel level = mc.level;
         if (level == null) return;
@@ -273,11 +276,16 @@ public class FlightBypass extends YiyiaddonModule {
         if (!(held.getItem() instanceof BlockItem)) return;
 
         BlockPos belowPos = mc.player.blockPosition().below();
-        if (!mc.level.getBlockState(belowPos).isAir()) return;
+        BlockState belowState = mc.level.getBlockState(belowPos);
+        
+        // 检查目标位置：必须是空气且无流体，且碰撞箱为空
+        if (!belowState.isAir() || !belowState.getFluidState().isEmpty()) return;
+        if (!belowState.getCollisionShape(mc.level, belowPos).isEmpty()) return;
 
         // 放置目标格的下方那一格作为命中面，向上放置
         BlockPos supportPos = belowPos.below();
-        if (mc.level.getBlockState(supportPos).isAir()) return;
+        BlockState supportState = mc.level.getBlockState(supportPos);
+        if (supportState.isAir() || !supportState.getCollisionShape(mc.level, supportPos).isEmpty()) return;
 
         BlockHitResult hitResult = new BlockHitResult(
             new Vec3(supportPos.getX() + 0.5, supportPos.getY() + 1.0, supportPos.getZ() + 0.5),

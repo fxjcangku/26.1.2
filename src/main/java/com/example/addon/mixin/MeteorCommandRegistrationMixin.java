@@ -37,8 +37,7 @@ public abstract class MeteorCommandRegistrationMixin {
         Command command = (Command) (Object) this;
         for (String chineseName : MeteorCommandTranslations.getChineseNames(command)) {
             command.register(dispatcher, chineseName);
-            LiteralCommandNode<ClientSuggestionProvider> root = dispatcher.getRoot().getChild(chineseName) instanceof LiteralCommandNode<?> node
-                ? (LiteralCommandNode<ClientSuggestionProvider>) node : null;
+            CommandNode<ClientSuggestionProvider> root = dispatcher.getRoot().getChild(chineseName);
             if (root != null) yiyiaddon$registerChineseSubcommands(root);
         }
     }
