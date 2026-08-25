@@ -657,7 +657,7 @@ public class AntiKickBypass extends YiyiaddonModule {
                 table.add(clearData).expandX();
                 table.row();
             },
-            new String[]{ "§l终极防踢 · 使用说明" },
+            new String[]{ "🛡️ §l终极防踢 · 使用说明" },
             new String[]{
                 "§e§l▌ 快速开始",
                 "§f  1. 打开这个模块（终极防踢）",

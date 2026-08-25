@@ -573,7 +573,7 @@ public class ServerDetector extends YiyiaddonModule {
                 table.add(openFolder).expandX();
                 table.row();
             },
-            new String[]{ "§l服务器检测 · 使用说明" },
+            new String[]{ "🔍 §l服务器检测 · 使用说明" },
             new String[]{
                 "§e§l▌ 侦测结果",
                 "§f  · 核心：§a" + TacticalFSM.getDetectedServerCore(),

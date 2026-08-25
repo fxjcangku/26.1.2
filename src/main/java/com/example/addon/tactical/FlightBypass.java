@@ -375,7 +375,7 @@ public class FlightBypass extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "§l飞行绕过 · 功能说明" },
+            new String[]{ "✈️ §l飞行绕过 · 功能说明" },
             new String[]{
                 "§e§l▌ 当前模式",
                 "§f  " + mode.get().displayName
