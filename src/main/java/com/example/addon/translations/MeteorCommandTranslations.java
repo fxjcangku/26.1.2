@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public final class MeteorCommandTranslations {
@@ -141,6 +143,8 @@ public final class MeteorCommandTranslations {
         Map.entry("example", "发送一条示例消息。")
     );
 
+    private static final Pattern MODULE_NOT_FOUND = Pattern.compile("Module with name (?:['\"])?(.+?)(?:['\"])? doesn't exist\\.");
+
     private MeteorCommandTranslations() {}
 
     public static String translateCommandName(String commandName) {
@@ -196,7 +200,8 @@ public final class MeteorCommandTranslations {
         if (!YiyiaddonTranslator.enabled() || message == null) return message;
         String translated = YiyiaddonTranslator.translateVisible(message);
         if (!translated.equals(message)) return translated;
-        return message
+        String dynamic = translateDynamicErrors(message);
+        return dynamic
             .replace("Press a key to bind the module to.", "请按一个按键绑定该模块。")
             .replace("Recording cancelled", "录制已取消")
             .replace("Bound to %s.", "已绑定到 %s。")
@@ -204,6 +209,9 @@ public final class MeteorCommandTranslations {
             .replace("Toggled %s off.", "已关闭 %s。")
             .replace("Unknown or incomplete command, see below for error", "未知或不完整的命令，错误详情见下方")
             .replace("Incorrect argument for command", "命令参数错误")
+            .replace("at position ", "错误位置 ")
+            .replace("<--[HERE]", "<--[此处]")
+            .replace("anchor", "锚点")
             .replace("Module not found.", "未找到模块。")
             .replace("Invalid module.", "无效模块。")
             .replace("Player not found.", "未找到玩家。")
@@ -217,6 +225,14 @@ public final class MeteorCommandTranslations {
             .replace("Sneak to un-spectate.", "按下潜行键退出旁观。")
             .replace("The swarm module must be active to use this command.", "必须启用蜂群模块才能使用此命令。")
             .replace("Set as Baritone goal", "设为 Baritone 目标");
+    }
+
+    private static String translateDynamicErrors(String message) {
+        Matcher matcher = MODULE_NOT_FOUND.matcher(message);
+        if (matcher.find()) {
+            return matcher.replaceFirst(Matcher.quoteReplacement("名为 " + matcher.group(1) + " 的模块不存在。"));
+        }
+        return message;
     }
 
     public static String translate(String name, String fallback) {

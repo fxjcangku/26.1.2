@@ -9,6 +9,7 @@
     "ReachTranslationMixin",
     "PathManagerScreenTranslationMixin",
     "ModuleTranslationMixin",
+    "ModuleToggleMessageMixin",
     "SettingTranslationMixin",
     "SettingGroupTranslationMixin",
     "CategoryTranslationMixin",

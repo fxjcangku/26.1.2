@@ -114,8 +114,10 @@ public class FlightBypass extends YiyiaddonModule {
     public void onActivate() {
         // 单人世界自动关闭
         if (mc.hasSingleplayerServer()) {
-            warning("§c单人世界无需飞行绕过，已自动关闭");
-            toggle();
+            chatFeedback = false; // 禁用开关消息
+            toggle(); // 关闭模块
+            chatFeedback = true; // 恢复开关消息
+            warning("§c单人世界无需飞行绕过");
             return;
         }
         

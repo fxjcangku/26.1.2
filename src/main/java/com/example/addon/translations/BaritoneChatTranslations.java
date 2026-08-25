@@ -2,13 +2,16 @@ package com.example.addon.translations;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.world.level.block.Block;
 
 public final class BaritoneChatTranslations {
     private static final Map<String, String> EXACT = Map.ofEntries(
@@ -124,7 +127,11 @@ public final class BaritoneChatTranslations {
         template("Invalid (.+): (.+)", match -> "无效的" + match.group(1) + "：" + match.group(2)),
         template("Going to: (.+)", match -> "正在前往：" + match.group(1)),
         template("Exploring from (.+)", match -> "从 " + match.group(1) + " 开始探索"),
-        template("Mining (.+)", match -> "正在挖掘 " + match.group(1)),
+        template("Mining (.+)", match -> "正在挖掘 " + translateBlockName(match.group(1))),
+        template("mine (.+)", match -> "挖掘 " + translateBlockName(match.group(1))),
+        template("> mine (.+)", match -> "> 挖掘 " + translateBlockName(match.group(1))),
+        template("#mine\\s+(.+)", match -> "#挖掘 " + translateBlockName(match.group(1))),
+        template(".*BlockOptionalMeta\\{block=Block\\{([^,}]+).*", match -> "目标方块：" + translateBlockName(match.group(1))),
         template("Following all (.+)", match -> "正在跟随所有" + match.group(1)),
         template("Queued (\\d+) chunks for repacking", match -> "已将 " + match.group(1) + " 个区块加入重新整理队列"),
         template("Removed (\\d+) selections", match -> "已移除 " + match.group(1) + " 个选区"),
@@ -152,8 +159,58 @@ public final class BaritoneChatTranslations {
 
     private BaritoneChatTranslations() {}
 
+    /**
+     * 翻译方块名称（使用 Minecraft 内置翻译）
+     * 例如：acacia_fence_gate -> 金合欢木栅栏门
+     */
+    public static String translateBlockId(String blockId) {
+        if (blockId == null || blockId.isEmpty()) return blockId;
+        
+        try {
+            // 遍历所有已注册的方块，查找匹配的方块
+            for (Block block : BuiltInRegistries.BLOCK) {
+                String registeredId = BuiltInRegistries.BLOCK.getKey(block).toString();
+                String path = registeredId.contains(":") ? registeredId.split(":")[1] : registeredId;
+                
+                // 匹配方块ID（支持带命名空间和不带命名空间）
+                if (path.equals(blockId) || registeredId.equals(blockId)) {
+                    // 使用 Minecraft 内置翻译获取中文名
+                    String translated = block.getName().getString();
+                    // 如果翻译成功，返回翻译结果
+                    if (translated != null && !translated.isEmpty() && !translated.equals(blockId)) {
+                        return translated;
+                    }
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            // 解析失败，返回原始文本
+        }
+        
+        return blockId;
+    }
+
+    private static String translateBlockName(String blockId) {
+        return translateBlockId(blockId);
+    }
+
     public static String translate(String text) {
         if (!YiyiaddonTranslator.enabled() || text == null || text.isEmpty()) return text;
+        try {
+            Matcher blockMatcher = Pattern.compile("BlockOptionalMeta(?:Lookup)?(?:\\{|\\[)block=Block\\{([^,}]+)(?:,properties=\\{\\})?(?:\\}|\\])").matcher(text);
+            StringBuffer translatedBlocks = new StringBuffer();
+            while (blockMatcher.find()) {
+                blockMatcher.appendReplacement(translatedBlocks,
+                    Matcher.quoteReplacement("目标方块：" + translateBlockName(blockMatcher.group(1))));
+            }
+            blockMatcher.appendTail(translatedBlocks);
+            text = translatedBlocks.toString();
+            text = text.replace(",properties={}", "");
+            text = text.replace("BlockOptionalMetaLookup", "");
+            text = text.replace("BlockOptionalMeta", "");
+        } catch (RuntimeException ignored) {
+            return text;
+        }
         String exact = EXACT.get(text);
         if (exact != null) return exact;
         for (Template template : TEMPLATES) {
@@ -165,6 +222,11 @@ public final class BaritoneChatTranslations {
 
     public static Component translate(Component component) {
         if (!YiyiaddonTranslator.enabled() || component == null) return component;
+        String fullText = component.getString();
+        String translatedText = translate(fullText);
+        if (!translatedText.equals(fullText)) {
+            return Component.literal(translatedText).withStyle(component.getStyle());
+        }
         MutableComponent translated = Component.empty();
         component.visit((style, text) -> {
             translated.append(Component.literal(translate(text)).withStyle(style));

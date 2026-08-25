@@ -385,8 +385,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public void onActivate() {
         String error = selfCheck();
         if (error != null) {
+            chatFeedback = false; // 禁用开关消息
+            if (isActive()) toggle(); // 关闭模块
+            chatFeedback = true; // 恢复开关消息
             notifyError("启动失败：" + error);
-            if (isActive()) toggle();
             return;
         }
 
@@ -426,7 +428,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         fsm.reset();
         container.reset();
         cmdManager.reset();
-        notify("§c已停止");
+        // 不再显示"已停止"，因为基类 toggle() 已经显示"已关闭"
     }
 
     /**

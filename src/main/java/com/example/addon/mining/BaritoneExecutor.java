@@ -3,6 +3,7 @@ package com.example.addon.mining;
 import baritone.api.BaritoneAPI;
 import baritone.api.IBaritone;
 import com.example.addon.modules.AutoMinerModule;
+import com.example.addon.translations.BaritoneChatTranslations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -61,7 +62,7 @@ public final class BaritoneExecutor {
             // 调用 Baritone 的 mine 命令
             baritone.getCommandManager().execute("mine " + blockId);
 
-            module.info("§aBaritone 已启动挖掘：" + blockId);
+            module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
 
             // 重置卡死检测
             if (mc.player != null) {

@@ -375,8 +375,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 开机四重自检
         String error = selfCheck();
         if (error != null) {
+            chatFeedback = false; // 禁用开关消息
+            if (isActive()) toggle(); // 关闭模块
+            chatFeedback = true; // 恢复开关消息
             notifyError("自检失败：" + error);
-            if (isActive()) toggle();
             return;
         }
 

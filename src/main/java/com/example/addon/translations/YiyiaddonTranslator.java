@@ -48,6 +48,8 @@ public final class YiyiaddonTranslator {
         if (normalized.matches("\\(\\d+ selected\\)")) {
             return "（已选择 " + normalized.substring(1, normalized.indexOf(' ')) + " 项）";
         }
+        if (normalized.equals("Reconnect")) return "重新连接";
+        if (normalized.equals("Toggle Auto Reconnect")) return "切换自动重连";
         if (normalized.equals("Bind") || normalized.startsWith("Bind:")) return "绑定";
         if (normalized.equals("Toggle on bind release") || normalized.startsWith("Toggle on bind release:")) {
             return "按键释放时切换：";

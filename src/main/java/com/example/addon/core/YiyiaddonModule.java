@@ -1,5 +1,6 @@
 package com.example.addon.core;
 
+import com.example.addon.translations.YiyiaddonTranslator;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
@@ -31,6 +32,41 @@ import java.util.function.Consumer;
 // - 段落标题色：§e§l▌准备  §a§l▌功能  §b§l▌参数  §d§l▌模式  §c§l▌注意
 // - 正文缩进：§f  1. 步骤（有序）  §f  · 条目（无序）  §f    续行
 //
+// 【单人世界自动禁用规范】（绕过模块专用）
+// - 对于 CATEGORY_TACTICAL 分类下的绕过模块，单人世界无需这些功能
+// - onActivate() 中检测单人世界时的标准处理：
+//   ```java
+//   if (mc.hasSingleplayerServer()) {
+//       chatFeedback = false;  // 禁用开关消息
+//       toggle();              // 关闭模块
+//       chatFeedback = true;   // 恢复开关消息
+//       warning("§c单人世界无需XXX");  // 只显示一次警告
+//       return;
+//   }
+//   ```
+// - 这样做的好处：
+//   · 避免显示两次消息（开关消息 + 警告消息）
+//   · 只在单人世界生效，多人服务器正常显示开关消息
+//   · 用户体验更简洁清晰
+//
+// 【启动自检失败处理规范】（自动化模块专用）
+// - 对于需要预配置的自动化模块（如自动挖矿、自动农场）
+// - onActivate() 中自检失败时的标准处理：
+//   ```java
+//   String error = selfCheck();
+//   if (error != null) {
+//       chatFeedback = false;  // 禁用开关消息
+//       if (isActive()) toggle();  // 关闭模块
+//       chatFeedback = true;   // 恢复开关消息
+//       notifyError("启动失败：" + error);  // 只显示错误信息
+//       return;
+//   }
+//   ```
+// - 这样做的好处：
+//   · 避免显示两次消息（开关消息 + 错误消息）
+//   · 用户只看到具体的错误原因，更清晰
+//   · 代码逻辑统一，易于维护
+//
 // ════════════════════════════════════════════════════════════════════
 
 /**
@@ -61,7 +97,9 @@ public abstract class YiyiaddonModule extends Module {
         // Meteor 的 GUI 点击路径不会调用 sendToggledMsg()
         // 在这里统一输出，sendToggledMsg() 置空防止按键绑定双重提示
         if (mc.player != null && chatFeedback) {
-            String status = isActive() ? "§a§l已启动" : "§c§l已关闭";
+            // 确保使用翻译后的标题（如果翻译已启用，title 字段已经被翻译过了）
+            String status = isActive() ? "§a§l已开启" : "§c§l已关闭";
+            // 直接发送，不经过 notify()，这样单人世界也能看到
             mc.player.sendSystemMessage(Component.literal(formatMessage(title, status)));
         }
     }
@@ -117,8 +155,6 @@ public abstract class YiyiaddonModule extends Module {
      */
     protected void notify(String message) {
         if (mc.player == null) return;
-        // 单人世界不发送通知
-        if (mc.hasSingleplayerServer()) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§f" + message)));
     }
 
@@ -128,8 +164,6 @@ public abstract class YiyiaddonModule extends Module {
      */
     protected void notifyError(String message) {
         if (mc.player == null) return;
-        // 单人世界不发送通知
-        if (mc.hasSingleplayerServer()) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§6§l" + message)));
     }
 

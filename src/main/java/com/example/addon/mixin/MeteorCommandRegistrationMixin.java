@@ -8,12 +8,15 @@ import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import meteordevelopment.meteorclient.commands.Command;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.ClientSuggestionProvider;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
@@ -67,5 +70,17 @@ public abstract class MeteorCommandRegistrationMixin {
     )
     private static String yiyiaddon$translateMeteorChatOutput(String message) {
         return MeteorCommandTranslations.translateChatMessage(message);
+    }
+
+    @Inject(
+        method = "getPrefix()Lnet/minecraft/network/chat/Component;",
+        at = @At("RETURN"),
+        cancellable = true,
+        require = 0
+    )
+    private static void yiyiaddon$colorMeteorPrefix(CallbackInfoReturnable<Component> cir) {
+        cir.setReturnValue(Component.literal("[Meteor]").withStyle(style ->
+            style.withColor(ChatFormatting.LIGHT_PURPLE).withBold(true)
+        ));
     }
 }

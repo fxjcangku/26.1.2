@@ -2,11 +2,14 @@ package com.example.addon.core;
 
 import com.example.addon.commands.CommandExample;
 import com.example.addon.commands.NongChangCommand;
+import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
+import com.example.addon.modules.MeteorCommandGuideModule;
+import com.example.addon.modules.PinkThemeModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.example.addon.tactical.FlightBypass;
 import com.example.addon.tactical.AntiKickBypass;
@@ -21,14 +24,15 @@ import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.utils.render.DisplayItemUtils;
 import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
 
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具");
-    public static final Category CATEGORY_AUTOMATION = new Category("§c§lyiyiaddon §e§l自动化");
-    public static final Category CATEGORY_TACTICAL = new Category("§c§lyiyiaddon §5§l绕过", () -> Items.SHIELD.getDefaultInstance());
+    public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具", () -> DisplayItemUtils.toStack(Items.WRITABLE_BOOK));
+    public static final Category CATEGORY_AUTOMATION = new Category("§c§lyiyiaddon §e§l自动化", () -> DisplayItemUtils.toStack(Items.REDSTONE));
+    public static final Category CATEGORY_TACTICAL = new Category("§c§lyiyiaddon §b§l绕过", () -> DisplayItemUtils.toStack(Items.SHIELD));
     public static final HudGroup HUD_GROUP = new HudGroup("示例");
 
     @Override
@@ -42,6 +46,13 @@ public class AddonTemplate extends MeteorAddon {
 
         BaritoneCommandGuideModule baritoneCommandGuideModule = new BaritoneCommandGuideModule();
         Modules.get().add(baritoneCommandGuideModule);
+
+        MeteorCommandGuideModule meteorCommandGuideModule = new MeteorCommandGuideModule();
+        Modules.get().add(meteorCommandGuideModule);
+
+        PinkThemeModule pinkThemeModule = new PinkThemeModule();
+        Modules.get().add(pinkThemeModule);
+        pinkThemeModule.enable();
 
         // Modules - 自动化类
         AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();
@@ -58,6 +69,7 @@ public class AddonTemplate extends MeteorAddon {
         // Commands
         Commands.add(new CommandExample());
         Commands.add(new NongChangCommand());
+        Commands.add(new WKCommand());
         Commands.add(new YiyiaddonUpdateCommand());
 
         // HUD
