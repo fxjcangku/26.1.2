@@ -1,3 +1,4 @@
+
 package com.example.addon.core;
 
 import com.example.addon.translations.YiyiaddonTranslator;
@@ -13,6 +14,18 @@ import java.util.function.Consumer;
 // ║                    YiyiaddonModule 基类                            ║
 // ║                所有 yiyiaddon 模块的统一基类                        ║
 // ╚════════════════════════════════════════════════════════════════════╝
+//
+// 【用户工作偏好与运行时缺陷排查协议】
+// - 触发条件：仅在用户明确给出 Bug、目标项目目录、受影响模块/功能和可复现操作后启动排查；未满足时不得预建监听、调试文档或业务修复。
+// - 项目隔离：当前任务只允许读取、修改、构建和收集用户指定项目内的文件；严禁跨项目引用源码、JAR、配置、会话或历史日志作为结论依据。
+// - 会话创建：每个独立 Bug 必须在项目根目录创建 `debug-{问题描述}.md`，在 `.dbg/` 创建唯一 `{session-id}.env`；一个 session 只服务一个问题与一轮验证。
+// - 调试文档：`debug-{问题描述}.md` 必须包含 Status、Issue、影响范围、复现前提与步骤、可证伪假设、埋点位置、预期事件、证据时间线、根因、最小修复和复测结果；证据缺失时明确标注未确认。
+// - 监听配置：`.dbg/{session-id}.env` 固定包含 `DEBUG_SERVER_URL=http://127.0.0.1:7777/event` 与唯一 `DEBUG_SESSION_ID={session-id}`；日志唯一目标为 `.dbg/trae-debug-log-{session-id}.ndjson`。
+// - 路径原则：运行时读取调试配置与输出路径必须指向明确的当前项目绝对路径；不得依赖 Minecraft、IDE 或启动器的工作目录相对路径。
+// - 埋点原则：只记录与当前假设直接相关的用户操作、配置原始值/生效值、状态转换、关键分支、调用入口、异常和时间戳；不改动无关业务逻辑，不用泛化日志替代关键证据。
+// - 收集校验：用户复现前必须启动并验证 `127.0.0.1:7777` 可接收事件；若无 NDJSON，先定位监听服务、配置路径、运行 JAR 与 HTTP 投递链路，禁止直接推断业务根因。
+// - 证据驱动：用户说“复现了”后，只读取该 session 最新 NDJSON，按时间线还原操作与状态；旧 session、其他问题、其他项目或旧版本日志均不可作为当前结论。
+// - 修复与验证：仅在日志足以证实根因后实施最小业务修复；构建前核实当前项目 Gradle 任务、JDK、版本和真实输出名，复测后以新 session 日志确认结果；用户确认解决后将文档状态标记为 CLOSED.
 //
 // 【核心功能】
 // 1. 统一消息格式：[yiyiaddon] [模块名] 内容
@@ -68,140 +81,41 @@ import java.util.function.Consumer;
 //   · 代码逻辑统一，易于维护
 //
 // 【运行时调试规范】
-// - 遇到需要收集运行时证据的 Bug 时，使用标准化调试流程：
+// - 遇到需要收集运行时证据的 Bug 时，使用上方统一协议，并按以下模板执行：
 //
 // 1. **创建调试记录文件**
 //    位置：项目根目录 `debug-{问题描述}.md`
-//    格式：
-//    ```markdown
-//    # Debug Session: {session-id}
-//    - **Status**: [OPEN]
-//    - **Issue**: 问题描述
-//    - **Debug Server**: http://127.0.0.1:7777/event（如启用）
-//    - **Log File**: .dbg/trae-debug-log-{session-id}.ndjson
-//    
-//    ## 症状
-//    详细描述用户遇到的现象
-//    
-//    ## 可验证假设
-//    | ID | Hypothesis | Evidence |
-//    |----|------------|----------|
-//    | A | 假设1 | Pending |
-//    | B | 假设2 | Pending |
-//    
-//    ## 证据
-//    待收集运行时日志
-//    
-//    ## 结论
-//    待定
-//    ```
+//    内容至少包含：Status、Issue、症状、可验证假设、复现步骤、监听点、证据、结论、修复和验证结果。
 //
 // 2. **选择调试方式**
-//    
-//    **方式 A：轻量级调试（游戏内日志 + 截图）**
-//    适用于：简单问题、单次复现、快速定位
-//    - 直接在代码中添加 info() 日志
-//    - 用户在游戏内截图聊天栏
-//    - 分析截图中的日志输出
-//    
-//    **方式 B：深度调试（Debug Server + 网络日志）**
-//    适用于：复杂问题、需多次复现、大量日志输出
-//    - 创建 `.dbg/{session-id}.env` 环境文件
-//    - 启动 Debug Server 收集网络日志
-//    - 在代码中通过 HTTP 上报日志事件
-//    - 分析 `.dbg/trae-debug-log-{session-id}.ndjson`
+//    - 轻量级：使用游戏内 `info()` 日志和截图，适用于简单、单次复现的问题。
+//    - 深度调试：使用 Debug Server 和 NDJSON，适用于复杂问题、需要多次复现或需要记录大量状态的问题。
 //
-// 3. **深度调试环境配置**（方式 B）
-//    
-//    3.1 创建环境文件 `.dbg/{session-id}.env`：
+// 3. **深度调试环境配置**
+//    在当前项目 `.dbg/{session-id}.env` 中写入：
 //    ```
 //    DEBUG_SERVER_URL=http://127.0.0.1:7777/event
 //    DEBUG_SESSION_ID={session-id}
 //    ```
-//    
-//    3.2 启动 Debug Server（需要时）：
-//    ```bash
-//    # 使用 TRAE-debugger Skill 自动启动
-//    # 或手动启动 Node.js/Python 日志收集服务器
-//    ```
-//    
-//    3.3 在代码中添加网络上报逻辑：
-//    ```java
-//    private void reportDebugEvent(String eventType, Map<String, Object> data) {
-//        // 读取 .dbg/{session-id}.env 获取 DEBUG_SERVER_URL
-//        // 发送 HTTP POST 到 Debug Server
-//        // 格式：{"event": eventType, "data": data, "timestamp": ...}
-//    }
-//    ```
+//    日志写入 `.dbg/trae-debug-log-{session-id}.ndjson`。
 //
 // 4. **添加调试日志**
-//    在关键路径添加 info() 输出，记录：
-//    - 方法调用时机
-//    - 关键变量状态
-//    - 条件判断结果
-//    - 调用栈信息（必要时用 new Exception().getStackTrace()）
-//    
-//    示例（轻量级）：
-//    ```java
-//    @Override
-//    public void onActivate() {
-//        info("模块：onActivate() 被调用");
-//        info("变量状态: " + someVariable);
-//        info("条件检查: " + someCondition);
-//        // ... 原有逻辑
-//    }
-//    
-//    @Override
-//    public void onDeactivate() {
-//        info("模块：onDeactivate() 被调用");
-//        info("调用栈: " + new Exception().getStackTrace()[1]);
-//    }
-//    ```
-//    
-//    示例（深度调试）：
-//    ```java
-//    @Override
-//    public void onActivate() {
-//        reportDebugEvent("module_activate", Map.of(
-//            "module", this.name,
-//            "variable", someVariable,
-//            "condition", someCondition
-//        ));
-//        // ... 原有逻辑
-//    }
-//    ```
+//    只在当前 Bug 的关键路径记录：方法调用时机、关键变量、条件判断、状态转换、调用入口和必要的调用栈。
+//    深度调试通过 HTTP POST 上报事件；事件必须包含 session、假设标识、位置、数据和时间戳。
 //
 // 5. **构建并复现问题**
-//    ```bash
-//    gradlew buildPersonal
-//    ```
-//    让用户在游戏中复现问题：
-//    - 方式 A：通过游戏内聊天栏截图收集日志
-//    - 方式 B：Debug Server 自动收集到 .ndjson 文件
+//    构建当前项目实际配置的测试版本，启动监听服务并确认端口可接收事件后，再让用户复现。
 //
 // 6. **分析证据并更新调试文件**
-//    根据日志证据更新 `debug-{问题描述}.md`：
-//    - 标记假设为 ✅ 确认 或 ❌ 排除
-//    - 添加关键日志片段到"证据"章节
-//    - 记录根本原因到"结论"章节
+//    根据对应 session 的 NDJSON 按时间线记录关键日志，标记假设为确认或排除；没有证据的结论必须保持未确认。
 //
 // 7. **修复并验证**
-//    - 实施修复
-//    - 移除调试日志（或保留为注释）
-//    - 更新调试文件状态为 [CLOSED]
-//    - 记录解决方案
+//    仅实施已被日志证明的最小修复；重新构建并使用新的验证 session 复现，确认修复结果后将调试文档标记为 CLOSED。
 //
 // 8. **清理**
-//    - 调试文件保留在项目中，作为历史记录
-//    - `.dbg/*.env` 和 `.dbg/*.ndjson` 不提交到 Git（已在 .gitignore）
-//    - Debug Server 进程可保持运行，供后续调试复用
-//    - 提交时包含调试 markdown 文件，便于后续回溯
+//    调试文档保留用于历史回溯；`.dbg/*.env` 和 `.dbg/*.ndjson` 不提交 Git；不删除与当前或历史问题相关的证据文件。
 //
-// 注意事项：
-// - 调试日志会在聊天栏显示，格式为 [yiyiaddon][模块名] 消息
-// - 不要在生产版本中保留大量调试日志，影响用户体验
-// - Debug Server 适合复杂问题，简单问题用截图更快
-// - 环境文件路径 `.dbg/{session-id}.env` 按会话隔离，支持并行调试
+// 调试流程统一遵循上方《用户工作偏好与运行时缺陷排查协议》；本节是具体执行模板。
 //
 // ════════════════════════════════════════════════════════════════════
 
