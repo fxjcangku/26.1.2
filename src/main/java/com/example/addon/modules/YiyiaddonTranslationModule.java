@@ -17,6 +17,7 @@ public final class YiyiaddonTranslationModule extends YiyiaddonModule {
 
     public YiyiaddonTranslationModule() {
         super(AddonTemplate.CATEGORY, "界面汉化", "控制 Meteor Client 和 Baritone 的简体中文界面汉化。");
+        this.toggle(); // 默认开启
     }
 
     @Override
