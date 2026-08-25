@@ -119,18 +119,25 @@ public final class PinkThemeModule extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             table -> {
+                // 第一行
                 addButton(theme, table, "樱花粉", Palette.SAKURA);
                 addButton(theme, table, "蜜桃粉", Palette.PEACH);
                 addButton(theme, table, "玫瑰粉", Palette.ROSE);
                 table.row();
+                
+                // 第二行
                 addButton(theme, table, "莓果粉", Palette.BERRY);
                 addButton(theme, table, "粉紫夜", Palette.PINK_NIGHT);
-                table.row();
                 addButton(theme, table, "薄荷灰", Palette.MINT_GRAY);
+                table.row();
+                
+                // 第三行
                 addButton(theme, table, "雾霾蓝", Palette.MIST_BLUE);
                 addButton(theme, table, "暖沙灰", Palette.WARM_SAND);
-                table.row();
                 addButton(theme, table, "鼠尾草", Palette.SAGE);
+                table.row();
+                
+                // 第四行
                 addButton(theme, table, "灰紫夜", Palette.DUSK_LAVENDER);
                 addButton(theme, table, "森林雾", Palette.FOREST_MIST);
                 WButton restore = theme.button("恢复默认");

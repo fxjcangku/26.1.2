@@ -67,6 +67,142 @@ import java.util.function.Consumer;
 //   · 用户只看到具体的错误原因，更清晰
 //   · 代码逻辑统一，易于维护
 //
+// 【运行时调试规范】
+// - 遇到需要收集运行时证据的 Bug 时，使用标准化调试流程：
+//
+// 1. **创建调试记录文件**
+//    位置：项目根目录 `debug-{问题描述}.md`
+//    格式：
+//    ```markdown
+//    # Debug Session: {session-id}
+//    - **Status**: [OPEN]
+//    - **Issue**: 问题描述
+//    - **Debug Server**: http://127.0.0.1:7777/event（如启用）
+//    - **Log File**: .dbg/trae-debug-log-{session-id}.ndjson
+//    
+//    ## 症状
+//    详细描述用户遇到的现象
+//    
+//    ## 可验证假设
+//    | ID | Hypothesis | Evidence |
+//    |----|------------|----------|
+//    | A | 假设1 | Pending |
+//    | B | 假设2 | Pending |
+//    
+//    ## 证据
+//    待收集运行时日志
+//    
+//    ## 结论
+//    待定
+//    ```
+//
+// 2. **选择调试方式**
+//    
+//    **方式 A：轻量级调试（游戏内日志 + 截图）**
+//    适用于：简单问题、单次复现、快速定位
+//    - 直接在代码中添加 info() 日志
+//    - 用户在游戏内截图聊天栏
+//    - 分析截图中的日志输出
+//    
+//    **方式 B：深度调试（Debug Server + 网络日志）**
+//    适用于：复杂问题、需多次复现、大量日志输出
+//    - 创建 `.dbg/{session-id}.env` 环境文件
+//    - 启动 Debug Server 收集网络日志
+//    - 在代码中通过 HTTP 上报日志事件
+//    - 分析 `.dbg/trae-debug-log-{session-id}.ndjson`
+//
+// 3. **深度调试环境配置**（方式 B）
+//    
+//    3.1 创建环境文件 `.dbg/{session-id}.env`：
+//    ```
+//    DEBUG_SERVER_URL=http://127.0.0.1:7777/event
+//    DEBUG_SESSION_ID={session-id}
+//    ```
+//    
+//    3.2 启动 Debug Server（需要时）：
+//    ```bash
+//    # 使用 TRAE-debugger Skill 自动启动
+//    # 或手动启动 Node.js/Python 日志收集服务器
+//    ```
+//    
+//    3.3 在代码中添加网络上报逻辑：
+//    ```java
+//    private void reportDebugEvent(String eventType, Map<String, Object> data) {
+//        // 读取 .dbg/{session-id}.env 获取 DEBUG_SERVER_URL
+//        // 发送 HTTP POST 到 Debug Server
+//        // 格式：{"event": eventType, "data": data, "timestamp": ...}
+//    }
+//    ```
+//
+// 4. **添加调试日志**
+//    在关键路径添加 info() 输出，记录：
+//    - 方法调用时机
+//    - 关键变量状态
+//    - 条件判断结果
+//    - 调用栈信息（必要时用 new Exception().getStackTrace()）
+//    
+//    示例（轻量级）：
+//    ```java
+//    @Override
+//    public void onActivate() {
+//        info("模块：onActivate() 被调用");
+//        info("变量状态: " + someVariable);
+//        info("条件检查: " + someCondition);
+//        // ... 原有逻辑
+//    }
+//    
+//    @Override
+//    public void onDeactivate() {
+//        info("模块：onDeactivate() 被调用");
+//        info("调用栈: " + new Exception().getStackTrace()[1]);
+//    }
+//    ```
+//    
+//    示例（深度调试）：
+//    ```java
+//    @Override
+//    public void onActivate() {
+//        reportDebugEvent("module_activate", Map.of(
+//            "module", this.name,
+//            "variable", someVariable,
+//            "condition", someCondition
+//        ));
+//        // ... 原有逻辑
+//    }
+//    ```
+//
+// 5. **构建并复现问题**
+//    ```bash
+//    gradlew buildPersonal
+//    ```
+//    让用户在游戏中复现问题：
+//    - 方式 A：通过游戏内聊天栏截图收集日志
+//    - 方式 B：Debug Server 自动收集到 .ndjson 文件
+//
+// 6. **分析证据并更新调试文件**
+//    根据日志证据更新 `debug-{问题描述}.md`：
+//    - 标记假设为 ✅ 确认 或 ❌ 排除
+//    - 添加关键日志片段到"证据"章节
+//    - 记录根本原因到"结论"章节
+//
+// 7. **修复并验证**
+//    - 实施修复
+//    - 移除调试日志（或保留为注释）
+//    - 更新调试文件状态为 [CLOSED]
+//    - 记录解决方案
+//
+// 8. **清理**
+//    - 调试文件保留在项目中，作为历史记录
+//    - `.dbg/*.env` 和 `.dbg/*.ndjson` 不提交到 Git（已在 .gitignore）
+//    - Debug Server 进程可保持运行，供后续调试复用
+//    - 提交时包含调试 markdown 文件，便于后续回溯
+//
+// 注意事项：
+// - 调试日志会在聊天栏显示，格式为 [yiyiaddon][模块名] 消息
+// - 不要在生产版本中保留大量调试日志，影响用户体验
+// - Debug Server 适合复杂问题，简单问题用截图更快
+// - 环境文件路径 `.dbg/{session-id}.env` 按会话隔离，支持并行调试
+//
 // ════════════════════════════════════════════════════════════════════
 
 /**

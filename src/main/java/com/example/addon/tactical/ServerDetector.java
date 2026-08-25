@@ -144,7 +144,6 @@ public class ServerDetector extends YiyiaddonModule {
 
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。");
-        this.toggleOnBindRelease = true;
     }
 
     @Override
@@ -570,7 +569,7 @@ public class ServerDetector extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             table -> {
-                WButton openFolder = theme.button("打开服务器资源库");
+                WButton openFolder = theme.button("打开资源包位置");
                 openFolder.action = this::openResourcePackFolder;
                 table.add(openFolder).expandX();
                 table.row();
