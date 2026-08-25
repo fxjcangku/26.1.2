@@ -52,7 +52,6 @@ public class AddonTemplate extends MeteorAddon {
 
         PinkThemeModule pinkThemeModule = new PinkThemeModule();
         Modules.get().add(pinkThemeModule);
-        pinkThemeModule.enable();
 
         // Modules - 自动化类
         AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();

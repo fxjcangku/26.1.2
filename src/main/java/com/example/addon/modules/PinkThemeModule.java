@@ -28,7 +28,6 @@ public final class PinkThemeModule extends YiyiaddonModule {
 
     public PinkThemeModule() {
         super(AddonTemplate.CATEGORY, "粉色主题", "一键把 Meteor 界面和 HUD 换成粉色，并可随时切换配色。");
-        this.toggle();
     }
 
     @Override
