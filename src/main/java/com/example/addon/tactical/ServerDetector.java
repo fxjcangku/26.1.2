@@ -7,7 +7,6 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
@@ -569,9 +568,7 @@ public class ServerDetector extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             table -> {
-                WButton openFolder = theme.button("打开资源包位置");
-                openFolder.action = this::openResourcePackFolder;
-                table.add(openFolder).expandX();
+                addUniformButton(theme, table, "打开资源包位置", this::openResourcePackFolder);
                 table.row();
             },
             new String[]{ "§l服务器检测 · 使用说明" },

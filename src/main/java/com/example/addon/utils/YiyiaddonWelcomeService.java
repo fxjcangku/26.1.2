@@ -1,5 +1,6 @@
 package com.example.addon.utils;
 
+import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.orbit.EventHandler;
@@ -46,9 +47,13 @@ public final class YiyiaddonWelcomeService {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // 欢迎消息
-        mc.player.sendSystemMessage(Component.literal("§c§l[yiyiaddon] §f本扩展已整合简体中文汉化跟汉化Baritone不用单独安装"));
-        mc.player.sendSystemMessage(Component.literal("§c§l[yiyiaddon] §f本扩展免费 为爱发电"));
+        // 欢迎消息：统一走基类 formatMessage，前缀格式与所有模块保持一致
+        mc.player.sendSystemMessage(Component.literal(
+            YiyiaddonModule.formatMessage("欢迎", "§f本扩展已整合简体中文汉化跟汉化Baritone不用单独安装")
+        ));
+        mc.player.sendSystemMessage(Component.literal(
+            YiyiaddonModule.formatMessage("欢迎", "§f本扩展免费 为爱发电")
+        ));
 
         // 检查是否需要更新检查（频率控制）
         if (!shouldCheckUpdate()) {
@@ -78,7 +83,7 @@ public final class YiyiaddonWelcomeService {
                         "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     ));
                     mc.player.sendSystemMessage(Component.literal(
-                        "§c§l[yiyiaddon] §f§l[更新提醒]"
+                        YiyiaddonModule.formatMessage("更新提醒", "")
                     ));
                     mc.player.sendSystemMessage(Component.literal(
                         "§f§l发现新版本 §a§l" + latest.version + "§r §7(当前 " + currentVersion + ")"

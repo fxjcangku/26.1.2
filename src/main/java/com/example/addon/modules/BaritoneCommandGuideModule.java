@@ -14,7 +14,7 @@ public final class BaritoneCommandGuideModule extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "§lBaritone 指令完全指南（超详细版）" },
+            new String[]{ "§lBaritone指令说明 · 使用说明" },
             new String[]{
                 "§e§l▌ 什么是 Baritone？",
                 "§f  Baritone 是一个自动寻路机器人，可以帮你：",

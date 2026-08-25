@@ -36,6 +36,7 @@ import com.example.addon.translations.YiyiaddonTranslator;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import net.minecraft.nbt.CompoundTag;
@@ -436,6 +437,68 @@ import java.util.function.Consumer;
 //   涉及可序列化字段（会写进 modules.nbt 的），改内存值的同时必须处理 fromTag，
 //   否则旧存档会把值读回来——这是 2026-08-25 那次 Bug 的根因。
 //
+// 【3.7 说明面板与消息前缀统一规范】（所有模块必须一致）
+//
+//   用户要求所有模块的配置页面与聊天输出长得一模一样。以下四条是硬性约定，
+//   新增模块或改动旧模块时逐条对照，不允许「这个模块特殊」。
+//
+//   ── 一、聊天前缀 ──────────────────────────────────────────
+//
+//   唯一合法格式（由 formatMessage 统一产出，方括号之间没有空格）：
+//     §c§l[yiyiaddon]§r§f§l[模块名]§r内容
+//
+//   模块内部：一律用 notify() / notifyError()。
+//   模块外部（指令、Service、工具类）：调 YiyiaddonModule.formatMessage("显示名", 消息)。
+//
+//   ✗ 禁止硬编码 "§c§l[yiyiaddon] §f..."（注意那个空格），也禁止自己拼前缀。
+//     曾经 YiyiaddonWelcomeService 就是这么写的，导致欢迎语比模块消息多一个空格，
+//     两种前缀在聊天栏里并排出现时一眼就能看出不齐。
+//
+//   ── 二、说明面板结构 ──────────────────────────────────────
+//
+//   必须覆写 getWidget()，返回 buildInfoWidget(...)，不要自己拼 WTable。
+//   段落顺序固定：标题 → 使用方法 → 功能说明 → 当前状态 → 注意事项。
+//
+//     标题：  "§l模块名 · 使用说明"          （中间是「空格·空格」）
+//     小节：  "§{色}§l▌ 小节名"              （▌ 后面一个空格）
+//     条目：  "§f  1. 步骤"                  （有序，缩进两空格）
+//             "§f  · 要点"                   （无序，缩进两空格）
+//     子条目："§f     · 补充说明"            （挂在有序条目下，缩进五空格）
+//             "§f    · 补充说明"             （挂在无序条目下，缩进四空格）
+//
+//   子条目只用于「某个步骤内部还要拆细」的场合，最多一层，不要再往下嵌。
+//
+//   小节配色固定，不要自创。常规五色（绝大多数模块只用这五个就够）：
+//     §e§l▌ 准备 / 使用方法            黄
+//     §a§l▌ 功能 / 原理 / 流程         绿
+//     §b§l▌ 参数建议 / 当前状态        青
+//     §d§l▌ 模式说明 / 提示            粉
+//     §c§l▌ 注意 / 警告                红
+//
+//   小节超过五个时（指令说明类模块动辄十几节），按顺序续用以下扩展色，
+//   不要跳着挑，也不要用五色之外的其它颜色码：
+//     §6§l▌ 指令系统 / 分类小节        橙
+//     §5§l▌ 次级分类                   紫
+//     §9§l▌ 高级功能 / 连接相关        蓝
+//     §4§l▌ 安全提醒（比 §c 更重）      深红
+//
+//   ── 三、面板按钮 ──────────────────────────────────────────
+//
+//   一律用 addUniformButton(theme, table, "文字", 回调)，多行按钮之间用 table.row() 分行。
+//
+//   ✗ 禁止 table.add(theme.button(...)).expandX()。
+//     WTable 的列宽取该列内容最大值，expandX() 只让第一列吃掉剩余空间，
+//     结果第一列被拉得很长、后面几列按文字宽度收缩，三列布局明显参差
+//     （PinkThemeModule 的粉色主题面板原来就是这个毛病）。
+//     addUniformButton 用 minWidth(BUTTON_MIN_WIDTH) 统一列宽
+//     + expandWidgetX() 让按钮填满单元格，才能真正等宽。
+//
+//   ── 四、自检 ──────────────────────────────────────────────
+//
+//   改完任意模块，先跑这两条确认没有漏网的写法：
+//     Grep "\[yiyiaddon\] "  → 应只在基类注释里出现（说明文字），不应出现在字符串里
+//     Grep "expandX\(\)"     → 只允许 buildInfoWidget 内部的 label 使用，按钮不许用
+//
 // ════════════════════════════════════════════════════════════════════
 
 /**
@@ -538,7 +601,7 @@ public abstract class YiyiaddonModule extends Module {
 
     /**
      * 普通消息（白色）
-     * 格式：§c§l[yiyiaddon] §r§f§l[模块名] §r§f消息
+     * 格式：§c§l[yiyiaddon]§r§f§l[模块名]§r§f消息
      */
     protected void notify(String message) {
         if (mc.player == null) return;
@@ -547,7 +610,7 @@ public abstract class YiyiaddonModule extends Module {
 
     /**
      * 错误消息（橙色加粗）
-     * 格式：§c§l[yiyiaddon] §r§f§l[模块名] §r§6§l错误消息
+     * 格式：§c§l[yiyiaddon]§r§f§l[模块名]§r§6§l错误消息
      */
     protected void notifyError(String message) {
         if (mc.player == null) return;
@@ -627,6 +690,28 @@ public abstract class YiyiaddonModule extends Module {
         }
         
         return t;
+    }
+
+    /** 说明面板按钮的统一最小宽度，保证同一面板内所有按钮等宽 */
+    protected static final double BUTTON_MIN_WIDTH = 90;
+
+    /**
+     * 添加等宽按钮到说明面板
+     *
+     * WTable 的列宽取该列内容的最大值，若用 expandX() 只有第一列会吃掉剩余空间，
+     * 导致同一行的按钮宽度不一致（第一列很长、后面按文字长度收缩）。
+     * 这里改用 minWidth 统一列宽 + expandWidgetX 让按钮填满单元格，
+     * 三列布局才会真正等宽。
+     *
+     * @param theme  Meteor GUI 主题
+     * @param table  面板表格
+     * @param title  按钮文字
+     * @param action 点击回调
+     */
+    protected void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
+        WButton button = theme.button(title);
+        button.action = action;
+        table.add(button).minWidth(BUTTON_MIN_WIDTH).expandWidgetX();
     }
 
     /**

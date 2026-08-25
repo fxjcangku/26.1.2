@@ -6,7 +6,7 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.systems.hud.Hud;
@@ -140,9 +140,7 @@ public final class PinkThemeModule extends YiyiaddonModule {
                 // 第四行
                 addButton(theme, table, "灰紫夜", Palette.DUSK_LAVENDER);
                 addButton(theme, table, "森林雾", Palette.FOREST_MIST);
-                WButton restore = theme.button("恢复默认");
-                restore.action = this::restoreDefault;
-                table.add(restore).expandX();
+                addUniformButton(theme, table, "恢复默认", this::restoreDefault);
                 table.row();
             },
             new String[]{ "§l粉色主题 · 使用说明" },
@@ -171,10 +169,8 @@ public final class PinkThemeModule extends YiyiaddonModule {
         );
     }
 
-    private void addButton(GuiTheme theme, meteordevelopment.meteorclient.gui.widgets.containers.WTable table, String title, Palette selected) {
-        WButton button = theme.button(title);
-        button.action = () -> select(selected);
-        table.add(button).expandX();
+    private void addButton(GuiTheme theme, WTable table, String title, Palette selected) {
+        addUniformButton(theme, table, title, () -> select(selected));
     }
 
     public enum Palette {

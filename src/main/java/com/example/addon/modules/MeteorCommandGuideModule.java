@@ -14,7 +14,7 @@ public final class MeteorCommandGuideModule extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
-            new String[]{ "§lMeteor 指令完全指南（超详细版）" },
+            new String[]{ "§lMeteor指令说明 · 使用说明" },
             new String[]{
                 "§e§l▌ 基础规则",
                 "§f  · Meteor 指令使用 §e.§f 前缀，例如 §e.help§f。",

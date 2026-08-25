@@ -6,7 +6,6 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.network.protocol.Packet;
@@ -651,12 +650,10 @@ public class AntiKickBypass extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             table -> {
-                WButton clearData = theme.button("清空拉回分析数据");
-                clearData.action = () -> {
+                addUniformButton(theme, table, "清空拉回分析数据", () -> {
                     rubberBandHistory.clear();
                     notify("§a已清空");
-                };
-                table.add(clearData).expandX();
+                });
                 table.row();
             },
             new String[]{ "§l终极防踢 · 使用说明" },
@@ -685,7 +682,7 @@ public class AntiKickBypass extends YiyiaddonModule {
                 "§f  · 延迟队列：§e" + delayQueue.size() + "§f 个包"
             },
             new String[]{
-                "§c§l▌ 推荐设置",
+                "§d§l▌ 推荐设置",
                 "§f  · 挖掘上限：§e8§f 个/秒（原版 5，留点余量）",
                 "§f  · 放置上限：§e8§f 个/秒（原版 4，留点余量）",
                 "§f  · 视角抖动：§e2°§f（太大会被识别）",
