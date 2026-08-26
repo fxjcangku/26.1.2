@@ -404,6 +404,8 @@ public final class MinerFSM {
         // 检查饱食度是否回满（满值20）
         if (foodData.getFoodLevel() >= 20) {
             mc.options.keyUse.setDown(false); // 释放右键
+            module.info("§a饱食度已恢复，继续挖矿");
+            module.getSoundNotifier().notifyMiningStart();
             transitionTo(MinerState.MINING);
             module.getBaritone().startMining(module.getTargetBlock()); // 恢复Baritone
             return;
@@ -411,12 +413,20 @@ public final class MinerFSM {
 
         // 每2秒尝试吃一次（吃完一个食物需要32 tick = 1.6秒）
         if (stateTick % 40 == 0) {
+            // 获取当前手持物品名称
+            ItemStack handItem = mc.player.getMainHandItem();
+            String foodName = handItem.isEmpty() ? "食物" : handItem.getHoverName().getString();
+            
+            module.info("§e正在进食: " + foodName + " §7(饱食度: " + foodData.getFoodLevel() + "/20)");
+            
             module.getContainer().autoEat();
         }
 
         // 超时保护：2分钟还没吃饱就放弃，回到挖矿
         if (stateTick > 2400) {
             mc.options.keyUse.setDown(false);
+            module.warning("§c进食超时，放弃等待");
+            module.getSoundNotifier().notifyLowFood();
             transitionTo(MinerState.MINING);
             module.getBaritone().startMining(module.getTargetBlock());
         }
