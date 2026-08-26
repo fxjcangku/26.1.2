@@ -1330,21 +1330,19 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         card.add(theme.label(titleColor + "§l" + title)).expandX().center();
         card.row();
         
-        // 设置按钮（根据绑定状态改变颜色）
-        WButton setBtn = theme.button(com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a设置" : "§c设置");
+        // 设置按钮
+        WButton setBtn = theme.button("设置");
         setBtn.action = () -> {
             com.example.addon.commands.NongChangCommand.setBinding(key);
-            // 关闭整个Shift界面，而非单个模块配置GUI
             mc.setScreen(null);
         };
         card.add(setBtn).expandX();
         card.row();
         
         // 删除按钮
-        WButton delBtn = theme.button("§7删除");
+        WButton delBtn = theme.button("删除");
         delBtn.action = () -> {
             com.example.addon.commands.NongChangCommand.removeBinding(key);
-            // 关闭整个Shift界面
             mc.setScreen(null);
         };
         card.add(delBtn).expandX();

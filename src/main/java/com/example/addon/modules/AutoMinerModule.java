@@ -1146,7 +1146,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  假矿检测按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            WButton checkFakeBtn = theme.button("§e§l🔍 检测假矿");
+            WButton checkFakeBtn = theme.button("🔍 检测假矿");
             checkFakeBtn.action = this::checkFakeOres;
             table.add(checkFakeBtn).expandX().minWidth(200);
             table.row();
@@ -1291,24 +1291,20 @@ public final class AutoMinerModule extends YiyiaddonModule {
             card.row();
         }
         
-        // 设置按钮（根据绑定状态改变颜色和文字）
-        String setBtnText = isBound ? "§a✓ 设置" : "§c✗ 设置";
-        WButton setBtn = theme.button(setBtnText);
+        // 设置按钮
+        WButton setBtn = theme.button("设置");
         setBtn.action = () -> {
             WKCommand.setBinding(key);
-            // 关闭整个Shift界面，而非单个模块配置GUI
             mc.setScreen(null);
         };
         card.add(setBtn).expandX();
         card.row();
         
-        // 删除按钮（只有已绑定时才显示为可用状态）
-        String delBtnText = isBound ? "§e删除" : "§8删除";
-        WButton delBtn = theme.button(delBtnText);
+        // 删除按钮
+        WButton delBtn = theme.button("删除");
         delBtn.action = () -> {
             if (isBound) {
                 WKCommand.removeBinding(key);
-                // 关闭整个Shift界面
                 mc.setScreen(null);
             }
         };
