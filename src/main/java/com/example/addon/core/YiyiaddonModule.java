@@ -55,6 +55,16 @@
 //   - 状态机/异步/发包必须注释意图
 //   - 拒绝废话注释（如"获取XXX""设置XXX"）
 //
+// 后台 API 配置（2026-08-26 新增）：
+//   ✓ 用户统计服务部署在 Cloudflare Workers：https://yiyiaddon-stats.fxjggyx.workers.dev
+//   ✓ 注册端点：POST /api/register  参数：uuid, name, version, minecraft_version
+//   ✓ 查询端点：GET  /api/stats     返回：total_users, recent_users
+//   ✓ 管理端点：GET  /api/users?key=xxx  需要 ADMIN_KEY 鉴权
+//   ✓ Workers 源码位于 backend/ 目录（worker.js + wrangler.toml）
+//   ✓ D1 数据库表结构：users(uuid, name, version, minecraft_version, first_seen, last_seen)
+//   ✓ 客户端实现：YiyiaddonWelcomeService.java 在进入世界时自动上报
+//   ✓ 配置常量：AddonTemplate.STATS_API_URL 集中管理后台地址
+//
 // 启动播报规范（2026-08-26 新增）：
 //   ✓ 所有需要配置的模块（自动挖矿/自动农场等）必须在 onActivate() 里播报关键配置
 //   ✓ 只报影响本次运行的关键项，不把整个设置面板念一遍，避免聊天栏刷屏

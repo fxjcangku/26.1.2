@@ -31,7 +31,7 @@ public final class YiyiaddonWelcomeService {
     
     // 用户统计 API（部署在 Cloudflare Workers）
     // 配置集中管理在 AddonTemplate.STATS_API_URL
-    private static final String STATS_API_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/report";
+    private static final String STATS_API_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/register";
     private static final String STATS_QUERY_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/stats";
     
     // 更新检查配置
@@ -289,7 +289,9 @@ public final class YiyiaddonWelcomeService {
         new Thread(() -> {
             try {
                 Minecraft mc = Minecraft.getInstance();
-                if (mc.player == null) return;
+                if (mc.player == null) {
+                    return;
+                }
 
                 String uuid = mc.player.getUUID().toString();
                 String name = mc.player.getName().getString();
@@ -297,7 +299,7 @@ public final class YiyiaddonWelcomeService {
                 String mcVersion = mc.getVersionType();
 
                 // 构造 JSON 请求体
-                String json = String.format(
+                String jsonBody = String.format(
                     "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\"}",
                     uuid, name, version, mcVersion
                 );
@@ -306,7 +308,7 @@ public final class YiyiaddonWelcomeService {
                     .uri(URI.create(STATS_API_ENDPOINT))
                     .timeout(Duration.ofSeconds(8))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .build();
 
                 HttpResponse<String> response = HTTP_CLIENT.send(request, 
@@ -328,45 +330,48 @@ public final class YiyiaddonWelcomeService {
                         // 获取最近活跃信息
                         String recentActivityInfo = fetchRecentActivity();
                         
-                        // 在公屏显示排名信息
-                        if (mc.player != null) {
-                            mc.player.sendSystemMessage(Component.literal(
-                                "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                            ));
-                            
-                            if (isNew) {
+                        // 必须在渲染线程（主线程）里发消息，子线程直接调 sendSystemMessage 会崩溃
+                        mc.execute(() -> {
+                            if (mc.player != null) {
+                                mc.player.sendSystemMessage(Component.literal(
+                                    "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                                ));
+                                
+                                if (isNew) {
+                                    mc.player.sendSystemMessage(Component.literal(
+                                        YiyiaddonModule.formatMessage("统计", 
+                                            "§f" + name + " §e你是第 §6§l" + rank + " §e个使用该扩展的玩家 §a§l✓")
+                                    ));
+                                } else {
+                                    mc.player.sendSystemMessage(Component.literal(
+                                        YiyiaddonModule.formatMessage("统计", 
+                                            "§f欢迎回来 " + name + "§f！你是第 §6§l" + rank + " §f个使用该扩展的玩家")
+                                    ));
+                                }
+                                
                                 mc.player.sendSystemMessage(Component.literal(
                                     YiyiaddonModule.formatMessage("统计", 
-                                        "§f" + name + " §e你是第 §6§l" + rank + " §e个使用该扩展的玩家 §a§l✓")
+                                        "§f当前已有 §b§l" + total + " §f位玩家使用该扩展")
                                 ));
-                            } else {
+                                
+                                // 显示最近活跃信息
+                                if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
+                                    mc.player.sendSystemMessage(Component.literal(
+                                        YiyiaddonModule.formatMessage("统计", recentActivityInfo)
+                                    ));
+                                }
+                                
                                 mc.player.sendSystemMessage(Component.literal(
-                                    YiyiaddonModule.formatMessage("统计", 
-                                        "§f欢迎回来 " + name + "§f！你是第 §6§l" + rank + " §f个使用该扩展的玩家")
+                                    "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                                 ));
                             }
-                            
-                            mc.player.sendSystemMessage(Component.literal(
-                                YiyiaddonModule.formatMessage("统计", 
-                                    "§f当前已有 §b§l" + total + " §f位玩家使用该扩展")
-                            ));
-                            
-                            // 显示最近活跃信息
-                            if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
-                                mc.player.sendSystemMessage(Component.literal(
-                                    YiyiaddonModule.formatMessage("统计", recentActivityInfo)
-                                ));
-                            }
-                            
-                            mc.player.sendSystemMessage(Component.literal(
-                                "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                            ));
-                        }
+                        });
                     }
                 }
             } catch (Exception e) {
-                // 静默失败，不影响游戏体验
-                // 即使统计服务器挂了，玩家也能正常使用扩展
+                // 调试：打印异常信息以便排查问题
+                e.printStackTrace();
+                System.err.println("[YiyiaddonWelcomeService] 统计请求失败: " + e.getMessage());
             }
         }, "yiyiaddon-user-register").start();
     }
