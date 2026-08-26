@@ -89,8 +89,12 @@ com.example.addon.commands.YiyiaddonUpdateCommand -> IO:
     void <init>() -> <init>
     void build(com.mojang.brigadier.builder.LiteralArgumentBuilder) -> build
     void updateInfo(java.lang.String) -> l
-    int lambda$build$2(com.mojang.brigadier.context.CommandContext) -> l
+    int lambda$build$6(com.mojang.brigadier.context.CommandContext) -> l
     int lambda$build$1(com.mojang.brigadier.context.CommandContext) -> I
+    void lambda$build$2() -> l
+    void lambda$build$5(java.lang.Exception) -> l
+    void lambda$build$3(java.lang.Boolean,java.lang.String) -> l
+    void lambda$build$4(java.lang.String) -> I
     int lambda$build$0(com.mojang.brigadier.context.CommandContext) -> O
 com.example.addon.core.AddonTemplate -> com.example.addon.core.AddonTemplate:
     org.slf4j.Logger LOG -> l
@@ -1326,6 +1330,8 @@ com.example.addon.utils.YiyiaddonWelcomeService -> lIlI:
     void <init>() -> <init>
     void register() -> l
     void onGameJoined(meteordevelopment.meteorclient.events.game.GameJoinedEvent) -> l
+    void checkForUpdatesManually(net.minecraft.client.Minecraft,java.util.function.BiConsumer) -> l
+    void showUpdateNotification(net.minecraft.client.Minecraft,java.lang.String,com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo) -> l
     boolean shouldCheckUpdate() -> l
     void saveLastCheckTime() -> I
     void skipCurrentVersion(java.lang.String) -> l
@@ -1335,14 +1341,16 @@ com.example.addon.utils.YiyiaddonWelcomeService -> lIlI:
     java.lang.String getCurrentVersion() -> I
     com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo fetchLatestRelease() -> l
     int compareVersions(java.lang.String,java.lang.String) -> l
+    int compareMainVersion(java.lang.String,java.lang.String) -> I
     java.lang.String normalizeVersion(java.lang.String) -> l
     int parseNumber(java.lang.String) -> l
     void registerUserAndShowRank(java.lang.String) -> I
     java.lang.String fetchRecentActivity() -> O
     void lambda$registerUserAndShowRank$0(java.lang.String) -> O
     java.lang.String lambda$getCurrentVersion$0(net.fabricmc.loader.api.ModContainer) -> l
+    void lambda$showUpdateNotification$0(net.minecraft.client.Minecraft,com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo,java.lang.String) -> l
+    net.minecraft.network.chat.Style lambda$showUpdateNotification$1(com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo,net.minecraft.network.chat.Style) -> l
     void lambda$onGameJoined$0(java.lang.String,net.minecraft.client.Minecraft) -> l
-    net.minecraft.network.chat.Style lambda$onGameJoined$1(com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo,net.minecraft.network.chat.Style) -> l
     void <clinit>() -> <clinit>
 com.example.addon.utils.YiyiaddonWelcomeService$1 -> lIlO:
     net.minecraft.client.Minecraft val$mc -> l
@@ -1351,10 +1359,9 @@ com.example.addon.utils.YiyiaddonWelcomeService$1 -> lIlO:
     java.lang.String val$name -> I
     int val$rank -> l
     int val$total -> I
-    java.lang.String val$recentActivityInfo -> O
-    void <init>(net.minecraft.client.Minecraft,java.lang.String,boolean,java.lang.String,int,int,java.lang.String) -> <init>
+    void <init>(net.minecraft.client.Minecraft,java.lang.String,boolean,java.lang.String,int,int) -> <init>
     void run() -> l
-    void lambda$run$0(net.minecraft.client.Minecraft,java.lang.String,boolean,java.lang.String,int,int,java.lang.String) -> l
+    void lambda$run$0(net.minecraft.client.Minecraft,java.lang.String,boolean,java.lang.String,int,int) -> l
     net.minecraft.network.chat.Style lambda$run$2(net.minecraft.network.chat.Style) -> l
     net.minecraft.network.chat.Style lambda$run$1(net.minecraft.network.chat.Style) -> I
 com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo -> lIIl:
