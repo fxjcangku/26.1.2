@@ -36,7 +36,9 @@ public final class UserStatsModule extends YiyiaddonModule {
     //  设置项
     // ══════════════════════════════════════════════════════════════
     
-    private final Setting<Integer> refreshInterval = settings.getDefaultGroup().add(new IntSetting.Builder()
+    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 统计设置", true);
+    
+    private final Setting<Integer> refreshInterval = sgGeneral.add(new IntSetting.Builder()
         .name("自动刷新间隔")
         .description("界面数据每隔多少秒自动刷新一次（0 = 仅手动刷新）")
         .defaultValue(30)

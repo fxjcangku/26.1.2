@@ -13,14 +13,16 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.gui.GuiTheme;
-import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -47,16 +49,16 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final ContainerHelper container = new ContainerHelper(this);
     private final CommandManager cmdManager = new CommandManager(this);
     private final OrePredictor orePredictor = new OrePredictor();
+    private final SoundNotifier soundNotifier = new SoundNotifier();
 
     // ═══════════════════════════════════════════════════════════════════
-    //  UI 配置面板
+    //  UI 配置面板 - 按使用频率分组
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgTarget = settings.createGroup("目标选择", false);
-    private final SettingGroup sgSeedMining = settings.createGroup("种子挖矿", false);
-    private final SettingGroup sgBasic = settings.createGroup("基础设置", false);
-    private final SettingGroup sgBaritone = settings.createGroup("Baritone设置", false);
-    private final SettingGroup sgDisplay = settings.createGroup("显示设置", false);
+    private final SettingGroup sgEssential = settings.createGroup("1️⃣ 常用设置", true);
+    private final SettingGroup sgBaritone = settings.createGroup("2️⃣ Baritone调优", false);
+    private final SettingGroup sgAdvanced = settings.createGroup("3️⃣ 高级功能", false);
+    private final SettingGroup sgVisual = settings.createGroup("4️⃣ 可视化设置", false);
 
     // ─── 目标选择（互斥） ───
     private final Setting<Block> overworldOreTarget;
@@ -75,6 +77,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     // ─── 指令配置 ───
     private final Setting<String> wildCommand;
+    private final Setting<Boolean> rtpGuiEnabled;
+    private final Setting<String> rtpGuiKeyword;
     private final Setting<String> unloadCommand;
     private final Setting<String> supplyCommand;
     private final Setting<String> afkCommand;
@@ -88,6 +92,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     // ─── 垃圾丢弃 ───
     private final Setting<List<Block>> trashList;
+    
+    // ─── 食物白名单 ───
+    private final Setting<List<Item>> foodWhitelist;
+    
+    // ─── 搭路方块白名单 ───
+    private final BlockListSetting placeBlocks;
 
     // ─── Baritone 设置 ───
     private final Setting<Boolean> avoidLava;
@@ -97,12 +107,18 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Boolean> allowPlace;
     private final Setting<Integer> maxFallHeight;
     private final Setting<Boolean> pauseMiningForFallingBlocks;
-    private final Setting<Boolean> itemSaver;
-    private final Setting<Integer> itemSaverThreshold;
+    private final Setting<Boolean> allowInventory;
+    private final Setting<Boolean> autoTool;
+    private final Setting<Boolean> sprintAscends;
+    private final Setting<Boolean> allowParkour;
+    private final Setting<Boolean> allowParkourPlace;
+    private final Setting<Boolean> allowDiagonalAscend;
+    private final Setting<Boolean> allowDiagonalDescend;
     private final Setting<Boolean> allowOnlyExposedOres;
     private final Setting<Integer> allowOnlyExposedOresDistance;
     private final Setting<Integer> minYLevelWhileMining;
     private final Setting<Integer> maxYLevelWhileMining;
+    private final Setting<Integer> mineGoalUpdateInterval;
     private final Setting<Integer> mineMaxOreLocationsCount;
     private final Setting<Boolean> blacklistClosestOnFailure;
     private final Setting<Boolean> legitMine;
@@ -119,25 +135,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动挖矿",
             "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考下面使用说明。");
 
-        // ─── 目标选择 ───
-        netherOreTarget = sgTarget.add(new BlockSetting.Builder()
-            .name("下界矿石")
-            .description("选择下界矿石（下界金矿、下界石英矿、远古残骸）")
-            .defaultValue(Blocks.AIR)
-            .filter(block -> {
-                String id = BuiltInRegistries.BLOCK.getKey(block).toString();
-                return id.contains("nether") && (id.contains("ore") || id.contains("quartz")) 
-                    || id.contains("ancient_debris");
-            })
-            .build());
-
-        blockTarget = sgTarget.add(new BlockSetting.Builder()
-            .name("普通方块")
-            .description("选择普通方块（石头、泥土、原木等）")
-            .defaultValue(Blocks.AIR)
-            .build());
-
-        overworldOreTarget = sgTarget.add(new BlockSetting.Builder()
+        // ═══════════════════════════════════════════════════════════
+        //  1️⃣ 常用设置 - 经常调整的核心配置
+        // ═══════════════════════════════════════════════════════════
+        
+        // ─── 目标选择（互斥） ───
+        overworldOreTarget = sgEssential.add(new BlockSetting.Builder()
             .name("主世界矿石")
             .description("选择主世界矿石（含深层变种）")
             .defaultValue(Blocks.AIR)
@@ -154,117 +157,102 @@ public final class AutoMinerModule extends YiyiaddonModule {
             })
             .build());
 
-        // ─── 种子挖矿 ───
-        seedMiningEnabled = sgSeedMining.add(new BoolSetting.Builder()
-            .name("启用种子挖矿")
-            .description("根据世界种子预测真实矿石位置，只挖真矿，无视假矿")
-            .defaultValue(false)
-            .onChanged(value -> {
-                if (value) {
-                    updateOrePredictor();
-                } else {
-                    orePredictor.invalidateCache();
-                }
+        netherOreTarget = sgEssential.add(new BlockSetting.Builder()
+            .name("下界矿石")
+            .description("选择下界矿石（下界金矿、下界石英矿、远古残骸）")
+            .defaultValue(Blocks.AIR)
+            .filter(block -> {
+                String id = BuiltInRegistries.BLOCK.getKey(block).toString();
+                return id.contains("nether") && (id.contains("ore") || id.contains("quartz")) 
+                    || id.contains("ancient_debris");
             })
             .build());
 
-        worldSeed = sgSeedMining.add(new StringSetting.Builder()
-            .name("世界种子")
-            .description("服务器的世界种子（Long类型，支持负数，如 -8913466909937400889）")
-            .defaultValue("")
-            .visible(seedMiningEnabled::get)
-            .onChanged(s -> updateOrePredictor())
-            .build());
-
-        renderRange = sgSeedMining.add(new IntSetting.Builder()
-            .name("渲染范围")
-            .description("渲染玩家周围多少格内的预测矿石")
-            .defaultValue(128)
-            .min(32)
-            .sliderMax(256)
-            .visible(seedMiningEnabled::get)
-            .build());
-
-        oreRenderColor = sgSeedMining.add(new ColorSetting.Builder()
-            .name("矿石渲染颜色")
-            .description("预测矿石方块框线的颜色")
-            .defaultValue(new SettingColor(255, 215, 0, 180))
-            .visible(seedMiningEnabled::get)
-            .build());
-
-        pulseEffect = sgSeedMining.add(new BoolSetting.Builder()
-            .name("脉冲效果")
-            .description("矿石框线启用呼吸灯效果")
-            .defaultValue(true)
-            .visible(seedMiningEnabled::get)
+        blockTarget = sgEssential.add(new BlockSetting.Builder()
+            .name("普通方块")
+            .description("选择普通方块（石头、泥土、原木等）")
+            .defaultValue(Blocks.AIR)
             .build());
 
         // ─── 指令配置 ───
-        wildCommand = sgBasic.add(new StringSetting.Builder()
+        wildCommand = sgEssential.add(new StringSetting.Builder()
             .name("去野外指令")
-            .description("传送到挖矿区域的指令（如 /rtp）")
+            .description("传送到挖矿区域的指令（支持带/或不带/；如需打开GUI选择请启用下方开关）")
             .defaultValue("")
             .build());
 
-        unloadCommand = sgBasic.add(new StringSetting.Builder()
+        rtpGuiEnabled = sgEssential.add(new BoolSetting.Builder()
+            .name("RTP需要GUI选择")
+            .description("指令后自动扫描GUI点击匹配按钮（纯文本匹配，忽略颜色代码和空格）")
+            .defaultValue(false)
+            .build());
+
+        rtpGuiKeyword = sgEssential.add(new StringSetting.Builder()
+            .name("GUI按钮关键词")
+            .description("输入纯文本（如'主世界'会匹配'§a主 §e世 §b界'），自动忽略颜色和空格")
+            .defaultValue("主世界")
+            .visible(rtpGuiEnabled::get)
+            .build());
+
+        unloadCommand = sgEssential.add(new StringSetting.Builder()
             .name("满载卸货指令")
-            .description("传送到卸货箱的指令（如 /home kuang）")
+            .description("传送到卸货箱的指令（支持带/或不带/）")
             .defaultValue("")
             .build());
 
-        supplyCommand = sgBasic.add(new StringSetting.Builder()
+        supplyCommand = sgEssential.add(new StringSetting.Builder()
             .name("补给指令")
-            .description("传送到食物箱的指令（如 /home shiwu）")
+            .description("传送到食物箱的指令（支持带/或不带/）")
             .defaultValue("")
             .build());
 
-        afkCommand = sgBasic.add(new StringSetting.Builder()
+        afkCommand = sgEssential.add(new StringSetting.Builder()
             .name("挂机点指令")
-            .description("传送到挂机修补点的指令（如 /home guaji）")
+            .description("传送到挂机修补点（支持带/或不带/；自动联动杀戮光环，修好后自动RTP）")
             .defaultValue("")
             .build());
 
-        respawnCommand = sgBasic.add(new StringSetting.Builder()
+        respawnCommand = sgEssential.add(new StringSetting.Builder()
             .name("死亡重返指令")
-            .description("复活后返回挂机点的指令")
+            .description("复活后返回挂机点（支持带/或不带/；死亡瞬间自动调用流星自动重生）")
             .defaultValue("")
             .build());
 
         // ─── 阈值设置 ───
-        unloadThreshold = sgBasic.add(new IntSetting.Builder()
+        unloadThreshold = sgEssential.add(new IntSetting.Builder()
             .name("满载组数")
-            .description("背包矿物达到多少组时触发卸货")
+            .description("背包矿物达到多少组时触发卸货（1组=64个）")
             .defaultValue(20)
             .min(1)
             .sliderMax(36)
             .build());
 
-        hungerThreshold = sgBasic.add(new IntSetting.Builder()
-            .name("饥饿阈值")
-            .description("饥饿值低于此值时触发补给")
-            .defaultValue(12)
+        hungerThreshold = sgEssential.add(new IntSetting.Builder()
+            .name("食物数量")
+            .description("背包食物少于此数量时触发补给（单位：组，1组=64个）")
+            .defaultValue(5)
             .min(1)
-            .sliderMax(20)
+            .sliderMax(64)
             .build());
 
-        durabilityThreshold = sgBasic.add(new IntSetting.Builder()
+        durabilityThreshold = sgEssential.add(new IntSetting.Builder()
             .name("耐久阈值")
-            .description("工具剩余耐久低于此值时触发修补")
+            .description("工具剩余耐久低于此值时前往挂机点联动杀戮光环修补")
             .defaultValue(50)
             .min(1)
             .sliderMax(500)
             .build());
 
-        teleportDelay = sgBasic.add(new IntSetting.Builder()
+        teleportDelay = sgEssential.add(new IntSetting.Builder()
             .name("传送等待时长")
-            .description("执行传送指令后等待多少秒（服务器传送延迟+区块加载时间）")
+            .description("执行传送指令后等待秒数（包括服务器延迟+区块加载）；超时自动重新RTP")
             .defaultValue(5)
             .min(1)
             .sliderMax(30)
             .build());
 
-        // ─── 垃圾丢弃（预设并默认勾选） ───
-        trashList = sgBasic.add(new BlockListSetting.Builder()
+        // ─── 垃圾与食物 ───
+        trashList = sgEssential.add(new BlockListSetting.Builder()
             .name("垃圾丢弃名单")
             .description("挖矿时自动丢弃这些方块")
             .defaultValue(List.of(
@@ -280,30 +268,92 @@ public final class AutoMinerModule extends YiyiaddonModule {
             ))
             .build());
 
-        // ─── Baritone 设置 ───
-        avoidLava = sgBaritone.add(new BoolSetting.Builder()
-            .name("避开岩浆")
-            .description("禁止 Baritone 将岩浆作为正常寻路路径")
-            .defaultValue(true)
-            .onChanged(value -> baritone.updateSetting("avoidLava", value))
+        foodWhitelist = sgEssential.add(new ItemListSetting.Builder()
+            .name("食物白名单")
+            .description("从食物箱只拿这些食物")
+            .defaultValue(List.of(
+                Items.COOKED_BEEF,
+                Items.COOKED_PORKCHOP,
+                Items.BREAD,
+                Items.GOLDEN_CARROT
+            ))
+            .filter(item -> {
+                ItemStack stack = new ItemStack(item);
+                return stack.has(DataComponents.FOOD);
+            })
             .build());
 
-        mobAvoidance = sgBaritone.add(new BoolSetting.Builder()
-            .name("怪物规避")
-            .description("提高怪物附近路径代价，尽量绕开危险区域")
-            .defaultValue(true)
-            .onChanged(value -> baritone.updateSetting("avoidance", value))
+        // ═══════════════════════════════════════════════════════════
+        //  2️⃣ Baritone调优 - 寻路与挖掘参数
+        // ═══════════════════════════════════════════════════════════
+        
+        // ─── 种子挖矿 ───
+        seedMiningEnabled = sgBaritone.add(new BoolSetting.Builder()
+            .name("启用种子挖矿")
+            .description("根据世界种子预测真实矿石位置，只挖真矿，无视假矿")
+            .defaultValue(false)
+            .onChanged(value -> {
+                if (value) {
+                    updateOrePredictor();
+                } else {
+                    orePredictor.invalidateCache();
+                }
+            })
             .build());
 
-        mobAvoidanceRadius = sgBaritone.add(new IntSetting.Builder()
-            .name("怪物规避半径")
-            .description("计算怪物危险区域的半径")
-            .defaultValue(8)
+        worldSeed = sgBaritone.add(new StringSetting.Builder()
+            .name("世界种子")
+            .description("服务器的世界种子（Long类型，支持负数，如 -8913466909937400889）")
+            .defaultValue("")
+            .visible(seedMiningEnabled::get)
+            .onChanged(s -> updateOrePredictor())
+            .build());
+
+        renderRange = sgBaritone.add(new IntSetting.Builder()
+            .name("渲染范围")
+            .description("渲染玩家周围多少格内的预测矿石")
+            .defaultValue(128)
+            .min(32)
+            .sliderMax(256)
+            .visible(seedMiningEnabled::get)
+            .build());
+
+        oreRenderColor = sgBaritone.add(new ColorSetting.Builder()
+            .name("矿石渲染颜色")
+            .description("预测矿石方块框线的颜色")
+            .defaultValue(new SettingColor(255, 215, 0, 180))
+            .visible(seedMiningEnabled::get)
+            .build());
+
+        pulseEffect = sgBaritone.add(new BoolSetting.Builder()
+            .name("脉冲效果")
+            .description("矿石框线启用呼吸灯效果")
+            .defaultValue(true)
+            .visible(seedMiningEnabled::get)
+            .build());
+
+        // ─── Baritone参数 ───
+        
+        // ────────────── 矿点刷新（优先挖近矿） ──────────────
+        mineGoalUpdateInterval = sgBaritone.add(new IntSetting.Builder()
+            .name("矿点刷新间隔")
+            .description("每隔多少tick重新扫描一次矿点（值越小越优先挖近矿，以自身为圆心递增扫描）")
+            .defaultValue(10)
             .min(1)
-            .sliderMax(16)
-            .onChanged(value -> baritone.updateSetting("mobAvoidanceRadius", value))
+            .sliderMax(100)
+            .onChanged(value -> baritone.updateSetting("mineGoalUpdateInterval", value))
             .build());
 
+        mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
+            .name("矿点缓存数量")
+            .description("Baritone 一次缓存的最大矿点数量")
+            .defaultValue(64)
+            .min(1)
+            .sliderMax(256)
+            .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
+            .build());
+        
+        // ────────────── 开关类设置 ──────────────
         allowBreak = sgBaritone.add(new BoolSetting.Builder()
             .name("破坏阻挡方块")
             .description("允许破坏阻挡路径的方块（石头、泥土等）")
@@ -318,13 +368,32 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("allowPlace", value))
             .build());
 
-        maxFallHeight = sgBaritone.add(new IntSetting.Builder()
-            .name("最大坠落高度")
-            .description("允许从多高的地方跳下（超过会绕路）")
-            .defaultValue(3)
-            .min(0)
-            .sliderMax(20)
-            .onChanged(value -> baritone.updateSetting("maxFallHeightNoWater", value))
+        allowInventory = sgBaritone.add(new BoolSetting.Builder()
+            .name("自动整理物品栏")
+            .description("允许Baritone自动将物品从背包移到快捷栏（工具、方块等）")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("allowInventory", value))
+            .build());
+
+        autoTool = sgBaritone.add(new BoolSetting.Builder()
+            .name("自动切换工具")
+            .description("挖掘时自动选择最佳工具（镐子挖石头、铲子挖土等）")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("autoTool", value))
+            .build());
+
+        avoidLava = sgBaritone.add(new BoolSetting.Builder()
+            .name("避开岩浆")
+            .description("禁止 Baritone 将岩浆作为正常寻路路径")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("avoidLava", value))
+            .build());
+
+        mobAvoidance = sgBaritone.add(new BoolSetting.Builder()
+            .name("怪物规避")
+            .description("提高怪物附近路径代价，尽量绕开危险区域")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("avoidance", value))
             .build());
 
         pauseMiningForFallingBlocks = sgBaritone.add(new BoolSetting.Builder()
@@ -334,20 +403,39 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("pauseMiningForFallingBlocks", value))
             .build());
 
-        itemSaver = sgBaritone.add(new BoolSetting.Builder()
-            .name("工具保护")
-            .description("工具耐久不足时避免继续使用该工具")
+        sprintAscends = sgBaritone.add(new BoolSetting.Builder()
+            .name("疾跑上坡")
+            .description("上坡时提前一格疾跑+跳跃，提升速度")
             .defaultValue(true)
-            .onChanged(value -> baritone.updateSetting("itemSaver", value))
+            .onChanged(value -> baritone.updateSetting("sprintAscends", value))
             .build());
 
-        itemSaverThreshold = sgBaritone.add(new IntSetting.Builder()
-            .name("Baritone工具耐久阈值")
-            .description("Baritone 停止使用工具的剩余耐久")
-            .defaultValue(50)
-            .min(1)
-            .sliderMax(500)
-            .onChanged(value -> baritone.updateSetting("itemSaverThreshold", value))
+        allowParkour = sgBaritone.add(new BoolSetting.Builder()
+            .name("允许跑酷")
+            .description("允许跨越1-4格的跑酷跳跃（有一定风险）")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("allowParkour", value))
+            .build());
+
+        allowParkourPlace = sgBaritone.add(new BoolSetting.Builder()
+            .name("跑酷搭桥")
+            .description("跑酷跳跃中途放置方块来延长距离（需开启放置方块）")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("allowParkourPlace", value))
+            .build());
+
+        allowDiagonalAscend = sgBaritone.add(new BoolSetting.Builder()
+            .name("对角线上升")
+            .description("允许斜向上跳跃，速度更快但消耗更多饥饿值")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("allowDiagonalAscend", value))
+            .build());
+
+        allowDiagonalDescend = sgBaritone.add(new BoolSetting.Builder()
+            .name("对角线下降")
+            .description("允许斜向下降，速度更快但有一定风险（地狱慎用）")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("allowDiagonalDescend", value))
             .build());
 
         allowOnlyExposedOres = sgBaritone.add(new BoolSetting.Builder()
@@ -357,6 +445,47 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("allowOnlyExposedOres", value))
             .build());
 
+        blacklistClosestOnFailure = sgBaritone.add(new BoolSetting.Builder()
+            .name("失败目标暂时跳过")
+            .description("矿点无法到达时跳过最近目标，避免反复卡住")
+            .defaultValue(true)
+            .onChanged(value -> baritone.updateSetting("blacklistClosestOnFailure", value))
+            .build());
+
+        legitMine = sgBaritone.add(new BoolSetting.Builder()
+            .name("合法挖掘模式")
+            .description("启用合法挖掘限制（关闭可提升效率但可能被检测）")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("legitMine", value))
+            .build());
+
+        legitMineIncludeDiagonals = sgBaritone.add(new BoolSetting.Builder()
+            .name("合法挖掘检测对角矿石")
+            .description("合法挖掘时检测与已发现矿石对角相邻的矿石")
+            .defaultValue(false)
+            .onChanged(value -> baritone.updateSetting("legitMineIncludeDiagonals", value))
+            .build());
+
+        // ────────────── 滑块类设置 ──────────────
+        mobAvoidanceRadius = sgBaritone.add(new IntSetting.Builder()
+            .name("怪物规避半径")
+            .description("计算怪物危险区域的半径")
+            .defaultValue(8)
+            .min(1)
+            .sliderMax(16)
+            .onChanged(value -> baritone.updateSetting("mobAvoidanceRadius", value))
+            .visible(mobAvoidance::get)
+            .build());
+
+        maxFallHeight = sgBaritone.add(new IntSetting.Builder()
+            .name("最大坠落高度")
+            .description("允许从多高的地方跳下（超过会绕路）")
+            .defaultValue(3)
+            .min(0)
+            .sliderMax(20)
+            .onChanged(value -> baritone.updateSetting("maxFallHeightNoWater", value))
+            .build());
+
         allowOnlyExposedOresDistance = sgBaritone.add(new IntSetting.Builder()
             .name("暴露矿石检测距离")
             .description("判断矿石是否暴露时使用的检测距离")
@@ -364,6 +493,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .min(1)
             .sliderMax(8)
             .onChanged(value -> baritone.updateSetting("allowOnlyExposedOresDistance", value))
+            .visible(allowOnlyExposedOres::get)
             .build());
 
         minYLevelWhileMining = sgBaritone.add(new IntSetting.Builder()
@@ -384,29 +514,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("maxYLevelWhileMining", value))
             .build());
 
-        mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
-            .name("矿点缓存数量")
-            .description("Baritone 一次缓存的最大矿点数量")
-            .defaultValue(64)
-            .min(1)
-            .sliderMax(256)
-            .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
-            .build());
-
-        blacklistClosestOnFailure = sgBaritone.add(new BoolSetting.Builder()
-            .name("失败目标暂时跳过")
-            .description("矿点无法到达时跳过最近目标，避免反复卡住")
-            .defaultValue(true)
-            .onChanged(value -> baritone.updateSetting("blacklistClosestOnFailure", value))
-            .build());
-
-        legitMine = sgBaritone.add(new BoolSetting.Builder()
-            .name("合法挖掘模式")
-            .description("启用合法挖掘限制（关闭可提升效率但可能被检测）")
-            .defaultValue(false)
-            .onChanged(value -> baritone.updateSetting("legitMine", value))
-            .build());
-
         legitMineYLevel = sgBaritone.add(new IntSetting.Builder()
             .name("合法挖掘高度")
             .description("合法挖掘模式进行条带探索时使用的高度")
@@ -414,17 +521,51 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .min(-64)
             .sliderMax(320)
             .onChanged(value -> baritone.updateSetting("legitMineYLevel", value))
+            .visible(legitMine::get)
             .build());
 
-        legitMineIncludeDiagonals = sgBaritone.add(new BoolSetting.Builder()
-            .name("合法挖掘检测对角矿石")
-            .description("合法挖掘时检测与已发现矿石对角相邻的矿石")
-            .defaultValue(false)
-            .onChanged(value -> baritone.updateSetting("legitMineIncludeDiagonals", value))
+        // ────────────── 方块列表设置 ──────────────
+        placeBlocks = sgBaritone.add(new BlockListSetting.Builder()
+            .name("搭路方块白名单")
+            .description("Baritone搭桥/填坑时优先使用这些方块（会自动排除在垃圾丢弃外）")
+            .defaultValue(List.of(
+                Blocks.COBBLESTONE,
+                Blocks.DIRT,
+                Blocks.NETHERRACK,
+                Blocks.COBBLED_DEEPSLATE
+            ))
+            .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
+            .visible(allowPlace::get)
             .build());
 
-        // ─── 显示设置 ───
-        espScale = sgDisplay.add(new DoubleSetting.Builder()
+        // ═══════════════════════════════════════════════════════════
+        //  3️⃣ 高级功能 - 语音播报
+        // ═══════════════════════════════════════════════════════════
+        
+        // ─── 语音播报 ───
+        Setting<Boolean> soundEnabled = sgAdvanced.add(new BoolSetting.Builder()
+            .name("语音播报")
+            .description("关键状态转换时播放音效提示（卸货完成、食物不足、工具损坏等）")
+            .defaultValue(true)
+            .onChanged(value -> soundNotifier.setEnabled(value))
+            .build());
+        
+        Setting<Double> soundVolume = sgAdvanced.add(new DoubleSetting.Builder()
+            .name("音效音量")
+            .description("语音播报的音量大小（0.0-1.0）")
+            .defaultValue(1.0)
+            .min(0.0)
+            .max(1.0)
+            .sliderMax(1.0)
+            .onChanged(value -> soundNotifier.setVolume(value.floatValue()))
+            .visible(soundEnabled::get)
+            .build());
+
+        // ═══════════════════════════════════════════════════════════
+        //  4️⃣ 可视化设置 - ESP显示
+        // ═══════════════════════════════════════════════════════════
+        
+        espScale = sgVisual.add(new DoubleSetting.Builder()
             .name("ESP字体大小")
             .description("三个坐标点悬浮标签的字体缩放倍数")
             .defaultValue(1.0)
@@ -432,19 +573,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .sliderMax(3.0)
             .build());
 
-        mineralChestColor = sgDisplay.add(new ColorSetting.Builder()
+        mineralChestColor = sgVisual.add(new ColorSetting.Builder()
             .name("矿物箱颜色")
             .description("矿物箱ESP标签的颜色")
             .defaultValue(new SettingColor(255, 215, 0))
             .build());
 
-        foodChestColor = sgDisplay.add(new ColorSetting.Builder()
+        foodChestColor = sgVisual.add(new ColorSetting.Builder()
             .name("食物箱颜色")
             .description("食物箱ESP标签的颜色")
             .defaultValue(new SettingColor(100, 255, 100))
             .build());
 
-        afkPointColor = sgDisplay.add(new ColorSetting.Builder()
+        afkPointColor = sgVisual.add(new ColorSetting.Builder()
             .name("挂机修复点颜色")
             .description("挂机修复点ESP标签的颜色")
             .defaultValue(new SettingColor(255, 100, 255))
@@ -472,8 +613,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
             allowPlace.get(),
             maxFallHeight.get(),
             pauseMiningForFallingBlocks.get(),
-            itemSaver.get(),
-            itemSaverThreshold.get(),
+            allowInventory.get(),
+            autoTool.get(),
+            sprintAscends.get(),
+            allowParkour.get(),
+            allowParkourPlace.get(),
+            allowDiagonalAscend.get(),
+            allowDiagonalDescend.get(),
             allowOnlyExposedOres.get(),
             allowOnlyExposedOresDistance.get(),
             minYLevelWhileMining.get(),
@@ -671,7 +817,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (mc.player == null || mc.level == null) return;
 
         // 垃圾丢弃
-        container.tickTrashDisposal(trashList.get());
+        container.tickTrashDisposal(trashList.get(), placeBlocks.get());
 
         // 状态机推进
         fsm.tick();
@@ -686,15 +832,18 @@ public final class AutoMinerModule extends YiyiaddonModule {
         WKCommand.WKData afk = WKCommand.getAFKPoint();
         
         if (mineral != null && mineral.inCurrentDimension()) {
-            AutoMinerModule_ESP.renderLabel(event, mineral.pos, "[矿物箱]", 
+            String label = String.format("§6[矿物箱] §7(%s)", mineral.dimensionName());
+            AutoMinerModule_ESP.renderLabel(event, mineral.pos, label, 
                 mineralChestColor.get(), espScale.get().floatValue());
         }
         if (food != null && food.inCurrentDimension()) {
-            AutoMinerModule_ESP.renderLabel(event, food.pos, "[食物箱]", 
+            String label = String.format("§2[食物箱] §7(%s)", food.dimensionName());
+            AutoMinerModule_ESP.renderLabel(event, food.pos, label, 
                 foodChestColor.get(), espScale.get().floatValue());
         }
         if (afk != null && afk.inCurrentDimension()) {
-            AutoMinerModule_ESP.renderLabel(event, afk.pos, "[挂机修复点]", 
+            String label = String.format("§d[挂机修复点] §7(%s)", afk.dimensionName());
+            AutoMinerModule_ESP.renderLabel(event, afk.pos, label, 
                 afkPointColor.get(), espScale.get().floatValue());
         }
     }
@@ -743,26 +892,49 @@ public final class AutoMinerModule extends YiyiaddonModule {
     }
 
     public String getWildCommand() { return wildCommand.get(); }
+    public boolean isRtpGuiEnabled() { return rtpGuiEnabled.get(); }
+    public String getRtpGuiKeyword() { return rtpGuiKeyword.get(); }
     public String getUnloadCommand() { return unloadCommand.get(); }
     public String getSupplyCommand() { return supplyCommand.get(); }
     public String getAFKCommand() { return afkCommand.get(); }
     public String getRespawnCommand() { return respawnCommand.get(); }
 
     public int getUnloadThreshold() { return unloadThreshold.get(); }
+    public int getFullLoadStacks() { return unloadThreshold.get(); }
     public int getHungerThreshold() { return hungerThreshold.get(); }
     public int getDurabilityThreshold() { return durabilityThreshold.get(); }
     public int getTeleportDelay() { return teleportDelay.get(); }
+    public int getMineGoalUpdateInterval() { return mineGoalUpdateInterval.get(); }
+    
+    public List<Item> getFoodWhitelist() { return foodWhitelist.get(); }
 
     public BaritoneExecutor getBaritone() { return baritone; }
     public ContainerHelper getContainer() { return container; }
     public CommandManager getCmdManager() { return cmdManager; }
     public OrePredictor getOrePredictor() { return orePredictor; }
+    public SoundNotifier getSoundNotifier() { return soundNotifier; }
+
     
     public boolean isSeedMiningEnabled() { return seedMiningEnabled.get(); }
 
     // 公开消息方法供子组件调用
     public void info(String msg) { notify(msg); }
     public void error(String msg) { notifyError(msg); }
+    
+    // 传送超时重试标志
+    private boolean needRetryTeleport = false;
+    
+    public void requestRetryTeleport() {
+        needRetryTeleport = true;
+    }
+    
+    public boolean shouldRetryTeleport() {
+        if (needRetryTeleport) {
+            needRetryTeleport = false;
+            return true;
+        }
+        return false;
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     //  假矿检测
@@ -993,32 +1165,28 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // 设置按钮（根据绑定状态改变颜色）
         WButton setBtn = theme.button(WKCommand.hasBinding(key) ? "§a设置" : "§c设置");
         setBtn.action = () -> {
-            boolean success = WKCommand.setBinding(key);
-            // 设置成功或失败都关闭GUI（距离超限也会失败）
-            if (mc.screen != null) {
-                mc.screen.onClose();
-            }
+            WKCommand.setBinding(key);
+            // 关闭整个Shift界面，而非单个模块配置GUI
+            mc.setScreen(null);
         };
-        card.add(setBtn).minWidth(80).expandWidgetX();
+        card.add(setBtn).expandX();
         card.row();
         
         // 删除按钮
         WButton delBtn = theme.button("§7删除");
         delBtn.action = () -> {
             WKCommand.removeBinding(key);
-            // 删除后关闭GUI
-            if (mc.screen != null) {
-                mc.screen.onClose();
-            }
+            // 关闭整个Shift界面
+            mc.setScreen(null);
         };
-        card.add(delBtn).minWidth(80).expandWidgetX();
+        card.add(delBtn).expandX();
         card.row();
         
         // 状态显示
         String status = WKCommand.hasBinding(key) ? "§a已设置" : "§c未设置";
         card.add(theme.label(status)).expandX();
         
-        // 将卡片加入父表格（横向排列）
-        parentTable.add(card).minWidth(100);
+        // 将卡片加入父表格（横向排列，均匀分配）
+        parentTable.add(card).expandX();
     }
 }

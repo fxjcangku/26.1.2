@@ -8,7 +8,10 @@ import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 
 public final class YiyiaddonTranslationModule extends YiyiaddonModule {
-    public final Setting<Boolean> simplifiedChinese = settings.getDefaultGroup().add(new BoolSetting.Builder()
+    
+    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 汉化设置", true);
+    
+    public final Setting<Boolean> simplifiedChinese = sgGeneral.add(new BoolSetting.Builder()
         .name("简体中文")
         .description("启用简体中文界面汉化。")
         .defaultValue(true)

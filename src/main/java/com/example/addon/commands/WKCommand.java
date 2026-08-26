@@ -139,10 +139,8 @@ public class WKCommand extends Command {
         DATA_STORE.put("mineral", data);
         saveData();
 
-        wkInfo("");
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §6矿物箱 §8→ §a" + data.describe());
-        wkInfo("");
+        wkInfo("  §6矿物箱 §8▸ §a" + data.describe());
 
         return SINGLE_SUCCESS;
     }
@@ -187,10 +185,8 @@ public class WKCommand extends Command {
         DATA_STORE.put("food", data);
         saveData();
 
-        wkInfo("");
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §2食物箱 §8→ §a" + data.describe());
-        wkInfo("");
+        wkInfo("  §2食物箱 §8▸ §a" + data.describe());
 
         return SINGLE_SUCCESS;
     }
@@ -234,11 +230,9 @@ public class WKCommand extends Command {
         DATA_STORE.put("afk", data);
         saveData();
 
-        wkInfo("");
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §d挂机修复点 §8→ §a" + data.describe());
+        wkInfo("  §d■ 挂机修复点 §8▸ §a" + data.describe());
         wkInfo("  §7视角：偏航角=" + String.format("%.1f", yaw) + "° 俯仰角=" + String.format("%.1f", pitch) + "°");
-        wkInfo("");
 
         return SINGLE_SUCCESS;
     }
@@ -291,16 +285,15 @@ public class WKCommand extends Command {
 
     private void showStatus() {
         wkInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        wkInfo("§b§l         WK 坐标绑定状态");
+        wkInfo("§b§l         自动挖矿 ▸ 坐标绑定");
         wkInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        wkInfo("");
 
         // 服务器信息
         String serverInfo = "§7单人世界";
         if (mc.getCurrentServer() != null) {
             serverInfo = "§f" + mc.getCurrentServer().ip;
         }
-        wkInfo("  §7服务器: " + serverInfo);
+        wkInfo("  §7服务器 ▸ " + serverInfo);
 
         // 当前维度
         String currentDim = "§7未知";
@@ -308,8 +301,7 @@ public class WKCommand extends Command {
             String dimId = mc.level.dimension().toString();
             currentDim = "§b" + getDimensionName(dimId);
         }
-        wkInfo("  §7当前维度: " + currentDim);
-        wkInfo("");
+        wkInfo("  §7维度 ▸ " + currentDim);
 
         showBinding("矿物箱", "mineral", "§6");
         showBinding("食物箱", "food", "§2");
@@ -320,7 +312,7 @@ public class WKCommand extends Command {
 
     /**
      * 维度 ID 转中文名
-     * overworld → 主世界，nether → 下界，end → 末地
+     * overworld ▸ 主世界，nether ▸ 下界，end ▸ 末地
      */
     private String getDimensionName(String dimension) {
         if (dimension.contains("overworld")) return "主世界";
@@ -337,19 +329,19 @@ public class WKCommand extends Command {
         WKData data = DATA_STORE.get(key);
 
         if (data == null) {
-            wkInfo("  " + color + "■ §f§l" + name);
-            wkInfo("    §8└─ §c未绑定");
+            wkInfo("  " + color + "■ §f§l" + name + " §8▸ §c未绑定");
         } else {
-            wkInfo("  " + color + "■ §f§l" + name);
-            wkInfo("    §8├─ §7坐标: §a" + data.pos.getX() + ", " + data.pos.getY() + ", " + data.pos.getZ());
-            wkInfo("    §8├─ §7维度: §b" + data.dimensionName());
-            if (data.yaw != 0 || data.pitch != 0) {
-                wkInfo("    §8└─ §7视角: §e偏航角=" + String.format("%.1f", data.yaw) + "° 俯仰角=" + String.format("%.1f", data.pitch) + "°");
-            } else {
-                wkInfo("    §8└─ §7类型: §e容器方块");
+            String dimName = data.dimensionName();
+            double distance = 0;
+            if (mc.player != null) {
+                distance = Math.sqrt(mc.player.blockPosition().distSqr(data.pos));
             }
+            
+            wkInfo("  " + color + "■ §f§l" + name);
+            wkInfo("    §8├─ §7坐标 ▸ §a" + data.pos.getX() + ", " + data.pos.getY() + ", " + data.pos.getZ());
+            wkInfo("    §8├─ §7维度 ▸ §b" + dimName);
+            wkInfo("    §8└─ §7距离 ▸ §e" + String.format("%.0f", distance) + "m");
         }
-        wkInfo("");
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -360,9 +352,9 @@ public class WKCommand extends Command {
      * 检测新点位与已有点位的距离（32格限制）
      * 检测所有已绑定点位 + 新点位之间的距离，任意两点超过32格则拦截
      * 
-     * @param newPos 新点位坐标
-     * @param newKey 新点位键名（mineral/food/afk）
-     * @return 错误信息，距离合法时返回 null
+     * ▸ newPos 新点位坐标
+     * ▸ newKey 新点位键名（mineral/food/afk）
+     * ▸ 返回错误信息，距离合法时返回 null
      */
     private String checkDistance(BlockPos newPos, String newKey) {
         // 构建临时完整点位集合（已有 + 新点位）
@@ -409,7 +401,7 @@ public class WKCommand extends Command {
 
     /**
      * 获取准星对准的方块位置
-     * @return 方块坐标，未对准任何方块时返回 null
+     * ▸ 返回方块坐标，未对准任何方块时返回 null
      */
     private BlockPos getTargetBlock() {
         HitResult hit = mc.hitResult;
@@ -430,6 +422,9 @@ public class WKCommand extends Command {
 
     private void wkInfo(String message) {
         if (mc.player == null) return;
+        if (message == null) return;
+        String clean = message.replaceAll("§[0-9a-fk-orA-FK-OR]", "").trim();
+        if (clean.isEmpty()) return;
         mc.player.sendSystemMessage(Component.literal(
             YiyiaddonModule.formatMessage("自动挖矿", message)));
     }
@@ -439,6 +434,9 @@ public class WKCommand extends Command {
      */
     private void wkError(String message) {
         if (mc.player == null) return;
+        if (message == null) return;
+        String clean = message.replaceAll("§[0-9a-fk-orA-FK-OR]", "").trim();
+        if (clean.isEmpty()) return;
         mc.player.sendSystemMessage(Component.literal(
             YiyiaddonModule.formatMessage("自动挖矿", "§6§l" + message)));
     }
@@ -449,26 +447,26 @@ public class WKCommand extends Command {
 
     /**
      * 获取绑定状态
-     * @param key "mineral" / "food" / "afk"
-     * @return true = 已绑定，false = 未绑定
+     * ▸ key "mineral" / "food" / "afk"
+     * ▸ 返回 true = 已绑定，false = 未绑定
      */
     public static boolean hasBinding(String key) {
         return DATA_STORE.containsKey(key);
     }
 
     /**
-     * 获取绑定数据
-     * @param key "mineral" / "food" / "afk"
-     * @return WKData 或 null
+     * 获取点位数据
+     * ▸ key "mineral" / "food" / "afk"
+     * ▸ 返回 WKData 或 null
      */
     public static WKData getBinding(String key) {
         return DATA_STORE.get(key);
     }
 
     /**
-     * 设置绑定（供模块按钮调用）
-     * @param key "mineral" / "food" / "afk"
-     * @return true = 设置成功，false = 设置失败（需关闭GUI）
+     * 设置点位（供模块配置页面的按钮调用）
+     * ▸ key "mineral" / "food" / "afk"
+     * ▸ 返回 true = 设置成功，false = 设置失败（需关闭GUI）
      */
     public static boolean setBinding(String key) {
         WKCommand cmd = new WKCommand();
@@ -509,8 +507,8 @@ public class WKCommand extends Command {
     }
 
     /**
-     * 删除绑定（供模块按钮调用）
-     * @param key "mineral" / "food" / "afk"
+     * 删除点位（供模块配置页面的按钮调用）
+     * ▸ key "mineral" / "food" / "afk"
      */
     public static void removeBinding(String key) {
         WKCommand cmd = new WKCommand();
@@ -712,7 +710,7 @@ public class WKCommand extends Command {
         }
 
         public String describe() {
-            return String.format("(%d, %d, %d) @ %s",
+            return String.format("(%d, %d, %d) ▸ %s",
                 pos.getX(), pos.getY(), pos.getZ(), dimensionName());
         }
     }

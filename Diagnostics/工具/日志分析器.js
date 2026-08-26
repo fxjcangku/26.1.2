@@ -105,7 +105,16 @@ if (事件列表.length === 0) {
     process.exit(1);
 }
 
-事件列表.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+function 事件序号(事件) {
+    const 数据 = 事件.data;
+    const 值 = 数据 && typeof 数据 === 'object' ? 数据.sequence : undefined;
+    return Number.isFinite(Number(值)) ? Number(值) : Number.MAX_SAFE_INTEGER;
+}
+
+事件列表.sort((a, b) => {
+    const 时间差 = (a.ts || 0) - (b.ts || 0);
+    return 时间差 !== 0 ? 时间差 : 事件序号(a) - 事件序号(b);
+});
 
 const 起始 = 事件列表[0].ts || 0;
 const 结束 = 事件列表[事件列表.length - 1].ts || 0;

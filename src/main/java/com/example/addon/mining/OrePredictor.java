@@ -118,6 +118,26 @@ public class OrePredictor {
     }
 
     /**
+     * 获取所有已预测的矿石位置（用于种子挖矿的全局目标）
+     * 
+     * @return 所有预测的矿石位置集合
+     */
+    public Set<BlockPos> getAllPredictedOres() {
+        if (!cacheValid) return Collections.emptySet();
+        
+        Set<BlockPos> result = new HashSet<>();
+        
+        // 遍历所有已缓存的区块
+        for (Set<BlockPos> chunkOres : predictionCache.values()) {
+            if (chunkOres != null) {
+                result.addAll(chunkOres);
+            }
+        }
+        
+        return result;
+    }
+
+    /**
      * 预测单个区块内的矿石分布
      * 
      * 使用简化的噪声算法模拟Minecraft的矿石生成

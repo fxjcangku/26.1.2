@@ -48,13 +48,21 @@ public class NongChangCommand extends Command {
             AutoFarmMatrix module = module();
             if (module == null) return SINGLE_SUCCESS;
 
-            farmInfo("§b§l——— 农场锚点绑定情况 ———");
+            farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            farmInfo("§b§l         自动农场 ▸ 锚点绑定");
+            farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             for (SiteType type : SiteType.values()) {
                 FarmSite site = module.site(type);
+                String icon = switch (type) {
+                    case START -> "§a■";
+                    case END -> "§e■";
+                    case UNLOADING -> "§6■";
+                    case SUPPLY -> "§2■";
+                };
                 if (site == null) {
-                    farmInfo("§7" + type.cn() + "：§c未绑定");
+                    farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §c未绑定");
                 } else {
-                    farmInfo("§7" + type.cn() + "：§a" + site.describe());
+                    farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe());
                 }
             }
             return SINGLE_SUCCESS;
@@ -89,11 +97,9 @@ public class NongChangCommand extends Command {
         }
 
         farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        farmInfo("§b§l         农场锚点详细信息");
+        farmInfo("§b§l         自动农场 ▸ 详细信息");
         farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        farmInfo("");
-        farmInfo("  §7服务器: §f" + serverInfo);
-            farmInfo("");
+        farmInfo("  §7服务器 ▸ §f" + serverInfo);
         
         for (SiteType type : SiteType.values()) {
             FarmSite site = module.site(type);
@@ -105,14 +111,12 @@ public class NongChangCommand extends Command {
             };
             
             if (site == null) {
-                farmInfo("  " + icon + " §f§l" + type.cn());
-                farmInfo("    §8└─ §c未绑定");
+                farmInfo("  " + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
             } else {
                 farmInfo("  " + icon + " §f§l" + type.cn());
-                farmInfo("    §8├─ §7坐标: §a" + site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ());
-                farmInfo("    §8└─ §7维度: §b" + site.describe().split("@ ")[1]);
+                farmInfo("    §8├─ §7坐标 ▸ §a" + site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ());
+                farmInfo("    §8└─ §7维度 ▸ §b" + site.describe().split("▸ ")[1]);
             }
-            if (type != SiteType.SUPPLY) farmInfo("");
         }
         
         farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -185,10 +189,8 @@ public class NongChangCommand extends Command {
             case SUPPLY -> "↑";
         };
         
-        farmInfo("");
         farmInfo("§a§l✓ 绑定成功");
-        farmInfo("  " + icon + " §f" + type.cn() + " §8→ §a" + site.describe());
-        farmInfo("");
+        farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe());
         
         return SINGLE_SUCCESS;
     }
@@ -242,7 +244,7 @@ public class NongChangCommand extends Command {
             if (site == null) {
                 farmInfo("  " + icon + " §7" + type.cn() + " §8→ §c未绑定");
             } else {
-                farmInfo("  " + icon + " §7" + type.cn() + " §8→ §a" + site.describe());
+                farmInfo("  " + icon + " §7" + type.cn() + " §8▸ §a" + site.describe());
             }
         }
         
@@ -271,8 +273,8 @@ public class NongChangCommand extends Command {
 
     /**
      * 获取绑定状态（供模块调用）
-     * @param key "dump" / "supply"
-     * @return true = 已绑定，false = 未绑定
+     * ▸ key "dump" / "supply"
+     * ▸ 返回 true = 已绑定，false = 未绑定
      */
     public static boolean hasBinding(String key) {
         AutoFarmMatrix module = Modules.get().get(AutoFarmMatrix.class);
@@ -290,8 +292,8 @@ public class NongChangCommand extends Command {
 
     /**
      * 设置绑定（供模块按钮调用）
-     * @param key "dump" / "supply"
-     * @return true = 设置成功，false = 设置失败（需关闭GUI）
+     * ▸ key "dump" / "supply"
+     * ▸ 返回 true = 设置成功，false = 设置失败（需关闭GUI）
      */
     public static boolean setBinding(String key) {
         NongChangCommand cmd = new NongChangCommand();
@@ -326,11 +328,7 @@ public class NongChangCommand extends Command {
 
     /**
      * 删除绑定（供模块按钮调用）
-     * @param key "dump" / "supply"
-     */
-    /**
-     * 删除绑定（供模块按钮调用）
-     * @param key "dump" / "supply"
+     * ▸ key "dump" / "supply"
      */
     public static void removeBinding(String key) {
         NongChangCommand cmd = new NongChangCommand();

@@ -55,10 +55,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     //  UI 配置面板（分组折叠）
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgCrops = settings.createGroup("作物选择", false);
-    private final SettingGroup sgLogistics = settings.createGroup("后勤设置", false);
-    private final SettingGroup sgSafety = settings.createGroup("安全设置", false);
-    private final SettingGroup sgRender = settings.createGroup("显示设置", false);
+    private final SettingGroup sgCrops = settings.createGroup("1️⃣ 作物选择", true);
+    private final SettingGroup sgLogistics = settings.createGroup("2️⃣ 后勤设置", false);
+    private final SettingGroup sgSafety = settings.createGroup("3️⃣ 安全设置", false);
+    private final SettingGroup sgRender = settings.createGroup("4️⃣ 显示设置", false);
 
     // ─── 作物分类选择器 ───
     private final Setting<List<Block>> cropsDouble;
@@ -1317,32 +1317,28 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 设置按钮（根据绑定状态改变颜色）
         WButton setBtn = theme.button(com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a设置" : "§c设置");
         setBtn.action = () -> {
-            boolean success = com.example.addon.commands.NongChangCommand.setBinding(key);
-            // 设置成功或失败都关闭GUI
-            if (mc.screen != null) {
-                mc.screen.onClose();
-            }
+            com.example.addon.commands.NongChangCommand.setBinding(key);
+            // 关闭整个Shift界面，而非单个模块配置GUI
+            mc.setScreen(null);
         };
-        card.add(setBtn).minWidth(80).expandWidgetX();
+        card.add(setBtn).expandX();
         card.row();
         
         // 删除按钮
         WButton delBtn = theme.button("§7删除");
         delBtn.action = () -> {
             com.example.addon.commands.NongChangCommand.removeBinding(key);
-            // 删除后关闭GUI
-            if (mc.screen != null) {
-                mc.screen.onClose();
-            }
+            // 关闭整个Shift界面
+            mc.setScreen(null);
         };
-        card.add(delBtn).minWidth(80).expandWidgetX();
+        card.add(delBtn).expandX();
         card.row();
         
         // 状态显示
         String status = com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a已设置" : "§c未设置";
         card.add(theme.label(status)).expandX();
         
-        // 将卡片加入父表格（横向排列）
-        parentTable.add(card).minWidth(100);
+        // 将卡片加入父表格（横向排列，均匀分配）
+        parentTable.add(card).expandX();
     }
 }

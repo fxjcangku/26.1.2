@@ -16,7 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class PinkThemeModule extends YiyiaddonModule {
-    private final Setting<Palette> palette = settings.getDefaultGroup().add(new EnumSetting.Builder<Palette>()
+    
+    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 配色选择", true);
+    
+    private final Setting<Palette> palette = sgGeneral.add(new EnumSetting.Builder<Palette>()
         .name("选择颜色")
         .description("选择界面和 HUD 使用的粉色配色。")
         .defaultValue(Palette.SAKURA)

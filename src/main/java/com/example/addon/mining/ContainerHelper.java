@@ -12,6 +12,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -66,8 +67,11 @@ public final class ContainerHelper {
      * 静默垃圾丢弃器（每 tick 调用）
      * 
      * 分频发包规避反作弊：每5 tick丢一个物品
+     * 
+     * @param trashList 垃圾方块名单
+     * @param placeBlocks Baritone搭路方块白名单（排除在丢弃外）
      */
-    public void tickTrashDisposal(List<Block> trashList) {
+    public void tickTrashDisposal(List<Block> trashList, List<Block> placeBlocks) {
         if (mc.player == null || trashList.isEmpty()) return;
 
         trashDisposalCooldown--;
@@ -80,6 +84,10 @@ public final class ContainerHelper {
             if (stack.isEmpty()) continue;
 
             Block block = Block.byItem(stack.getItem());
+            
+            // 排除搭路方块：如果在搭路白名单中，跳过丢弃
+            if (placeBlocks.contains(block)) continue;
+            
             if (trashList.contains(block)) {
                 dropStack(i);
                 trashDisposalCooldown = TRASH_DISPOSAL_INTERVAL;
@@ -95,8 +103,11 @@ public final class ContainerHelper {
         if (mc.player == null || mc.gameMode == null) return;
 
         try {
-            // 直接丢弃物品（简化实现）
-            mc.player.drop(mc.player.getInventory().getItem(slot), true);
+            ItemStack stack = mc.player.getInventory().getItem(slot);
+            if (stack.isEmpty()) return;
+            
+            // 调用 InvUtils.drop() 正确丢弃物品
+            InvUtils.drop().slot(slot);
         } catch (Exception e) {
             // 静默失败
         }
@@ -189,6 +200,8 @@ public final class ContainerHelper {
     /**
      * 卸货：把背包里的矿物 Shift 点进箱子
      * 
+     * 优化策略：等待GUI稳定后按顺序快速放入
+     * 
      * @return 是否还有矿物需要继续转移
      */
     public boolean depositOres() {
@@ -200,6 +213,7 @@ public final class ContainerHelper {
         if (menu == null) return false;
 
         Inventory inventory = mc.player.getInventory();
+        boolean foundAny = false;
 
         // 扫描背包侧槽位，找到矿物后 Shift 点击
         for (Slot slot : menu.slots) {
@@ -210,16 +224,22 @@ public final class ContainerHelper {
 
             String itemId = stack.getItem().toString();
             if (itemId.contains("ore") || itemId.contains("raw_") || 
-                itemId.contains("diamond") || itemId.contains("emerald")) {
+                itemId.contains("diamond") || itemId.contains("emerald") ||
+                itemId.contains("coal") || itemId.contains("redstone") ||
+                itemId.contains("lapis") || itemId.contains("quartz")) {
                 
                 // 使用 QUICK_MOVE（Shift 点击）转移物品
-                mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, 
-                    net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, mc.player);
+                mc.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, 
+                    net.minecraft.world.inventory.ClickType.QUICK_MOVE,
+                    mc.player);
+                foundAny = true;
+                
+                // 每次只传输一个槽位，避免服务器延迟导致丢失
                 return true;
             }
         }
 
-        return false;
+        return foundAny;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -227,7 +247,9 @@ public final class ContainerHelper {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * 从食物箱提取食物
+     * 从食物箱提取食物（只拿白名单内的，默认拿1组）
+     * 
+     * 优化策略：等待GUI稳定后快速提取
      * 
      * @return 是否成功提取
      */
@@ -240,6 +262,7 @@ public final class ContainerHelper {
         if (menu == null) return false;
 
         Inventory inventory = mc.player.getInventory();
+        List<Item> whitelist = module.getFoodWhitelist();
 
         // 扫描箱子侧的槽位
         for (Slot slot : menu.slots) {
@@ -248,12 +271,12 @@ public final class ContainerHelper {
             ItemStack stack = slot.getItem();
             if (stack.isEmpty()) continue;
 
-            // 判断是否为食物（检查 FOOD 组件）
+            // 判断是否为食物且在白名单内
             var foodComp = stack.get(DataComponents.FOOD);
-            if (foodComp != null) {
-                // 使用 QUICK_MOVE（Shift 点击）转移食物
-                mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, 
-                    net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, mc.player);
+            if (foodComp != null && whitelist.contains(stack.getItem())) {
+                // 使用 QUICK_MOVE（Shift 点击）转移1组食物
+                mc.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, 
+                    net.minecraft.world.inventory.ClickType.QUICK_MOVE, mc.player);
                 return true;
             }
         }

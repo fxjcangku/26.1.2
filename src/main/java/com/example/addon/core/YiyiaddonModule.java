@@ -50,6 +50,7 @@
 //   ✓ UI 元素（HUD、聊天消息、设置面板）必须使用中文
 //   ✓ 不凭记忆写 API，有疑问先用 `node Mappings\工具\查JARAPI.js` 查询
 //   ✓ 26.1.2 使用官方非混淆命名（Identifier/Minecraft/Component/Level）
+//   ✓ 配置分组统一编号前缀：1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣（确保所有模块一致）
 //
 // 注释原则：
 //   - 写"为什么这样做"，不写"做了什么"
@@ -409,7 +410,24 @@ import java.util.function.Consumer;
 //     @EventHandler(priority = -100) 可控制优先级
 //     事件回调第一行统一写 `if (!isActive()) return;`
 //
-//   Meteor 设置项
+//   【3.4 Meteor 设置项与配置分组规范】
+//
+//   配置分组命名统一规范（2026-08-27 新增）：
+//     ✓ 所有模块的配置分组必须使用统一的编号前缀 + Emoji
+//     ✓ 格式："{编号} {中文名称}"（编号使用 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 等 Emoji）
+//     ✓ 第一组默认展开：createGroup("1️⃣ 目标选择", true)
+//     ✓ 其余组默认收起：createGroup("2️⃣ 基础设置", false)
+//     ✓ 分组按逻辑顺序编号，确保配置页面整洁统一
+//
+//   示例（自动挖矿模块）：
+//     private final SettingGroup sgTarget = settings.createGroup("1️⃣ 目标选择", true);
+//     private final SettingGroup sgBasic = settings.createGroup("2️⃣ 基础设置", false);
+//     private final SettingGroup sgThreshold = settings.createGroup("3️⃣ 阈值设置", false);
+//     private final SettingGroup sgBaritone = settings.createGroup("4️⃣ Baritone设置", false);
+//     private final SettingGroup sgSeedMining = settings.createGroup("5️⃣ 种子挖矿", false);
+//     private final SettingGroup sgDisplay = settings.createGroup("6️⃣ 显示设置", false);
+//
+//   Meteor 设置项（常用类型）：
 //     private final SettingGroup sgX = settings.createGroup("组名");
 //     sgX.add(new BoolSetting.Builder().name("名").description("说明")
 //         .defaultValue(true).build());
@@ -661,6 +679,256 @@ import java.util.function.Consumer;
 //
 //   ✗ 禁止手动修改 jar 文件名——必须通过 libs.versions.toml 改版本号，
 //     否则 jar 名和映射文件名会对不上，还原时找不到对应映射。
+//
+//   ── 八、运行时埋点与诊断规范（智能体必须照做）──────────────────
+//
+//   【目的】
+//   静态代码无法确定的开关异常、事件未触发、容器同步、网络包、状态机卡死等问题，必须按：
+//   假设 → 埋点 → 复现 → 日志判定 → 最小修复 → 复测 执行。未拿到证据，禁止猜测式改业务逻辑。
+//
+//   【唯一诊断归档：全部中文】
+//   所有测试 Bug 文件只允许放入 d:\\mcaddon\\26.1.2\\Diagnostics\\：
+//     ├─ 会话记录\\进行中\\  YYYY-MM-DD-问题名称.md
+//     ├─ 会话记录\\已修复\\  YYYY-MM-DD-问题名称.md
+//     ├─ 运行日志\\          YYYY-MM-DD-问题名称.ndjson
+//     ├─ 游戏操作录像\\      YYYY-MM-DD-问题名称.env、启动日志监听.ps1
+//     └─ 工具\\              调试监听服务.js、日志分析器.js
+//   会话目录、文件展示名称、问题名称必须中文；.env、.ndjson、会话记录都是证据，必须提交 Git。
+//   sessionId 仅为 HTTP 协议字段，可使用英文短横线；不得用 debug-xxx.md 或英文会话 ID 替代中文归档。
+//
+//   【会话记录模板】
+//   新问题先在 Diagnostics\\会话记录\\进行中\\ 新建中文 Markdown，按固定章节填写：
+//   问题描述、影响范围、复现前提、复现步骤、3~5 个可证伪假设、埋点位置、证据时间线、
+//   根因、最小修复方案、复测结果。确认修复后移动到 会话记录\\已修复\\，不能删除证据。
+//
+//   【埋点设计】
+//   1. 每个假设分配稳定编号 A、B、C……；埋点区域必须标记：
+//      // #region debug-point A:中文位置名称
+//      // #endregion
+//   2. 只记录能证伪假设的状态：方法入口、分支条件、前后状态、资源数量、界面/容器同步号、
+//      网络包类型、调用栈或最终结果；禁止每 Tick 无条件刷日志。
+//   3. 状态机必须记录“旧状态 → 新状态”、触发原因、阶段、关键资源与当前界面；容器流程必须记录
+//      打开请求、处理器类型、同步号、槽位/物品快照、扫描结果和实际点击结果。
+//   4. 所有模块内部 toggle() 前必须先记录具体停机原因；onDeactivate() 必须记录最终停机原因、
+//      当前状态、阶段、界面、关键资源、模式和寻路/任务状态。没有内部停机记录即视为外部关闭证据。
+//
+//   【可直接抄用的 Java 实现】
+//   需要导入：java.net.HttpURLConnection、java.net.URL、java.nio.charset.StandardCharsets、
+//   java.util.concurrent.atomic.AtomicLong。
+//
+//   // #region debug-point A:字段与统一上报
+//   private static final String 调试地址 = "http://127.0.0.1:7777/event";
+//   private static final String 调试会话 = "模块名称-问题简称"; // 协议标识
+//   private static final String 调试展示名称 = "模块名称-中文问题名称"; // 决定中文日志文件名
+//   private final AtomicLong 调试序号 = new AtomicLong();
+//   private String 停机原因 = "外部关闭或原因未知";
+//
+//   private void debugEvent(String 假设编号, String 消息, String 数据) {
+//       long 序号 = 调试序号.incrementAndGet();
+//       long 时刻 = System.currentTimeMillis();
+//       String json = "{\"sessionId\":\"" + 转义(调试会话) + "\",\"displayName\":\""
+//           + 转义(调试展示名称) + "\",\"runId\":\"本次复现\",\"hypothesisId\":\""
+//           + 转义(假设编号) + "\",\"location\":\""
+//           + 转义(getClass().getSimpleName()) + "\",\"ts\":" + 时刻
+//           + ",\"data\":{\"sequence\":" + 序号 + ",\"detail\":\"" + 转义(数据)
+//           + "\"},\"msg\":\"" + 转义(消息) + "\"}";
+//       new Thread(() -> {
+//           for (int 尝试 = 1; 尝试 <= 3; 尝试++) {
+//               HttpURLConnection 连接 = null;
+//               try {
+//                   连接 = (HttpURLConnection) new URL(调试地址).openConnection();
+//                   连接.setRequestMethod("POST");
+//                   连接.setConnectTimeout(250);
+//                   连接.setReadTimeout(250);
+//                   连接.setDoOutput(true);
+//                   连接.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+//                   try (java.io.OutputStream 输出 = 连接.getOutputStream()) {
+//                       输出.write(json.getBytes(StandardCharsets.UTF_8));
+//                   }
+//                   int 状态码 = 连接.getResponseCode();
+//                   if (状态码 >= 200 && 状态码 < 300) return; // 监听器已确认写盘
+//               } catch (Exception ignored) {
+//                   // 监听器尚未就绪时有限重试；不得把错误抛回游戏线程。
+//               } finally {
+//                   if (连接 != null) 连接.disconnect();
+//               }
+//               try {
+//                   Thread.sleep(100L * 尝试);
+//               } catch (InterruptedException ignored) {
+//                   Thread.currentThread().interrupt();
+//                   return;
+//               }
+//           }
+//       }, "诊断上报-" + 序号).start();
+//   }
+//
+//   private static String 转义(String 文本) {
+//       return 文本 == null ? "" : 文本.replace("\\", "\\\\").replace("\"", "\\\"")
+//           .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+//   }
+//   // #endregion
+//
+//   【可直接抄用的调用点】
+//   // #region debug-point B:状态切换
+//   private void 切换状态(State 新状态, String 原因) {
+//       State 旧状态 = state;
+//       state = 新状态;
+//       debugEvent("B", "状态切换", "旧状态=" + 旧状态 + "，新状态=" + 新状态
+//           + "，原因=" + 原因 + "，经验=" + mc.player.experienceLevel + "，界面=" + 当前界面名());
+//   }
+//   // #endregion
+//
+//   // #region debug-point C:内部停机
+//   private void 请求停机(String 原因) {
+//       停机原因 = 原因;
+//       debugEvent("C", "请求停机", "原因=" + 原因 + "，状态=" + state + "，界面=" + 当前界面名());
+//   }
+//
+//   @Override
+//   public void onDeactivate() {
+//       debugEvent("C", "模块停用", "停机原因=" + 停机原因 + "，状态=" + state
+//           + "，界面=" + 当前界面名());
+//       // 原有清理逻辑
+//   }
+//
+//   // 任何内部关闭都必须这样写：
+//   请求停机("附魔台不存在");
+//   toggle();
+//   // #endregion
+//
+//   // #region debug-point D:容器同步
+//   debugEvent("D", "请求打开容器", "目标=" + 目标坐标 + "，状态=" + state);
+//   // 收到容器界面后：
+//   debugEvent("D", "容器已打开", "处理器=" + mc.player.currentScreenHandler.getClass().getSimpleName()
+//       + "，同步号=" + mc.player.currentScreenHandler.syncId + "，槽位数="
+//       + mc.player.currentScreenHandler.slots.size());
+//   // 点击前后均记录：槽位号、物品、数量、点击方式、点击结果。
+//   // #endregion
+//
+//   上报数据必须只包含诊断所需字段；不要记录账号、令牌、服务器密码或完整聊天内容。
+//
+//   【Java 上报约束】
+//   1. 每个模块只保留一份上述 debugEvent()，调用处只传“假设编号、中文消息、中文数据”。
+//   2. 地址仅允许 127.0.0.1:7777/event；连接/读取超时保持短暂；异常必须吞掉，绝不影响游戏线程。
+//   3. 每条事件带单调递增 sequence。异步发送使 NDJSON 文件顺序不可靠，分析时按 ts + sequence
+//      联合排序，不能只按文件行号判断因果。
+//   4. 同一问题只使用一个 sessionId、一套上报方法和一个中文运行日志文件，禁止把关键事件拆到
+//      多份日志或多个会话。
+//
+//   【监听与分析】
+//   1. 监听脚本固定使用 Diagnostics\\工具\\调试监听服务.js，监听 127.0.0.1:7777，日志写入
+//      Diagnostics\\运行日志\\；只接受本机回环地址，不开放局域网端口。
+//   2. 通过 http://127.0.0.1:7777/健康 确认监听存活；复现前先确认新日志文件已创建且事件数递增。
+//   3. 使用 Diagnostics\\工具\\日志分析器.js 按时间线、调用栈、状态迁移、节律分析 NDJSON；
+//      大日志禁止肉眼全量翻读，优先按假设编号、停机原因、状态和 sequence 筛选。
+//
+//   【万能案例：任何“功能没反应、自动关闭、界面异常、状态卡死”都按这一套】
+//   下面用历史日志“附魔循环反复执行但结果异常”演示完整闭环。案例中的模块名、状态名、资源名
+//   可以替换成当前 Bug 的实际名称；方法不依赖附魔、箱子或具体 Minecraft 版本。
+//
+//   第一步：只描述现象，不先写结论
+//   例：用户看到模块没有按预期完成任务，怀疑模块停了、事件没触发、状态机卡住或资源判断错误。
+//
+//   第二步：列出可证伪假设，每个假设必须有“如果为真/如果为假”的证据
+//   A：模块根本没有收到启动或事件回调；若为真，看不到入口事件，若为假，入口事件存在。
+//   B：模块内部条件主动关闭；若为真，先出现“请求停机”，再出现“模块停用”。
+//   C：状态机进入了错误分支或没有推进；若为真，状态切换停止，或同一状态和条件重复出现。
+//   D：容器、网络包或界面同步失败；若为真，有打开请求但没有打开确认，或 syncId/槽位/物品不一致。
+//   E：外部按键、框架、断线或世界切换关闭；若为真，没有任何内部“请求停机”，但出现“模块停用”。
+//
+//   第三步：只在能区分假设的位置埋点
+//   // #region debug-point A:入口与自检
+//   @Override
+//   public void onActivate() {
+//       debugEvent("A", "监听自检", "模块=" + getClass().getSimpleName() + "，状态=" + isActive());
+//       debugEvent("A", "功能入口", "阶段=" + 当前阶段 + "，界面=" + 当前界面名());
+//       // 原有启动逻辑
+//   }
+//   // #endregion
+//
+//   // #region debug-point B:每个内部关闭点
+//   private void 请求停机(String 原因) {
+//       停机原因 = 原因;
+//       debugEvent("B", "请求停机", "原因=" + 原因 + "，状态=" + state
+//           + "，阶段=" + 当前阶段 + "，界面=" + 当前界面名());
+//       toggle();
+//   }
+//   // #endregion
+//
+//   // #region debug-point C:状态机决策
+//   private void 记录决策(String 决策, String 条件) {
+//       debugEvent("C", "状态机决策", "状态=" + state + "，决策=" + 决策
+//           + "，条件=" + 条件 + "，阶段=" + 当前阶段);
+//   }
+//
+//   private void 切换状态(State 新状态, String 原因) {
+//       State 旧状态 = state;
+//       state = 新状态;
+//       debugEvent("C", "状态切换", "旧状态=" + 旧状态 + "，新状态=" + 新状态 + "，原因=" + 原因);
+//   }
+//   // #endregion
+//
+//   // #region debug-point D:容器或网络边界
+//   private void 记录容器(String 事件, String 数据) {
+//       debugEvent("D", 事件, "处理器=" + 当前处理器名() + "，同步号=" + 当前同步号()
+//           + "，槽位数=" + 当前槽位数() + "，" + 数据);
+//   }
+//   // 请求前记录目标；回调中记录实际处理器、syncId、槽位、物品、数量；点击前后记录结果。
+//   // 网络包同样记录“发送/收到、包类型、关键字段、结果”，禁止只记录“处理了包”。
+//   // #endregion
+//
+//   // #region debug-point E:最终快照
+//   @Override
+//   public void onDeactivate() {
+//       debugEvent("E", "模块停用", "停机原因=" + 停机原因 + "，状态=" + state
+//           + "，阶段=" + 当前阶段 + "，界面=" + 当前界面名() + "，资源=" + 关键资源快照());
+//       // 原有清理逻辑
+//   }
+//   // #endregion
+//
+//   第四步：启动监听器并验证“确实能收日志”，自检没落盘不能开始复现
+//   1. 启动 Diagnostics\\工具\\调试监听服务.js。
+//   2. 访问 http://127.0.0.1:7777/健康，必须返回 200。
+//   3. 开启模块，第一条必须是“监听自检”。
+//   4. 检查 Diagnostics\\运行日志\\ 中对应中文文件已出现该事件，且 sequence 从 1 递增。
+//   5. 自检失败时只修监听链路，不得把业务 Bug 和日志丢失混在一起判断。
+//
+//   第五步：按 ts + sequence 阅读 NDJSON，不按文件行号猜因果
+//   真实日志可抽象成：
+//   {"hypothesisId":"C","data":{"sequence":101,"detail":"状态=等待处理，决策=继续"},"ts":1000}
+//   {"hypothesisId":"D","data":{"sequence":102,"detail":"请求打开容器"},"ts":1010}
+//   {"hypothesisId":"D","data":{"sequence":103,"detail":"容器已打开，syncId=4，槽位数=46"},"ts":1050}
+//   {"hypothesisId":"B","data":{"sequence":104,"detail":"请求停机，原因=目标方块不存在"},"ts":1100}
+//   {"hypothesisId":"E","data":{"sequence":105,"detail":"模块停用，停机原因=目标方块不存在"},"ts":1110}
+//   若 ts 相同，使用 data.sequence；异步 HTTP 可能改变文件落盘顺序，不能用行号代替事件顺序。
+//
+//   第六步：用“存在”和“不存在”同时判定假设
+//   1. 有“监听自检”但没有“功能入口”：优先查启动后的业务入口或事件注册。
+//   2. 有“功能入口”但没有 D 的“容器已打开”：容器/网络/回调链路未完成，不要先改状态机。
+//   3. 有 B 的“请求停机”且紧接 E：根因就是该停机点记录的条件，做最小修复。
+//   4. 只有 E、没有 B：不能说业务内部主动关闭；继续查按键、框架、断线、世界切换和外部 toggle。
+//   5. C 的同一状态和同一条件无限重复：这是状态机推进条件或完成标志错误，不要靠延时掩盖。
+//   6. D 的 syncId、槽位数或物品数量变化异常：先修同步时机/目标容器校验，再判断点击逻辑。
+//
+//   第七步：从证据写出根因和最小修复，不扩大修改范围
+//   例：日志连续显示“remaining=0 → 砂轮处理完成 → IDLE决策”，没有停机事件，说明模块没有关闭，
+//   而是完成标志没有改变或下一轮条件仍允许进入处理分支。最小修复只能改完成标志/分支条件，
+//   不能顺手重写寻路、容器或整个状态机。修复后必须使用相同步骤再次产生日志。
+//
+//   第八步：复测必须证明“原 Bug 消失且正常路径仍在”
+//   修复前后至少对比：监听自检、入口、关键状态迁移、关键资源、最终结果、停机原因；
+//   通过条件是：自检落盘、关键事件只发生一次或符合预期、没有异常重复循环、最终结果正确。
+//   只有复测通过，才把中文会话记录从 会话记录\\进行中\\ 移到 会话记录\\已修复\\；证据不删除。
+//
+//   【案例提炼】
+//   不管 Bug 是自动关闭、事件不触发、GUI 秒关、包处理无效、配置不生效还是状态卡死，
+//   都先用 A 确认入口、用 B 确认内部副作用、用 C 确认状态机、用 D 确认外部边界、用 E 确认最终结果；
+//   通过一条完整证据链排除假设，再改唯一被证实的根因。这就是可复制的通用调试方法。
+//
+//   【修复与清理】
+//   1. 仅修复日志已确认的根因，保持最小改动；修复后使用同一复现步骤产出新的运行日志并对比。
+//   2. 用户确认前，不得删除或覆盖埋点、监听服务、.env、.ndjson、会话记录；确认后才可移除临时
+//      埋点并将会话归档为“已修复”。
 //
 // ════════════════════════════════════════════════════════════════════
 

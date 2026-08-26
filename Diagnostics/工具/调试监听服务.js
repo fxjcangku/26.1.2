@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const 端口 = 7777;
-const 日志目录 = path.join(__dirname, '..', '游戏操作录像');
+const 日志目录 = path.join(__dirname, '..', '运行日志');
 fs.mkdirSync(日志目录, { recursive: true });
 
 // ── 运行时统计 ──────────────────────────────────────────
@@ -84,30 +84,37 @@ http.createServer((请求, 响应) => {
             if (事件.location) 计数(统计.按位置, 事件.location);
         }
 
-        const 文件 = path.join(日志目录, `调试日志-${安全文件名(会话)}.ndjson`);
+        const 文件名来源 = 事件?.displayName || 会话;
+        const 文件 = path.join(日志目录, `调试日志-${安全文件名(文件名来源)}.ndjson`);
         fs.appendFile(文件, 行 + '\n', 'utf8', 错误 => {
-            if (错误) process.stderr.write(`写盘失败：${错误.message}\n`);
-        });
-
-        // 控制台摘要：同一埋点位置 1 秒内只打一条，末尾标注折叠数量
-        if (事件) {
-            const 键 = `${会话}|${事件.location}`;
-            const 现在 = Date.now();
-            const 上次 = 上次输出.get(键);
-            if (!上次 || 现在 - 上次.时刻 >= 折叠窗口毫秒) {
-                const 折叠提示 = 上次 && 上次.折叠 > 0 ? `（期间折叠 ${上次.折叠} 条）` : '';
-                const 数据 = String(事件.data ?? '').slice(0, 160);
-                process.stdout.write(
-                    `[${时间戳(事件.ts)}] ${事件.hypothesisId || '--'} ${事件.location || '未标位置'}${折叠提示}\n` +
-                    `    ${数据}\n`
-                );
-                上次输出.set(键, { 时刻: 现在, 折叠: 0 });
-            } else {
-                上次.折叠++;
+            if (错误) {
+                process.stderr.write(`写盘失败：${错误.message}\n`);
+                响应.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                响应.end(JSON.stringify({ 状态: '写盘失败' }));
+                return;
             }
-        }
 
-        响应.writeHead(204).end();
+            // 控制台摘要：同一埋点位置 1 秒内只打一条，末尾标注折叠数量
+            if (事件) {
+                const 键 = `${会话}|${事件.location}`;
+                const 现在 = Date.now();
+                const 上次 = 上次输出.get(键);
+                if (!上次 || 现在 - 上次.时刻 >= 折叠窗口毫秒) {
+                    const 折叠提示 = 上次 && 上次.折叠 > 0 ? `（期间折叠 ${上次.折叠} 条）` : '';
+                    const 数据 = String(事件.data ?? '').slice(0, 160);
+                    process.stdout.write(
+                        `[${时间戳(事件.ts)}] ${事件.hypothesisId || '--'} ${事件.location || '未标位置'}${折叠提示}\n` +
+                        `    ${数据}\n`
+                    );
+                    上次输出.set(键, { 时刻: 现在, 折叠: 0 });
+                } else {
+                    上次.折叠++;
+                }
+            }
+
+            // 仅在 NDJSON 已成功追加后确认接收，客户端才能将 2xx 视为送达。
+            响应.writeHead(204).end();
+        });
     });
 }).listen(端口, '127.0.0.1', () => {
     process.stdout.write(

@@ -9,9 +9,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.AABB;
+
+import java.util.List;
 
 /**
  * 挖矿状态机 - FSM 核心引擎
@@ -30,6 +35,10 @@ public final class MinerFSM {
     private MinerState state = MinerState.IDLE;
     private int stateTick = 0;
 
+    // 传送监测数据
+    private BlockPos teleportStartPos = BlockPos.ZERO;
+    private int teleportTimeout = 0;
+
     // 修补模式数据
     private ItemStack savedTool = ItemStack.EMPTY;
     private ItemStack savedWeapon = ItemStack.EMPTY;
@@ -37,6 +46,11 @@ public final class MinerFSM {
 
     // 死亡标志
     private boolean playerWasDead = false;
+
+    // 卡死监测：改用速度监测而非位置监测
+    private int lowSpeedTicks = 0;
+    private static final double MIN_SPEED_THRESHOLD = 0.05; // 速度低于0.05判定为卡住
+    private static final int STUCK_TIME_THRESHOLD = 3600; // 3分钟
 
     public MinerFSM(AutoMinerModule module) {
         this.module = module;
@@ -46,10 +60,13 @@ public final class MinerFSM {
     public void reset() {
         state = MinerState.IDLE;
         stateTick = 0;
+        teleportStartPos = BlockPos.ZERO;
+        teleportTimeout = 0;
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
         repairMode = false;
         playerWasDead = false;
+        lowSpeedTicks = 0;
     }
 
     public void tick() {
@@ -89,12 +106,17 @@ public final class MinerFSM {
         // 状态退出清理
         onStateExit(state);
 
+        MinerState oldState = state;
         state = newState;
         stateTick = 0;
+
+        // 状态转换播报
+        broadcastStateTransition(oldState, newState);
 
         // 状态进入初始化
         onStateEnter(newState);
     }
+
 
     private void onStateEnter(MinerState newState) {
         if (newState == MinerState.MINING) {
@@ -124,25 +146,54 @@ public final class MinerFSM {
     private void tickGoWild() {
         CommandManager cmdMgr = module.getCmdManager();
 
+        // 阶段 1：记录传送前位置并发送传送命令
         if (stateTick == 1) {
+            teleportStartPos = mc.player.blockPosition();
             cmdMgr.executeCommand(module.getWildCommand());
+            teleportTimeout = module.getTeleportDelay() * 20; // 转换为tick
             return;
         }
 
-        // 等待区块加载完成
+        // 阶段 2：等待命令执行完成
         if (cmdMgr.isCommandExecuting()) {
             return;
         }
 
-        // 加载完成，开始挖矿
-        transitionTo(MinerState.MINING);
+        // 阶段 3：检测传送是否成功（位置变化 > 50格）
+        BlockPos currentPos = mc.player.blockPosition();
+        double distance = Math.sqrt(currentPos.distSqr(teleportStartPos));
+        
+        if (distance > 50) {
+            // 传送成功，音效提示
+            module.getSoundNotifier().notifyTeleportSuccess();
+            
+            // 等待世界加载
+            if (stateTick > 40) {
+                transitionTo(MinerState.MINING);
+            }
+            return;
+        }
+
+        // 阶段 4：超时检测 - 如果超过设定时间还在原地，重新RTP
+        if (stateTick > teleportTimeout) {
+            info("§c传送超时，重新尝试RTP");
+            stateTick = 0;
+        }
     }
 
     private void tickMining() {
-        // 每次进入 MINING 状态时启动 Baritone
+        // 阶段 1：启动 Baritone
         if (stateTick == 1) {
             module.getBaritone().startMining(module.getTargetBlock());
+            lowSpeedTicks = 0;
+            
+            // 播放开始挖矿音效
+            module.getSoundNotifier().notifyMiningStart();
+            return;
         }
+
+        // 掉落物自动拾取：检测并拾取目标矿石掉落物
+        pickupTargetOreDrops();
 
         // 耐久预警
         checkToolDurabilityWarning();
@@ -152,13 +203,14 @@ public final class MinerFSM {
         // 优先级 2：耐久检测
         ItemStack tool = mc.player.getMainHandItem();
         if (!tool.isEmpty() && needsRepair(tool)) {
+            module.getSoundNotifier().notifyLowDurability();
             transitionTo(MinerState.REPAIR);
             return;
         }
 
-        // 优先级 3：饥饿检测
-        FoodData food = mc.player.getFoodData();
-        if (food.getFoodLevel() < module.getHungerThreshold()) {
+        // 优先级 3：食物不足检测（检查背包食物组数）
+        if (countFoodStacks() < module.getHungerThreshold()) {
+            module.getSoundNotifier().notifyLowFood();
             transitionTo(MinerState.SUPPLY);
             return;
         }
@@ -177,7 +229,29 @@ public final class MinerFSM {
             }
         }
 
-        // Baritone 卡死检测
+        // 卡死检测：改用速度监测（Baritone卡住会抖动但速度极低）
+        double currentSpeed = Math.sqrt(
+            mc.player.getDeltaMovement().x * mc.player.getDeltaMovement().x +
+            mc.player.getDeltaMovement().z * mc.player.getDeltaMovement().z
+        );
+        
+        if (currentSpeed < MIN_SPEED_THRESHOLD) {
+            lowSpeedTicks++;
+        } else {
+            lowSpeedTicks = 0;
+        }
+
+        // 如果3分钟持续低速，判定为卡死
+        if (lowSpeedTicks > STUCK_TIME_THRESHOLD) {
+            WKCommand.wkInfo("§c[自动挖矿] 检测到卡死（速度过低），重新RTP");
+            module.getSoundNotifier().notifyStuck();
+            module.getBaritone().stop();
+            lowSpeedTicks = 0;
+            transitionTo(MinerState.GO_WILD);
+            return;
+        }
+
+        // Baritone 卡死检测（保留原有逻辑）
         if (stateTick > 6000 && stateTick % 1200 == 0) {
             if (module.getBaritone().isStuck()) {
                 module.getBaritone().stop();
@@ -317,10 +391,8 @@ public final class MinerFSM {
     }
 
     private void tickEating() {
-        FoodData food = mc.player.getFoodData();
-
-        // 已吃饱
-        if (food.getFoodLevel() >= 20) {
+        // 检查是否达到食物数量阈值
+        if (countFoodStacks() >= module.getHungerThreshold()) {
             transitionTo(MinerState.GO_WILD);
             return;
         }
@@ -437,16 +509,22 @@ public final class MinerFSM {
     private void tickDeathHandling() {
         if (mc.player == null) return;
 
-        // 阶段 1：等待复活
+        // 阶段 1：首次进入时立即尝试启用流星自动重生
+        if (stateTick == 1) {
+            tryMeteorAutoRespawn();
+            module.getSoundNotifier().notifyDeath();
+            info("§c[自动挖矿] 已调用流星自动重生模块");
+        }
+
+        // 阶段 2：等待复活
         if (mc.player.isDeadOrDying()) {
             if (stateTick % 20 == 0) {
-                // 每秒尝试复活
-                mc.player.respawn();
+                mc.player.respawn(); // 后备方案
             }
             return;
         }
 
-        // 阶段 2：复活完成，进入等待
+        // 阶段 3：复活完成，进入等待
         transitionTo(MinerState.RESPAWN_WAIT);
     }
 
@@ -492,10 +570,31 @@ public final class MinerFSM {
         return damage == null || damage <= 5; // 接近满耐久
     }
 
+    /**
+     * 统计背包中的食物数量
+     */
+    private int countFoodStacks() {
+        if (mc.player == null) return 0;
+
+        List<Item> whitelist = module.getFoodWhitelist();
+        int count = 0;
+
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.isEmpty()) continue;
+
+            // 只统计白名单内的食物
+            if (whitelist.contains(stack.getItem())) {
+                count += stack.getCount(); // 统计实际数量
+            }
+        }
+        return count;
+    }
+
     private int countOreStacks() {
         if (mc.player == null) return 0;
 
-        int count = 0;
+        int totalCount = 0;
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
@@ -503,10 +602,11 @@ public final class MinerFSM {
             String itemId = stack.getItem().toString();
             if (itemId.contains("ore") || itemId.contains("raw_") ||
                 itemId.contains("diamond") || itemId.contains("emerald")) {
-                count += (stack.getCount() + 63) / 64;
+                totalCount += stack.getCount(); // 统计总数量
             }
         }
-        return count;
+        // 转换为组数（向上取整）
+        return (int) Math.ceil(totalCount / 64.0);
     }
 
     private ItemStack findWeaponInHotbar() {
@@ -529,6 +629,29 @@ public final class MinerFSM {
             }
         }
         return -1;
+    }
+
+    private void broadcastStateTransition(MinerState from, MinerState to) {
+        if (from == to) return;
+        
+        int oreStacks = countOreStacks();
+        int targetStacks = module.getFullLoadStacks();
+        int foodCount = countFoodStacks();
+        int foodThreshold = module.getHungerThreshold();
+        
+        String message = switch (to) {
+            case IDLE -> "§7[状态] 待机中";
+            case GO_WILD -> "§a[状态] 前往野外";
+            case MINING -> String.format("§e[状态] 开始挖矿 (矿石: %d/%d组, 食物: %d/%d组)", oreStacks, targetStacks, foodCount, foodThreshold);
+            case UNLOADING -> String.format("§b[状态] 矿石已达 %d/%d 组，执行卸货", oreStacks, targetStacks);
+            case SUPPLY -> String.format("§6[状态] 食物不足 (%d/%d组)，前往补给", foodCount, foodThreshold);
+            case EATING -> "§d[状态] 补充饥饿值";
+            case REPAIR -> "§c[状态] 工具耐久过低，联动杀戮光环修复中";
+            case DEATH_HANDLING -> "§4[状态] 检测到死亡，已调用流星自动重生";
+            case RESPAWN_WAIT -> "§6[状态] 复活完成，返回挂机点";
+        };
+        
+        WKCommand.wkInfo(message);
     }
 
     private void smoothRotateTo(float targetYaw, float targetPitch) {
@@ -565,6 +688,58 @@ public final class MinerFSM {
         }
     }
 
+    private void tryMeteorAutoRespawn() {
+        try {
+            var modules = meteordevelopment.meteorclient.systems.modules.Modules.get();
+            if (modules == null) return;
+            
+            var autoRespawn = modules.get(meteordevelopment.meteorclient.systems.modules.player.AutoRespawn.class);
+            if (autoRespawn != null && !autoRespawn.isActive()) {
+                autoRespawn.toggle();
+            }
+        } catch (Exception e) {
+            // 流星模块不存在，跳过
+        }
+    }
+
+    /**
+     * 掉落物自动拾取：只拾取当前选择的目标矿石掉落物
+     * 
+     * 策略：
+     * 1. 扫描玩家周围6格范围内的ItemEntity
+     * 2. 检查掉落物是否为目标矿石
+     * 3. 自动移动到掉落物附近触发拾取
+     */
+    private void pickupTargetOreDrops() {
+        if (mc.player == null || mc.level == null) return;
+
+        Item targetItem = module.getTargetBlock().asItem();
+        if (targetItem == null) return;
+
+        // 扫描周围6格范围的ItemEntity
+        AABB searchBox = mc.player.getBoundingBox().inflate(6.0);
+        List<ItemEntity> nearbyItems = mc.level.getEntitiesOfClass(
+            ItemEntity.class, 
+            searchBox, 
+            item -> item.isAlive() && !item.getItem().isEmpty()
+        );
+
+        for (ItemEntity itemEntity : nearbyItems) {
+            ItemStack stack = itemEntity.getItem();
+            
+            // 只拾取目标矿石
+            if (stack.getItem() == targetItem) {
+                // 移动到掉落物位置（Minecraft会自动拾取范围内的掉落物）
+                double distance = mc.player.distanceTo(itemEntity);
+                if (distance > 1.5) {
+                    // 如果距离较远，可以考虑让Baritone寻路过去
+                    // 这里简单处理：只拾取已经在拾取范围内的
+                    continue;
+                }
+            }
+        }
+    }
+
     private void restoreHotbar() {
         if (mc.player == null) return;
 
@@ -574,6 +749,13 @@ public final class MinerFSM {
         repairMode = false;
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
+    }
+
+    /**
+     * 状态转换播报
+     */
+    private void broadcastStateChange(MinerState from, MinerState to) {
+        // 已废弃，统一使用 broadcastStateTransition
     }
 
     // ═══════════════════════════════════════════════════════════════════

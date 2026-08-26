@@ -2,6 +2,11 @@ package com.example.addon.mining;
 
 import baritone.api.BaritoneAPI;
 import baritone.api.IBaritone;
+import baritone.api.pathing.goals.Goal;
+import baritone.api.pathing.goals.GoalComposite;
+import baritone.api.pathing.goals.GoalTwoBlocks;
+import baritone.api.process.PathingCommand;
+import baritone.api.process.PathingCommandType;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.translations.BaritoneChatTranslations;
 import net.minecraft.client.Minecraft;
@@ -12,6 +17,8 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Baritone 寻路中间件
@@ -57,18 +64,36 @@ public final class BaritoneExecutor {
                 return;
             }
 
-        // 种子挖矿模式：启用位置过滤
-        if (module.isSeedMiningEnabled()) {
-            module.info("§e种子模式已启用，只挖预测位置的矿石");
-        }
+            String blockId = BuiltInRegistries.BLOCK.getKey(target).toString();
 
-        // 获取方块的 Registry ID
-        String blockId = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(target).toString();
+            // 种子挖矿模式：使用自定义Goal只挖预测位置
+            if (module.isSeedMiningEnabled()) {
+                Set<BlockPos> predictedOres = module.getOrePredictor().getAllPredictedOres();
+                
+                if (predictedOres.isEmpty()) {
+                    module.error("§c种子挖矿：未找到预测矿石位置");
+                    return;
+                }
 
-            // 调用 Baritone 的 mine 命令
-            baritone.getCommandManager().execute("mine " + blockId);
+                // 创建Goal列表：每个预测位置创建一个GoalTwoBlocks
+                List<Goal> goals = predictedOres.stream()
+                    .map(GoalTwoBlocks::new)
+                    .collect(Collectors.toList());
 
-            module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
+                // 使用GoalComposite：Baritone会自动选择最近的目标
+                Goal compositeGoal = new GoalComposite(goals.toArray(new Goal[0]));
+
+                // 直接设置自定义寻路任务
+                baritone.getCustomGoalProcess().setGoalAndPath(compositeGoal);
+
+                module.info("§e[种子挖矿] 已锁定 " + predictedOres.size() + " 个预测位置");
+                module.info("§aBaritone 已启动：" + BaritoneChatTranslations.translateBlockId(blockId));
+
+            } else {
+                // 普通挖矿模式：使用原生mine命令
+                baritone.getCommandManager().execute("mine " + blockId);
+                module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
+            }
 
             // 重置卡死检测
             if (mc.player != null) {
@@ -130,8 +155,11 @@ public final class BaritoneExecutor {
      */
     public void applySettings(boolean avoidLava, boolean mobAvoidance, int mobAvoidanceRadius,
                               boolean allowBreak, boolean allowPlace, int maxFallHeight,
-                              boolean pauseMiningForFallingBlocks, boolean itemSaver,
-                              int itemSaverThreshold, boolean allowOnlyExposedOres,
+                              boolean pauseMiningForFallingBlocks,
+                              boolean allowInventory, boolean autoTool, boolean sprintAscends,
+                              boolean allowParkour, boolean allowParkourPlace,
+                              boolean allowDiagonalAscend, boolean allowDiagonalDescend,
+                              boolean allowOnlyExposedOres,
                               int allowOnlyExposedOresDistance, int minYLevelWhileMining,
                               int maxYLevelWhileMining, int mineMaxOreLocationsCount,
                               boolean blacklistClosestOnFailure, boolean legitMine,
@@ -153,8 +181,13 @@ public final class BaritoneExecutor {
             settings.mobAvoidanceRadius.value = mobAvoidanceRadius;
             settings.maxFallHeightNoWater.value = maxFallHeight;
             settings.pauseMiningForFallingBlocks.value = pauseMiningForFallingBlocks;
-            settings.itemSaver.value = itemSaver;
-            settings.itemSaverThreshold.value = itemSaverThreshold;
+            settings.allowInventory.value = allowInventory;
+            settings.autoTool.value = autoTool;
+            settings.sprintAscends.value = sprintAscends;
+            settings.allowParkour.value = allowParkour;
+            settings.allowParkourPlace.value = allowParkourPlace;
+            settings.allowDiagonalAscend.value = allowDiagonalAscend;
+            settings.allowDiagonalDescend.value = allowDiagonalDescend;
             settings.allowOnlyExposedOres.value = allowOnlyExposedOres;
             settings.allowOnlyExposedOresDistance.value = allowOnlyExposedOresDistance;
             settings.minYLevelWhileMining.value = minYLevelWhileMining;
@@ -164,6 +197,10 @@ public final class BaritoneExecutor {
             settings.legitMine.value = legitMine;
             settings.legitMineYLevel.value = legitMineYLevel;
             settings.legitMineIncludeDiagonals.value = legitMineIncludeDiagonals;
+            
+            // 优先挖掘附近矿石的设置
+            settings.mineGoalUpdateInterval.value = module.getMineGoalUpdateInterval();  // 使用配置值
+            settings.blockReachDistance.value = 4.5f;    // 缩小交互距离，优先近处
             
         } catch (Throwable e) {
             disabled = true;
@@ -191,8 +228,13 @@ public final class BaritoneExecutor {
             else if (key.equals("mobAvoidanceRadius")) settings.mobAvoidanceRadius.value = (Integer) value;
             else if (key.equals("maxFallHeightNoWater")) settings.maxFallHeightNoWater.value = (Integer) value;
             else if (key.equals("pauseMiningForFallingBlocks")) settings.pauseMiningForFallingBlocks.value = (Boolean) value;
-            else if (key.equals("itemSaver")) settings.itemSaver.value = (Boolean) value;
-            else if (key.equals("itemSaverThreshold")) settings.itemSaverThreshold.value = (Integer) value;
+            else if (key.equals("allowInventory")) settings.allowInventory.value = (Boolean) value;
+            else if (key.equals("autoTool")) settings.autoTool.value = (Boolean) value;
+            else if (key.equals("sprintAscends")) settings.sprintAscends.value = (Boolean) value;
+            else if (key.equals("allowParkour")) settings.allowParkour.value = (Boolean) value;
+            else if (key.equals("allowParkourPlace")) settings.allowParkourPlace.value = (Boolean) value;
+            else if (key.equals("allowDiagonalAscend")) settings.allowDiagonalAscend.value = (Boolean) value;
+            else if (key.equals("allowDiagonalDescend")) settings.allowDiagonalDescend.value = (Boolean) value;
             else if (key.equals("allowOnlyExposedOres")) settings.allowOnlyExposedOres.value = (Boolean) value;
             else if (key.equals("allowOnlyExposedOresDistance")) settings.allowOnlyExposedOresDistance.value = (Integer) value;
             else if (key.equals("minYLevelWhileMining")) settings.minYLevelWhileMining.value = (Integer) value;
@@ -202,7 +244,27 @@ public final class BaritoneExecutor {
             else if (key.equals("legitMine")) settings.legitMine.value = (Boolean) value;
             else if (key.equals("legitMineYLevel")) settings.legitMineYLevel.value = (Integer) value;
             else if (key.equals("legitMineIncludeDiagonals")) settings.legitMineIncludeDiagonals.value = (Boolean) value;
+            else if (key.equals("mineGoalUpdateInterval")) settings.mineGoalUpdateInterval.value = (Integer) value;
             
+        } catch (Throwable e) {
+            disabled = true;
+        }
+    }
+
+    /**
+     * 更新搭路方块白名单
+     */
+    public void updatePlaceBlocks(List<Block> blocks) {
+        if (disabled) return;
+
+        try {
+            var settings = BaritoneAPI.getSettings();
+            settings.acceptableThrowawayItems.value = new ArrayList<>(
+                blocks.stream()
+                    .map(net.minecraft.world.level.block.Block::asItem)
+                    .filter(item -> item != net.minecraft.world.item.Items.AIR)
+                    .toList()
+            );
         } catch (Throwable e) {
             disabled = true;
         }

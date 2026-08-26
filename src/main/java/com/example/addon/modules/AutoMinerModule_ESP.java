@@ -26,6 +26,7 @@ public class AutoMinerModule_ESP {
 
     /**
      * 渲染 2D 悬浮标签（矿物箱/食物箱/挂机点）
+     * 显示格式：[名称] (维度) [距离m]
      */
     public static void renderLabel(Render2DEvent event, BlockPos pos, String text, Color color, float userScale) {
         if (mc.player == null || mc.gameRenderer == null) return;
@@ -42,8 +43,20 @@ public class AutoMinerModule_ESP {
             NametagUtils.begin(pos3d);
             TextRenderer.get().begin(1.0, false, true);
             
-            String distText = String.format("%.0fm", distance);
-            String fullText = text + " " + distText;
+            // 获取维度名称
+            String dimension = "§7(未知)";
+            if (mc.level != null) {
+                String dimKey = mc.level.dimension().location().getPath();
+                dimension = switch (dimKey) {
+                    case "overworld" -> "§7(主世界)";
+                    case "the_nether" -> "§7(下界)";
+                    case "the_end" -> "§7(末地)";
+                    default -> "§7(" + dimKey + ")";
+                };
+            }
+            
+            String distText = String.format("§8[%.0fm]", distance);
+            String fullText = text + " " + dimension + " " + distText;
             
             double w = TextRenderer.get().getWidth(fullText);
             TextRenderer.get().render(fullText, -w / 2, 0, color, true);

@@ -12,6 +12,7 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.ServerboundResourcePackPacket;
@@ -20,18 +21,19 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.InputStream;
-import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.security.MessageDigest;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
@@ -87,7 +89,7 @@ public class ServerDetector extends YiyiaddonModule {
     private final Setting<ResourcePackMode> resourcePackMode = sgResourcePack.add(new EnumSetting.Builder<ResourcePackMode>()
         .name("资源包模式")
         .description("选择如何处理服务器资源包")
-        .defaultValue(ResourcePackMode.AUTO_DOWNLOAD)
+        .defaultValue(ResourcePackMode.BYPASS)
         .build()
     );
 
@@ -121,12 +123,7 @@ public class ServerDetector extends YiyiaddonModule {
         .build()
     );
 
-    /** 下载线程池。守护线程，退出游戏时不阻塞进程。 */
-    private static final ExecutorService DOWNLOAD_POOL = Executors.newFixedThreadPool(2, r -> {
-        Thread t = new Thread(r, "yiyiaddon-ResourcePackDownloader");
-        t.setDaemon(true);
-        return t;
-    });
+
 
     private static final File RESOURCE_PACK_DIR =
         new File(Minecraft.getInstance().gameDirectory, "yiyiaddon_resourcepacks");
@@ -141,12 +138,60 @@ public class ServerDetector extends YiyiaddonModule {
 
     private boolean detectionDone = false;
 
+    // #region debug-point 资源包暴力绕过不生效
+    private static final String 调试地址 = "http://127.0.0.1:7777/event";
+    private static final String 调试会话 = "2026-08-26-资源包暴力绕过不生效";
+    private final AtomicLong 调试序号 = new AtomicLong();
+    private final AtomicLong 收包埋点计数 = new AtomicLong();
+    private volatile String 调试运行批次 = "probe-未启动";
+
+    private void debugEvent(String 假设编号, String 埋点, String 数据) {
+        long 序号 = 调试序号.incrementAndGet();
+        long 时刻 = System.currentTimeMillis();
+        String json = "{\"sessionId\":\"" + 转义(调试会话) + "\",\"displayName\":\""
+            + 转义(调试会话) + "\",\"runId\":\"" + 转义(调试运行批次)
+            + "\",\"hypothesisId\":\"" + 转义(假设编号) + "\",\"location\":\""
+            + 转义("资源包/" + 埋点) + "\",\"ts\":" + 时刻 + ",\"data\":{\"sequence\":"
+            + 序号 + ",\"thread\":\"" + 转义(Thread.currentThread().getName())
+            + "\",\"detail\":\"" + 转义(数据) + "\"}}";
+
+        Thread 上报线程 = new Thread(() -> {
+            HttpURLConnection 连接 = null;
+            try {
+                连接 = (HttpURLConnection) new URL(调试地址).openConnection();
+                连接.setRequestMethod("POST");
+                连接.setConnectTimeout(500);
+                连接.setReadTimeout(500);
+                连接.setDoOutput(true);
+                连接.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                try (java.io.OutputStream 输出 = 连接.getOutputStream()) {
+                    输出.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+                连接.getResponseCode();
+            } catch (Exception ignored) {
+                // 调试服务不可用时绝不影响游戏网络线程与下载线程。
+            } finally {
+                if (连接 != null) 连接.disconnect();
+            }
+        }, "yiyiaddon-资源包诊断-" + 序号);
+        上报线程.setDaemon(true);
+        上报线程.start();
+    }
+
+    private static String 转义(String 文本) {
+        return 文本 == null ? "" : 文本.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    }
+    // #endregion
+
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。");
     }
 
     @Override
     public void onActivate() {
+        debugEvent("A", "模块启动", "active=" + isActive() + "，模式=" + resourcePackMode.get());
+        
         // 单人世界自动关闭
         if (mc.hasSingleplayerServer()) {
             chatFeedback = false;
@@ -366,200 +411,99 @@ public class ServerDetector extends YiyiaddonModule {
         }
 
         if (event.packet instanceof ClientboundResourcePackPushPacket packet) {
-            handleResourcePackRequest(event, packet);
-        }
-    }
-
-    private void handleResourcePackRequest(PacketEvent.Receive event, ClientboundResourcePackPushPacket packet) {
-        switch (resourcePackMode.get()) {
-            case BYPASS -> {
+            ResourcePackMode mode = resourcePackMode.get();
+            debugEvent("B", "资源包拦截", "mode=" + mode + "，id=" + packet.id() + "，url=" + packet.url());
+            
+            if (mode == ResourcePackMode.BYPASS) {
                 event.setCancelled(true);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
-                notify("已拦截资源包请求（暴力绕过）");
-            }
-            case AUTO_DOWNLOAD -> {
-                event.setCancelled(true);
-                sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED);
-                TacticalFSM.publishResourcePackDownloadStart(packet.id());
-                notify("开始下载资源包，期间已自动压低发包速率");
-                downloadAsync(packet.id(), packet.url(), packet.hash());
-            }
-            case VANILLA -> {
-                // 交给原版流程
+                debugEvent("F", "暴力绕过完成", "id=" + packet.id());
+                notify("已拦截资源包（暴力绕过）");
+            } else if (mode == ResourcePackMode.AUTO_DOWNLOAD) {
+                downloadResourcePackAsync(packet.id(), packet.url(), packet.hash());
             }
         }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  资源包下载：断点续传 + SHA-1 校验
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private void downloadAsync(UUID packId, String url, String expectedHash) {
-        CompletableFuture.runAsync(() -> {
-            File finalFile = new File(RESOURCE_PACK_DIR, "pack_" + packId + ".zip");
-            File partFile = new File(RESOURCE_PACK_DIR, "pack_" + packId + ".zip.part");
-
-            try {
-                // 已有同 hash 的成品，直接复用，避免跨服重复下载
-                if (finalFile.exists() && hashMatches(finalFile, expectedHash)) {
-                    finishDownload(packId, true, "资源包已存在，跳过下载");
-                    return;
-                }
-
-                boolean ok = downloadWithRetry(url, partFile);
-                if (!ok) {
-                    finishDownload(packId, false, "资源包下载失败，已用尽 " + downloadRetries.get() + " 次重试");
-                    return;
-                }
-
-                // 服务端给的 hash 为空时跳过校验：部分服务端确实不填这个字段
-                if (expectedHash != null && !expectedHash.isEmpty() && !hashMatches(partFile, expectedHash)) {
-                    partFile.delete();
-                    finishDownload(packId, false, "资源包 SHA-1 校验不匹配，已删除残件");
-                    return;
-                }
-
-                if (finalFile.exists()) finalFile.delete();
-                if (!partFile.renameTo(finalFile)) {
-                    finishDownload(packId, false, "资源包存盘失败，无法重命名临时文件");
-                    return;
-                }
-
-                finishDownload(packId, true, "资源包下载完成：" + finalFile.getName());
-
-            } catch (Exception e) {
-                finishDownload(packId, false, "资源包下载异常：" + e);
-            }
-        }, DOWNLOAD_POOL);
-    }
-
-    /**
-     * 带退避重试与断点续传的下载。
-     *
-     * 每次重试都从已有字节数继续请求。服务端返回 206 表示接受续传，
-     * 返回 200 说明它不支持 Range，此时必须从头覆写，否则文件会错位。
-     */
-    private boolean downloadWithRetry(String urlStr, File partFile) {
-        int retries = downloadRetries.get();
-
-        for (int attempt = 1; attempt <= retries; attempt++) {
-            long offset = (resumeDownload.get() && partFile.exists()) ? partFile.length() : 0L;
-
-            try {
-                HttpURLConnection conn = openConnection(urlStr, offset);
-                int code = conn.getResponseCode();
-
-                // 416 = Range 无效（文件已完整），直接删除重下
-                if (code == 416) {
-                    conn.disconnect();
-                    partFile.delete();
-                    continue;
-                }
-
-                // 206 = 接受续传；200 = 不支持续传，从头下
-                boolean append = code == HttpURLConnection.HTTP_PARTIAL;
-                if (code != HttpURLConnection.HTTP_OK && !append) {
-                    conn.disconnect();
-                    backoff(attempt);
-                    continue;
-                }
-                if (!append && offset > 0) {
-                    // 服务端忽略了 Range，之前的残件不能要了
-                    partFile.delete();
-                }
-
-                try (InputStream in = conn.getInputStream();
-                     RandomAccessFile out = new RandomAccessFile(partFile, "rw")) {
-
-                    out.seek(append ? offset : 0L);
-                    if (!append) out.setLength(0L);
-
-                    byte[] buffer = new byte[64 * 1024];
-                    int read;
-                    while ((read = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, read);
-                    }
-                }
-                conn.disconnect();
-                return true;
-
-            } catch (Exception e) {
-                // 断在中途也没关系，残件留着给下一轮续传
-                backoff(attempt);
-            }
+    public boolean handleResourcePackPushFromVanilla(ClientboundResourcePackPushPacket packet, Consumer<Packet<?>> sendPacket) {
+        if (!isActive()) return false;
+        ResourcePackMode mode = resourcePackMode.get();
+        debugEvent("B", "Mixin入口", "mode=" + mode + "，id=" + packet.id());
+        
+        if (mode == ResourcePackMode.BYPASS) {
+            UUID packId = packet.id();
+            sendPacket.accept(new ServerboundResourcePackPacket(packId, ServerboundResourcePackPacket.Action.ACCEPTED));
+            sendPacket.accept(new ServerboundResourcePackPacket(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED));
+            debugEvent("F", "Mixin暴力绕过", "id=" + packId);
+            notify("已拦截资源包（Mixin入口）");
+            return true;
         }
         return false;
     }
 
-    private HttpURLConnection openConnection(String urlStr, long offset) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
-        // 部分 CDN 会对非常规 UA 返回 403，这里伪装成普通浏览器
-        conn.setRequestProperty("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-        conn.setRequestProperty("Accept", "*/*");
-        conn.setRequestProperty("Accept-Encoding", "identity"); // 避免压缩导致 Range 偏移错乱
-        conn.setConnectTimeout(15_000);
-        conn.setReadTimeout(downloadTimeout.get() * 1000);
-        conn.setInstanceFollowRedirects(true);
-        if (offset > 0) conn.setRequestProperty("Range", "bytes=" + offset + "-");
-        return conn;
-    }
-
-    /** 指数退避，避免对着挂掉的 CDN 连打。 */
-    private void backoff(int attempt) {
-        try {
-            Thread.sleep(Math.min(8000L, 500L * (1L << (attempt - 1))));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private boolean hashMatches(File file, String expectedHash) throws Exception {
-        if (expectedHash == null || expectedHash.isEmpty()) return false;
-        return sha1(file).equalsIgnoreCase(expectedHash);
-    }
-
-    private String sha1(File file) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        try (InputStream in = new java.io.FileInputStream(file)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                digest.update(buffer, 0, read);
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        for (byte b : digest.digest()) sb.append(String.format("%02x", b));
-        return sb.toString();
-    }
-
-    /**
-     * 收尾：回主线程发状态包与提示。
-     * 发包与聊天输出都不是线程安全的，不能在下载线程里直接做。
-     */
-    private void finishDownload(UUID packId, boolean success, String message) {
-        mc.execute(() -> {
-            if (success) {
-                // 原版顺序是 ACCEPTED → DOWNLOADED → SUCCESSFULLY_LOADED，
-                // 少发中间那步会让状态机跳变，部分服务端据此判定客户端异常
-                sendPackAction(packId, ServerboundResourcePackPacket.Action.DOWNLOADED);
-                sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
-            } else {
-                sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
-            }
-
-            TacticalFSM.publishResourcePackDownloadComplete(packId, success);
-
-            if (success) notify(message);
-            else notifyError(message);
-        });
-    }
-
     private void sendPackAction(UUID packId, ServerboundResourcePackPacket.Action action) {
         ClientPacketListener connection = mc.getConnection();
-        if (connection == null) return;
+        if (connection == null) {
+            debugEvent("F", "状态包未发送", "action=" + action + "，原因=连接为空，id=" + packId);
+            return;
+        }
+        debugEvent("F", "状态包发送", "action=" + action + "，id=" + packId);
         connection.send(new ServerboundResourcePackPacket(packId, action));
+    }
+
+    private void downloadResourcePackAsync(UUID packId, String url, String hash) {
+        Thread.ofVirtual().start(() -> {
+            try {
+                sendPackAction(packId, ServerboundResourcePackPacket.Action.ACCEPTED);
+                
+                if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
+                
+                String fileName = packId.toString() + ".zip";
+                File targetFile = new File(RESOURCE_PACK_DIR, fileName);
+                
+                if (targetFile.exists()) {
+                    debugEvent("E", "资源包已存在", "跳过下载，id=" + packId + "，路径=" + targetFile.getAbsolutePath());
+                    sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
+                    notify("该服务器资源包已下载过：" + fileName);
+                    return;
+                }
+                
+
+                
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                
+                int code = conn.getResponseCode();
+                debugEvent("E", "HTTP响应", "code=" + code + "，id=" + packId);
+                
+                if (code == 200) {
+                    try (InputStream in = conn.getInputStream();
+                         java.io.FileOutputStream out = new java.io.FileOutputStream(targetFile)) {
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        long total = 0;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                            total += read;
+                        }
+
+                        sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
+                        notify("资源包已下载：" + fileName);
+                    }
+                } else {
+
+                    sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
+                    notify("该服务器材质包无法下载（HTTP " + code + "）");
+                }
+            } catch (Exception e) {
+
+                sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
+                notify("该服务器材质包无法下载：" + e.getMessage());
+            }
+        });
     }
 
     /** 26.1.2 已移除 net.minecraft.Util，改用 AWT Desktop，放独立线程避免卡渲染。 */

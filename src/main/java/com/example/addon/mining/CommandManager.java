@@ -2,9 +2,12 @@ package com.example.addon.mining;
 
 import com.example.addon.modules.AutoMinerModule;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -41,6 +44,11 @@ public final class CommandManager {
     private int rapidFallTicks = 0;
     private static final double RAPID_FALL_THRESHOLD = 2.0; // 每tick下降超过2格判定为快速坠落
 
+    // GUI等待与自动点击
+    private boolean waitingForGui = false;
+    private int guiWaitTicks = 0;
+    private static final int GUI_MAX_WAIT_TICKS = 100; // 5秒超时
+
     public CommandManager(AutoMinerModule module) {
         this.module = module;
         this.mc = Minecraft.getInstance();
@@ -53,6 +61,8 @@ public final class CommandManager {
         chunksLoadedCount = 0;
         lastY = 0;
         rapidFallTicks = 0;
+        waitingForGui = false;
+        guiWaitTicks = 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -63,13 +73,26 @@ public final class CommandManager {
      * 执行聊天指令（如 /rtp, /home kuang）
      * 
      * 发送后进入阻塞状态，直到传送完成并满足安全条件
+     * 自动处理斜杠前缀，无论输入 rtp 或 /rtp 都能正确执行
      */
     public void executeCommand(String command) {
         if (mc.player == null || command.isEmpty()) {
             return;
         }
 
-        mc.player.connection.sendCommand(command.startsWith("/") ? command.substring(1) : command);
+        // 自动补充斜杠：如果命令不以/开头，自动添加
+        String cmd = command.trim();
+        if (!cmd.startsWith("/")) {
+            cmd = "/" + cmd;
+        }
+        
+        // 移除多余的斜杠（如果有人输入 //rtp）
+        while (cmd.startsWith("//")) {
+            cmd = cmd.substring(1);
+        }
+        
+        // 去掉前缀/后发送
+        mc.player.connection.sendCommand(cmd.substring(1));
 
         // 从模块获取传送等待时长（秒转tick）
         maxWaitTicks = module.getTeleportDelay() * 20;
@@ -80,6 +103,12 @@ public final class CommandManager {
         lastY = mc.player.getY();
         chunksLoadedCount = 0;
         rapidFallTicks = 0;
+        
+        // 如果启用RTP GUI自动点击，进入GUI等待状态
+        if (module.isRtpGuiEnabled()) {
+            waitingForGui = true;
+            guiWaitTicks = 0;
+        }
     }
 
     /**
@@ -90,9 +119,17 @@ public final class CommandManager {
 
         executeTick++;
 
+        // 优先处理GUI自动点击
+        if (waitingForGui) {
+            return handleGuiAutoClick();
+        }
+
         // 超时保护（使用动态设置的等待时长）
         if (executeTick > maxWaitTicks) {
+            info("§c[自动挖矿] 传送超时，重新RTP");
             executing = false;
+            // 标记需要重新传送
+            module.requestRetryTeleport();
             return false;
         }
 
@@ -204,5 +241,84 @@ public final class CommandManager {
 
         // 位置静止超过5 tick，且玩家在地面
         return executeTick > 25 && player.onGround();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  GUI自动点击
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 处理RTP GUI自动点击
+     * 
+     * 策略：
+     * · 等待GUI打开（检测mc.screen不为null）
+     * · 遍历所有按钮，查找文本包含关键词的按钮
+     * · 纯文本匹配：移除所有颜色代码（§x）和空格后进行比对
+     * · 找到后模拟点击并关闭GUI
+     * 
+     * @return true=继续阻塞，false=GUI处理完毕
+     */
+    private boolean handleGuiAutoClick() {
+        guiWaitTicks++;
+
+        // 超时保护
+        if (guiWaitTicks > GUI_MAX_WAIT_TICKS) {
+            waitingForGui = false;
+            return true; // 继续等待传送完成
+        }
+
+        Screen currentScreen = mc.screen;
+        
+        // 等待GUI出现
+        if (currentScreen == null) {
+            return true;
+        }
+
+        String keyword = module.getRtpGuiKeyword();
+        if (keyword == null || keyword.isEmpty()) {
+            waitingForGui = false;
+            return true;
+        }
+
+        // 标准化关键词（移除颜色和空格）
+        String normalizedKeyword = stripFormatting(keyword);
+
+        // 遍历所有渲染组件，查找匹配的按钮
+        for (var widget : currentScreen.children()) {
+            if (widget instanceof AbstractWidget button) {
+                Component message = button.getMessage();
+                String buttonText = stripFormatting(message.getString());
+                
+                // 纯文本匹配（忽略颜色和空格）
+                if (buttonText.contains(normalizedKeyword)) {
+                    // 使用反射调用按钮点击
+                    try {
+                        var onPressField = net.minecraft.client.gui.components.Button.class.getDeclaredField("onPress");
+                        onPressField.setAccessible(true);
+                        var onPress = (net.minecraft.client.gui.components.Button.OnPress) onPressField.get(button);
+                        onPress.onPress((net.minecraft.client.gui.components.Button) button);
+                    } catch (Exception e) {
+                        // 反射失败则尝试直接点击
+                    }
+                    
+                    // 关闭GUI
+                    mc.setScreen(null);
+                    
+                    waitingForGui = false;
+                    return true; // 继续等待传送完成
+                }
+            }
+        }
+
+        // 未找到匹配按钮，继续等待
+        return true;
+    }
+
+    /**
+     * 移除Minecraft颜色代码（§x）和所有空格
+     */
+    private String stripFormatting(String text) {
+        if (text == null) return "";
+        return text.replaceAll("§.", "").replaceAll("\\s+", "");
     }
 }
