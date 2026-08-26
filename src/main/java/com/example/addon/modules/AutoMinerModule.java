@@ -1271,23 +1271,23 @@ public final class AutoMinerModule extends YiyiaddonModule {
             default -> "§f";
         };
         
-        // 标题（移除图标，直接显示文字）
-        card.add(theme.label(titleColor + "§l" + title)).expandX().center();
+        // 标题
+        card.add(theme.label(title)).expandX().center();
         card.row();
         
-        // 状态显示（更详细的信息）
+        // 状态显示
         if (isBound && data != null) {
-            String coords = String.format("§7%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
+            String coords = String.format("%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
             card.add(theme.label(coords)).expandX().center();
             card.row();
             
-            String dimName = "§7" + data.dimensionName();
+            String dimName = data.dimensionName();
             card.add(theme.label(dimName)).expandX().center();
             card.row();
         } else {
-            card.add(theme.label("§8▬▬▬▬▬▬▬▬")).expandX().center();
+            card.add(theme.label("────────")).expandX().center();
             card.row();
-            card.add(theme.label("§7暂未绑定")).expandX().center();
+            card.add(theme.label("暂未绑定")).expandX().center();
             card.row();
         }
         
