@@ -8,7 +8,7 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 
 public class HudExample extends HudElement {
     /**
-     * The {@code name} parameter should be in kebab-case.
+     * name 参数必须使用 kebab-case 格式（小写+连字符）
      */
     public static final HudElementInfo<HudExample> INFO = new HudElementInfo<>(AddonTemplate.HUD_GROUP, "example", "HUD element example.", HudExample::new);
 
@@ -20,10 +20,10 @@ public class HudExample extends HudElement {
     public void render(HudRenderer renderer) {
         setSize(renderer.textWidth("Example element", true), renderer.textHeight(true));
 
-        // Render background
+        // 渲染背景
         renderer.quad(x, y, getWidth(), getHeight(), Color.LIGHT_GRAY);
 
-        // Render text
+        // 渲染文本
         renderer.text("Example element", x, y, Color.WHITE, true);
     }
 }

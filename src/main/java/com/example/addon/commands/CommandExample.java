@@ -6,11 +6,11 @@ import meteordevelopment.meteorclient.commands.Command;
 import net.minecraft.client.multiplayer.ClientSuggestionProvider;
 
 /**
- * The Meteor Client command API uses the <a href="https://github.com/Mojang/brigadier">same command system as Minecraft does</a>.
+ * Meteor Client 命令 API 使用 <a href="https://github.com/Mojang/brigadier">Minecraft 原版的 Brigadier 命令系统</a>
  */
 public class CommandExample extends Command {
     /**
-     * The {@code name} parameter should be in kebab-case.
+     * name 参数必须使用 kebab-case 格式（小写+连字符）
      */
     public CommandExample() {
         super("example", "Sends a message.");
