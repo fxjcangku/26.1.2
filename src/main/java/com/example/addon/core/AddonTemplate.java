@@ -10,6 +10,7 @@ import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.MeteorCommandGuideModule;
 import com.example.addon.modules.PinkThemeModule;
+import com.example.addon.modules.UserStatsModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.example.addon.tactical.FlightBypass;
 import com.example.addon.tactical.AntiKickBypass;
@@ -32,6 +33,11 @@ import org.slf4j.Logger;
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
     
+    // ── 后端 API 配置 ──
+    // 用户统计服务（部署在 Cloudflare Workers）
+    public static final String STATS_API_URL = "https://yiyiaddon-stats.fxjggyx.workers.dev";
+    
+    // ── 模块分类 ──
     // 三个分类：工具、自动化、绕过
     public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具", () -> DisplayItemUtils.toStack(Items.WRITABLE_BOOK));
     public static final Category CATEGORY_AUTOMATION = new Category("§c§lyiyiaddon §e§l自动化", () -> DisplayItemUtils.toStack(Items.REDSTONE));
@@ -59,6 +65,10 @@ public class AddonTemplate extends MeteorAddon {
         // 粉色主题：应用粉色配色方案
         PinkThemeModule pinkThemeModule = new PinkThemeModule();
         Modules.get().add(pinkThemeModule);
+
+        // 用户统计：实时查看有多少玩家正在使用该扩展
+        UserStatsModule userStatsModule = new UserStatsModule();
+        Modules.get().add(userStatsModule);
 
         // ── 自动化模块 ──
         // 农场矩阵：自动种植和收割作物

@@ -1,5 +1,6 @@
 package com.example.addon.utils;
 
+import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
@@ -29,7 +30,9 @@ public final class YiyiaddonWelcomeService {
     private static final Pattern RELEASE_URL_PATTERN = Pattern.compile("\"html_url\"\\s*:\\s*\"([^\"]+)\"");
     
     // 用户统计 API（部署在 Cloudflare Workers）
-    private static final String STATS_API_URL = "https://yiyiaddon-stats.你的域名.workers.dev/api/register";
+    // 配置集中管理在 AddonTemplate.STATS_API_URL
+    private static final String STATS_API_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/report";
+    private static final String STATS_QUERY_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/stats";
     
     // 更新检查配置
     private static final long CHECK_INTERVAL_HOURS = 24; // 每天检查一次
@@ -300,7 +303,7 @@ public final class YiyiaddonWelcomeService {
                 );
 
                 HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(STATS_API_URL))
+                    .uri(URI.create(STATS_API_ENDPOINT))
                     .timeout(Duration.ofSeconds(8))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json))
@@ -321,6 +324,9 @@ public final class YiyiaddonWelcomeService {
                         int rank = Integer.parseInt(rankMatcher.group(1));
                         int total = Integer.parseInt(totalMatcher.group(1));
                         boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
+                        
+                        // 获取最近活跃信息
+                        String recentActivityInfo = fetchRecentActivity();
                         
                         // 在公屏显示排名信息
                         if (mc.player != null) {
@@ -345,6 +351,13 @@ public final class YiyiaddonWelcomeService {
                                     "§f当前已有 §b§l" + total + " §f位玩家使用该扩展")
                             ));
                             
+                            // 显示最近活跃信息
+                            if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
+                                mc.player.sendSystemMessage(Component.literal(
+                                    YiyiaddonModule.formatMessage("统计", recentActivityInfo)
+                                ));
+                            }
+                            
                             mc.player.sendSystemMessage(Component.literal(
                                 "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                             ));
@@ -356,6 +369,69 @@ public final class YiyiaddonWelcomeService {
                 // 即使统计服务器挂了，玩家也能正常使用扩展
             }
         }, "yiyiaddon-user-register").start();
+    }
+    
+    /**
+     * 获取最近活跃信息
+     * 查询 24h 内活跃用户数和最近上线的玩家
+     * 
+     * @return 格式化的活跃信息字符串，失败返回 null
+     */
+    private static String fetchRecentActivity() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(STATS_QUERY_ENDPOINT))
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                
+                // 解析 24h 活跃用户数
+                Matcher activeMatcher = Pattern.compile("\"active_users_24h\":(\\d+)").matcher(body);
+                
+                // 解析最近活跃用户列表
+                Matcher usersMatcher = Pattern.compile("\"recent_users\":\\[(.*?)\\]").matcher(body);
+                
+                if (activeMatcher.find()) {
+                    int activeCount = Integer.parseInt(activeMatcher.group(1));
+                    
+                    // 尝试获取最近上线的玩家
+                    String recentUserName = null;
+                    long recentUserTime = 0;
+                    
+                    if (usersMatcher.find()) {
+                        String usersJson = usersMatcher.group(1);
+                        Matcher nameMatcher = Pattern.compile("\"name\":\"([^\"]+)\"").matcher(usersJson);
+                        Matcher timeMatcher = Pattern.compile("\"last_seen\":(\\d+)").matcher(usersJson);
+                        
+                        if (nameMatcher.find() && timeMatcher.find()) {
+                            recentUserName = nameMatcher.group(1);
+                            recentUserTime = Long.parseLong(timeMatcher.group(1));
+                        }
+                    }
+                    
+                    // 构建活跃信息
+                    StringBuilder info = new StringBuilder();
+                    info.append("§f24h 活跃：§b§l").append(activeCount).append(" §f人");
+                    
+                    if (recentUserName != null) {
+                        long hoursAgo = (System.currentTimeMillis() / 1000 - recentUserTime) / 3600;
+                        String timeDesc = hoursAgo == 0 ? "§a刚刚在线" : "§7" + hoursAgo + "h 前在线";
+                        info.append(" §7| §f最近活跃：§e").append(recentUserName).append(" ").append(timeDesc);
+                    }
+                    
+                    return info.toString();
+                }
+            }
+        } catch (Exception e) {
+            // 静默失败
+        }
+        return null;
     }
 
     private static record ReleaseInfo(String version, String url, String body) {
