@@ -208,6 +208,14 @@ public final class MinerFSM {
             return;
         }
 
+        // 优先级 2.5：饱食度检测（低于15时暂停Baritone并吃东西）
+        FoodData foodData = mc.player.getFoodData();
+        if (foodData.getFoodLevel() < 15) {
+            module.getBaritone().stop();
+            transitionTo(MinerState.EATING);
+            return;
+        }
+
         // 优先级 3：食物不足检测（检查背包食物组数）
         if (countFoodStacks() < module.getHungerThreshold()) {
             module.getSoundNotifier().notifyLowFood();
@@ -391,20 +399,26 @@ public final class MinerFSM {
     }
 
     private void tickEating() {
-        // 检查是否达到食物数量阈值
-        if (countFoodStacks() >= module.getHungerThreshold()) {
-            transitionTo(MinerState.GO_WILD);
+        FoodData foodData = mc.player.getFoodData();
+        
+        // 检查饱食度是否回满（满值20）
+        if (foodData.getFoodLevel() >= 20) {
+            mc.options.keyUse.setDown(false); // 释放右键
+            transitionTo(MinerState.MINING);
+            module.getBaritone().startMining(module.getTargetBlock()); // 恢复Baritone
             return;
         }
 
-        // 每秒尝试进食
-        if (stateTick % 20 == 0) {
+        // 每2秒尝试吃一次（吃完一个食物需要32 tick = 1.6秒）
+        if (stateTick % 40 == 0) {
             module.getContainer().autoEat();
         }
 
-        // 超时保护
+        // 超时保护：2分钟还没吃饱就放弃，回到挖矿
         if (stateTick > 2400) {
-            transitionTo(MinerState.GO_WILD);
+            mc.options.keyUse.setDown(false);
+            transitionTo(MinerState.MINING);
+            module.getBaritone().startMining(module.getTargetBlock());
         }
     }
 

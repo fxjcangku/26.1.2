@@ -10,6 +10,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
@@ -283,15 +284,24 @@ public final class ContainerHelper {
 
     /**
      * 自动进食直到饥饿值回满
+     * 改进：持续按住右键吃东西，不会被Baritone打断
      */
     public void autoEat() {
         if (mc.player == null) return;
 
+        FoodData foodData = mc.player.getFoodData();
+        
+        // 已经饱了就不吃
+        if (foodData.getFoodLevel() >= 20) {
+            mc.options.keyUse.setDown(false);
+            return;
+        }
+
         Inventory inventory = mc.player.getInventory();
-        ItemStack bestFood = ItemStack.EMPTY;
         int bestSlot = -1;
         int bestNutrition = 0;
 
+        // 在热键栏找最高营养值的食物
         for (int i = 0; i < 9; i++) {
             ItemStack stack = inventory.getItem(i);
             if (stack.isEmpty()) continue;
@@ -302,15 +312,16 @@ public final class ContainerHelper {
             int nutrition = foodComp.nutrition();
             if (nutrition > bestNutrition) {
                 bestNutrition = nutrition;
-                bestFood = stack;
                 bestSlot = i;
             }
         }
 
         if (bestSlot == -1) return;
 
-        // 简化实现：直接切换到食物槽并使用
+        // 切换到食物槽
         InvUtils.swap(bestSlot, false);
-        mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
+        
+        // 持续按住右键吃东西（需要按住32 tick才能吃完）
+        mc.options.keyUse.setDown(true);
     }
 }
