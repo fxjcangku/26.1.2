@@ -284,7 +284,9 @@ public final class ContainerHelper {
 
     /**
      * 自动进食直到饥饿值回满
-     * 改进：持续按住右键吃东西，不会被Baritone打断
+     * 改进：
+     * 1. 先检查热键栏有没有食物，没有就从背包拿
+     * 2. 持续按住右键吃东西，不会被Baritone打断
      */
     public void autoEat() {
         if (mc.player == null) return;
@@ -298,10 +300,10 @@ public final class ContainerHelper {
         }
 
         Inventory inventory = mc.player.getInventory();
-        int bestSlot = -1;
-        int bestNutrition = 0;
+        int bestHotbarSlot = -1;
+        int bestHotbarNutrition = 0;
 
-        // 在热键栏找最高营养值的食物
+        // 第一步：在热键栏（0-8）找最高营养值的食物
         for (int i = 0; i < 9; i++) {
             ItemStack stack = inventory.getItem(i);
             if (stack.isEmpty()) continue;
@@ -310,16 +312,58 @@ public final class ContainerHelper {
             if (foodComp == null) continue;
 
             int nutrition = foodComp.nutrition();
-            if (nutrition > bestNutrition) {
-                bestNutrition = nutrition;
-                bestSlot = i;
+            if (nutrition > bestHotbarNutrition) {
+                bestHotbarNutrition = nutrition;
+                bestHotbarSlot = i;
             }
         }
 
-        if (bestSlot == -1) return;
+        // 第二步：如果热键栏没食物，从背包（9-35）找并移动到热键栏
+        if (bestHotbarSlot == -1) {
+            int bestBackpackSlot = -1;
+            int bestBackpackNutrition = 0;
 
-        // 切换到食物槽
-        InvUtils.swap(bestSlot, false);
+            for (int i = 9; i < 36; i++) {
+                ItemStack stack = inventory.getItem(i);
+                if (stack.isEmpty()) continue;
+
+                var foodComp = stack.get(net.minecraft.core.component.DataComponents.FOOD);
+                if (foodComp == null) continue;
+
+                int nutrition = foodComp.nutrition();
+                if (nutrition > bestBackpackNutrition) {
+                    bestBackpackNutrition = nutrition;
+                    bestBackpackSlot = i;
+                }
+            }
+
+            // 背包也没食物，放弃
+            if (bestBackpackSlot == -1) {
+                mc.options.keyUse.setDown(false);
+                return;
+            }
+
+            // 找一个空的热键栏槽位（优先8号位）
+            int emptyHotbarSlot = -1;
+            for (int i = 8; i >= 0; i--) {
+                if (inventory.getItem(i).isEmpty()) {
+                    emptyHotbarSlot = i;
+                    break;
+                }
+            }
+
+            // 如果热键栏没空位，用8号位
+            if (emptyHotbarSlot == -1) {
+                emptyHotbarSlot = 8;
+            }
+
+            // 从背包移动食物到热键栏
+            InvUtils.move().from(bestBackpackSlot).to(emptyHotbarSlot);
+            bestHotbarSlot = emptyHotbarSlot;
+        }
+
+        // 第三步：切换到食物槽
+        InvUtils.swap(bestHotbarSlot, false);
         
         // 持续按住右键吃东西（需要按住32 tick才能吃完）
         mc.options.keyUse.setDown(true);
