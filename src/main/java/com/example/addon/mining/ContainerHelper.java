@@ -285,8 +285,9 @@ public final class ContainerHelper {
     /**
      * 自动进食直到饥饿值回满
      * 改进：
-     * 1. 先检查热键栏有没有食物，没有就从背包拿
-     * 2. 持续按住右键吃东西，不会被Baritone打断
+     * 1. 只吃白名单里的食物
+     * 2. 先检查热键栏有没有白名单食物，没有就从背包拿
+     * 3. 持续按住右键吃东西，不会被Baritone打断
      */
     public void autoEat() {
         if (mc.player == null) return;
@@ -299,14 +300,20 @@ public final class ContainerHelper {
             return;
         }
 
+        // 获取食物白名单
+        var foodWhitelist = module.getFoodWhitelist();
+
         Inventory inventory = mc.player.getInventory();
         int bestHotbarSlot = -1;
         int bestHotbarNutrition = 0;
 
-        // 第一步：在热键栏（0-8）找最高营养值的食物
+        // 第一步：在热键栏（0-8）找白名单中营养值最高的食物
         for (int i = 0; i < 9; i++) {
             ItemStack stack = inventory.getItem(i);
             if (stack.isEmpty()) continue;
+
+            // 只吃白名单里的食物
+            if (!foodWhitelist.contains(stack.getItem())) continue;
 
             var foodComp = stack.get(net.minecraft.core.component.DataComponents.FOOD);
             if (foodComp == null) continue;
@@ -318,7 +325,7 @@ public final class ContainerHelper {
             }
         }
 
-        // 第二步：如果热键栏没食物，从背包（9-35）找并移动到热键栏
+        // 第二步：如果热键栏没白名单食物，从背包（9-35）找并移动到热键栏
         if (bestHotbarSlot == -1) {
             int bestBackpackSlot = -1;
             int bestBackpackNutrition = 0;
@@ -326,6 +333,9 @@ public final class ContainerHelper {
             for (int i = 9; i < 36; i++) {
                 ItemStack stack = inventory.getItem(i);
                 if (stack.isEmpty()) continue;
+
+                // 只吃白名单里的食物
+                if (!foodWhitelist.contains(stack.getItem())) continue;
 
                 var foodComp = stack.get(net.minecraft.core.component.DataComponents.FOOD);
                 if (foodComp == null) continue;
@@ -337,7 +347,7 @@ public final class ContainerHelper {
                 }
             }
 
-            // 背包也没食物，放弃
+            // 背包也没白名单食物，放弃
             if (bestBackpackSlot == -1) {
                 mc.options.keyUse.setDown(false);
                 return;
