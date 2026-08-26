@@ -155,6 +155,12 @@ public final class UserStatsModule extends YiyiaddonModule {
                 totalUsers = Integer.parseInt(totalMatcher.group(1));
             }
             
+            // 解析 24h 活跃用户数
+            Matcher activeMatcher = Pattern.compile("\"active_24h\":(\\d+)").matcher(json);
+            if (activeMatcher.find()) {
+                activeUsers24h = Integer.parseInt(activeMatcher.group(1));
+            }
+            
             // 解析最近活跃用户列表
             List<RecentUser> newRecentUsers = new ArrayList<>();
             Pattern userPattern = Pattern.compile(
@@ -238,7 +244,7 @@ public final class UserStatsModule extends YiyiaddonModule {
             table.add(theme.horizontalSeparator()).expandX();
             table.row();
             
-            WButton refreshButton = table.add(theme.button(isLoading ? "§e加载中..." : "§a立即刷新")).expandX().widget();
+            WButton refreshButton = table.add(theme.button(isLoading ? "加载中..." : "立即刷新")).expandX().widget();
             refreshButton.action = this::refreshStats;
         }, sections.toArray(new String[0][]));
     }
