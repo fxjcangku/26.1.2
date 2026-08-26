@@ -53,16 +53,14 @@ public final class YiyiaddonWelcomeService {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // 欢迎消息：统一走基类 formatMessage，前缀格式与所有模块保持一致
-        mc.player.sendSystemMessage(Component.literal(
-            YiyiaddonModule.formatMessage("欢迎", "§f本扩展已整合简体中文汉化跟汉化Baritone不用单独安装")
-        ));
-        mc.player.sendSystemMessage(Component.literal(
-            YiyiaddonModule.formatMessage("欢迎", "§f本扩展免费 为爱发电")
-        ));
+        // 获取当前版本号并检测是否为测试版
+        String currentVersion = getCurrentVersion();
+        String versionDisplay = currentVersion.toLowerCase().contains("beta") 
+            ? "§6§l" + currentVersion + " §c§l[测试版]" 
+            : "§6§l" + currentVersion;
 
-        // 用户统计：发送到 Cloudflare Workers 并显示排名
-        registerUserAndShowRank();
+        // 把欢迎消息和统计消息全部放在一起发送，避免顺序错乱
+        registerUserAndShowRank(versionDisplay);
 
         // 检查是否需要更新检查（频率控制）
         if (!shouldCheckUpdate()) {
@@ -71,7 +69,6 @@ public final class YiyiaddonWelcomeService {
 
         new Thread(() -> {
             try {
-                String currentVersion = getCurrentVersion();
                 ReleaseInfo latest = fetchLatestRelease();
                 
                 if (latest == null) return;
@@ -212,6 +209,20 @@ public final class YiyiaddonWelcomeService {
         return preview.toString().trim();
     }
 
+    /**
+     * 检测是否为正版账户
+     * 正版账户（微软登录）有 xuid（Xbox User ID），离线账户没有
+     */
+    private static boolean isOnlineMode(Minecraft mc) {
+        try {
+            // 26.1.2 的 User 类：正版账户的 xuid 字段不为空
+            return mc.getUser().getXuid().isPresent();
+        } catch (Exception e) {
+            // 如果无法获取，默认认为是离线
+            return false;
+        }
+    }
+
     private static String getCurrentVersion() {
         return FabricLoader.getInstance()
             .getModContainer("yiyiaddon")
@@ -284,8 +295,10 @@ public final class YiyiaddonWelcomeService {
      * 注册用户并显示排名
      * 发送玩家 UUID、游戏名、扩展版本、MC版本到统计服务器
      * 返回玩家排名并在公屏显示
+     * 
+     * @param versionDisplay 版本显示字符串（带颜色代码）
      */
-    private static void registerUserAndShowRank() {
+    private static void registerUserAndShowRank(String versionDisplay) {
         new Thread(() -> {
             try {
                 Minecraft mc = Minecraft.getInstance();
@@ -327,45 +340,88 @@ public final class YiyiaddonWelcomeService {
                         int total = Integer.parseInt(totalMatcher.group(1));
                         boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
                         
-                        // 获取最近活跃信息
+                        // 先获取最近活跃信息（在子线程完成所有 I/O），然后一次性显示
                         String recentActivityInfo = fetchRecentActivity();
                         
+                        // 等待 200ms 让欢迎消息先显示，避免统计信息插队
+                        try {
+                            Thread.sleep(200);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        
                         // 必须在渲染线程（主线程）里发消息，子线程直接调 sendSystemMessage 会崩溃
-                        mc.execute(() -> {
-                            if (mc.player != null) {
-                                mc.player.sendSystemMessage(Component.literal(
-                                    "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                                ));
-                                
-                                if (isNew) {
-                                    mc.player.sendSystemMessage(Component.literal(
-                                        YiyiaddonModule.formatMessage("统计", 
-                                            "§f" + name + " §e你是第 §6§l" + rank + " §e个使用该扩展的玩家 §a§l✓")
-                                    ));
-                                } else {
-                                    mc.player.sendSystemMessage(Component.literal(
-                                        YiyiaddonModule.formatMessage("统计", 
-                                            "§f欢迎回来 " + name + "§f！你是第 §6§l" + rank + " §f个使用该扩展的玩家")
-                                    ));
-                                }
-                                
-                                mc.player.sendSystemMessage(Component.literal(
-                                    YiyiaddonModule.formatMessage("统计", 
-                                        "§f当前已有 §b§l" + total + " §f位玩家使用该扩展")
-                                ));
-                                
-                                // 显示最近活跃信息
-                                if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
-                                    mc.player.sendSystemMessage(Component.literal(
-                                        YiyiaddonModule.formatMessage("统计", recentActivityInfo)
-                                    ));
-                                }
-                                
-                                mc.player.sendSystemMessage(Component.literal(
-                                    "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                                ));
+                        // 首次进入世界时 player 可能还没完全加载，延迟一下确保能发送
+                        new java.util.Timer().schedule(new java.util.TimerTask() {
+                            @Override
+                            public void run() {
+                                mc.execute(() -> {
+                                    if (mc.player != null) {
+                                        // 检测正版/离线（正版绿色，离线红色）
+                                        String accountType = isOnlineMode(mc) ? "§a§l[正版]" : "§c§l[离线]";
+                                        
+                                        // 顶部边框（青色双线框，缩短到 25 个横线字符避免超出）
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b╭─────────────────────────╮"
+                                        ));
+                                        
+                                        // 欢迎消息
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b│ §7本扩展已整合简体中文汉化"
+                                        ));
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b│ §7跟汉化Baritone不用单独安装"
+                                        ));
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b│ §7免费 为爱发电 §8| §f版本 " + versionDisplay
+                                        ));
+                                        
+                                        // Bug 反馈链接（GitLab 公开页面）
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b│ §d§lGitLab: §9§nhttps://gitlab.com/your-project/26.1.2/issues"
+                                        ));
+                                        
+                                        // 中间分隔线
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b├─────────────────────────┤"
+                                        ));
+                                        
+                                        // 统计信息
+                                        if (isNew) {
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§b│ " + accountType + " §6§l" + name
+                                            ));
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§b│ §7你是第 §e§l#" + rank + " §7个使用者 §a§l✓"
+                                            ));
+                                        } else {
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§b│ §7欢迎回来 " + accountType + " §6§l" + name
+                                            ));
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§b│ §7你是第 §e§l#" + rank + " §7个使用者"
+                                            ));
+                                        }
+                                        
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b│ §7当前已有 §b§l" + total + " §7位玩家使用"
+                                        ));
+                                        
+                                        // 显示最近活跃信息
+                                        if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§b│ " + recentActivityInfo
+                                            ));
+                                        }
+                                        
+                                        // 底部边框
+                                        mc.player.sendSystemMessage(Component.literal(
+                                            "§b╰─────────────────────────╯"
+                                        ));
+                                    }
+                                });
                             }
-                        });
+                        }, 500); // 延迟 500ms 确保 player 已加载
                     }
                 }
             } catch (Exception e) {
