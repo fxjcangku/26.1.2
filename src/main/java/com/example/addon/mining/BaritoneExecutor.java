@@ -262,7 +262,19 @@ public final class BaritoneExecutor {
     }
 
     /**
-     * 获取 Baritone 实例
+     * 获取 Baritone 实例（供状态机调用）
+     */
+    public IBaritone getBaritoneInstance() {
+        try {
+            return BaritoneAPI.getProvider().getPrimaryBaritone();
+        } catch (Throwable e) {
+            disabled = true;
+            return null;
+        }
+    }
+
+    /**
+     * 获取 Baritone 实例（内部使用）
      */
     private IBaritone getBaritone() {
         try {

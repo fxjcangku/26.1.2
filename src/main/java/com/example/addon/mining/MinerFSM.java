@@ -224,15 +224,29 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子边
+        // 阶段 3：走到箱子边（使用 Baritone）
         if (!mc.player.blockPosition().closerThan(mineralChest.pos, 5.0)) {
-            if (stateTick > 100) {
+            if (stateTick == 40) {
+                // 启动 Baritone 走到箱子
+                var baritone = module.getBaritone().getBaritoneInstance();
+                if (baritone != null) {
+                    baritone.getCommandManager().execute("goto " + 
+                        mineralChest.pos.getX() + " " + 
+                        mineralChest.pos.getY() + " " + 
+                        mineralChest.pos.getZ());
+                }
+            }
+            
+            if (stateTick > 300) {
+                module.getBaritone().stop();
                 transitionTo(MinerState.GO_WILD);
             }
             return;
         }
 
-        // 阶段 4：开箱倒货
+        // 阶段 4：停止寻路，开箱倒货
+        module.getBaritone().stop();
+        
         if (!module.getContainer().isContainerOpen()) {
             module.getContainer().openContainer(mineralChest.pos);
             return;
@@ -240,7 +254,7 @@ public final class MinerFSM {
 
         // 阶段 5：持续倒货
         boolean hasMore = module.getContainer().depositOres();
-        if (!hasMore || stateTick > 200) {
+        if (!hasMore || stateTick > 400) {
             module.getContainer().closeContainer();
             transitionTo(MinerState.GO_WILD);
         }
@@ -266,15 +280,29 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子边
+        // 阶段 3：走到箱子边（使用 Baritone）
         if (!mc.player.blockPosition().closerThan(foodChest.pos, 5.0)) {
-            if (stateTick > 100) {
+            if (stateTick == 40) {
+                // 启动 Baritone 走到箱子
+                var baritone = module.getBaritone().getBaritoneInstance();
+                if (baritone != null) {
+                    baritone.getCommandManager().execute("goto " + 
+                        foodChest.pos.getX() + " " + 
+                        foodChest.pos.getY() + " " + 
+                        foodChest.pos.getZ());
+                }
+            }
+            
+            if (stateTick > 300) {
+                module.getBaritone().stop();
                 transitionTo(MinerState.GO_WILD);
             }
             return;
         }
 
-        // 阶段 4：开箱取食物
+        // 阶段 4：停止寻路，开箱取食物
+        module.getBaritone().stop();
+        
         if (!module.getContainer().isContainerOpen()) {
             module.getContainer().openContainer(foodChest.pos);
             return;
@@ -282,7 +310,7 @@ public final class MinerFSM {
 
         // 阶段 5：取食物
         boolean taken = module.getContainer().withdrawFood();
-        if (taken || stateTick > 200) {
+        if (taken || stateTick > 400) {
             module.getContainer().closeContainer();
             transitionTo(MinerState.EATING);
         }
@@ -329,13 +357,35 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：调整视角到记录的 Yaw/Pitch
-        if (stateTick < 40 && !isViewAligned(afkPoint.yaw, afkPoint.pitch)) {
+        // 阶段 3：走到挂机点（使用 Baritone）
+        if (!mc.player.blockPosition().closerThan(afkPoint.pos, 3.0)) {
+            if (stateTick == 40) {
+                // 启动 Baritone 走到挂机点
+                var baritone = module.getBaritone().getBaritoneInstance();
+                if (baritone != null) {
+                    baritone.getCommandManager().execute("goto " + 
+                        afkPoint.pos.getX() + " " + 
+                        afkPoint.pos.getY() + " " + 
+                        afkPoint.pos.getZ());
+                }
+            }
+            
+            if (stateTick > 300) {
+                module.getBaritone().stop();
+                transitionTo(MinerState.GO_WILD);
+            }
+            return;
+        }
+
+        // 阶段 4：停止寻路，调整视角到记录的 Yaw/Pitch
+        module.getBaritone().stop();
+        
+        if (stateTick < 100 && !isViewAligned(afkPoint.yaw, afkPoint.pitch)) {
             smoothRotateTo(afkPoint.yaw, afkPoint.pitch);
             return;
         }
 
-        // 阶段 4：执行 Auto-Swap（只做一次）
+        // 阶段 5：执行 Auto-Swap（只做一次）
         if (!repairMode) {
             savedTool = mc.player.getMainHandItem().copy();
             savedWeapon = findWeaponInHotbar();
@@ -356,7 +406,7 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 5：持续监控耐久
+        // 阶段 6：持续监控耐久
         ItemStack currentTool = mc.player.getOffhandItem();
         if (currentTool.isEmpty() || isFullyRepaired(currentTool)) {
             transitionTo(MinerState.GO_WILD);

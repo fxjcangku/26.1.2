@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const 端口 = 7777;
-const 日志目录 = path.join(__dirname, '..', '运行日志');
+const 日志目录 = path.join(__dirname, '..', '游戏操作录像');
 fs.mkdirSync(日志目录, { recursive: true });
 
 // ── 运行时统计 ──────────────────────────────────────────

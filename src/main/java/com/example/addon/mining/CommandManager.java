@@ -29,6 +29,7 @@ public final class CommandManager {
 
     private boolean executing = false;
     private int executeTick = 0;
+    private int maxWaitTicks = 600; // 动态设置，默认30秒
 
     // 区块加载检测
     private BlockPos lastPlayerPos = BlockPos.ZERO;
@@ -39,9 +40,6 @@ public final class CommandManager {
     private double lastY = 0;
     private int rapidFallTicks = 0;
     private static final double RAPID_FALL_THRESHOLD = 2.0; // 每tick下降超过2格判定为快速坠落
-
-    // 超时保护
-    private static final int MAX_WAIT_TICKS = 600; // 30秒超时
 
     public CommandManager(AutoMinerModule module) {
         this.module = module;
@@ -73,6 +71,9 @@ public final class CommandManager {
 
         mc.player.connection.sendCommand(command.startsWith("/") ? command.substring(1) : command);
 
+        // 从模块获取传送等待时长（秒转tick）
+        maxWaitTicks = module.getTeleportDelay() * 20;
+
         executing = true;
         executeTick = 0;
         lastPlayerPos = mc.player.blockPosition();
@@ -89,8 +90,8 @@ public final class CommandManager {
 
         executeTick++;
 
-        // 超时保护
-        if (executeTick > MAX_WAIT_TICKS) {
+        // 超时保护（使用动态设置的等待时长）
+        if (executeTick > maxWaitTicks) {
             executing = false;
             return false;
         }

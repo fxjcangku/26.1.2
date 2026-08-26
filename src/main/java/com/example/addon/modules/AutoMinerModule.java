@@ -54,10 +54,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     private final SettingGroup sgTarget = settings.createGroup("目标选择", false);
     private final SettingGroup sgSeedMining = settings.createGroup("种子挖矿", false);
-    private final SettingGroup sgThresholds = settings.createGroup("阈值设置", false);
-    private final SettingGroup sgCommands = settings.createGroup("指令配置", false);
+    private final SettingGroup sgBasic = settings.createGroup("基础设置", false);
     private final SettingGroup sgBaritone = settings.createGroup("Baritone设置", false);
-    private final SettingGroup sgTrash = settings.createGroup("垃圾丢弃", false);
     private final SettingGroup sgDisplay = settings.createGroup("显示设置", false);
 
     // ─── 目标选择（互斥） ───
@@ -86,6 +84,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Integer> unloadThreshold;
     private final Setting<Integer> hungerThreshold;
     private final Setting<Integer> durabilityThreshold;
+    private final Setting<Integer> teleportDelay;
 
     // ─── 垃圾丢弃 ───
     private final Setting<List<Block>> trashList;
@@ -141,7 +140,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         overworldOreTarget = sgTarget.add(new BlockSetting.Builder()
             .name("主世界矿石")
             .description("选择主世界矿石（含深层变种）")
-            .defaultValue(Blocks.DIAMOND_ORE)
+            .defaultValue(Blocks.AIR)
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("_ore") && !id.contains("nether") && !id.contains("ancient");
@@ -201,38 +200,38 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .build());
 
         // ─── 指令配置 ───
-        wildCommand = sgCommands.add(new StringSetting.Builder()
+        wildCommand = sgBasic.add(new StringSetting.Builder()
             .name("去野外指令")
             .description("传送到挖矿区域的指令（如 /rtp）")
             .defaultValue("")
             .build());
 
-        unloadCommand = sgCommands.add(new StringSetting.Builder()
+        unloadCommand = sgBasic.add(new StringSetting.Builder()
             .name("满载卸货指令")
             .description("传送到卸货箱的指令（如 /home kuang）")
             .defaultValue("")
             .build());
 
-        supplyCommand = sgCommands.add(new StringSetting.Builder()
+        supplyCommand = sgBasic.add(new StringSetting.Builder()
             .name("补给指令")
             .description("传送到食物箱的指令（如 /home shiwu）")
             .defaultValue("")
             .build());
 
-        afkCommand = sgCommands.add(new StringSetting.Builder()
+        afkCommand = sgBasic.add(new StringSetting.Builder()
             .name("挂机点指令")
             .description("传送到挂机修补点的指令（如 /home guaji）")
             .defaultValue("")
             .build());
 
-        respawnCommand = sgCommands.add(new StringSetting.Builder()
+        respawnCommand = sgBasic.add(new StringSetting.Builder()
             .name("死亡重返指令")
             .description("复活后返回挂机点的指令")
             .defaultValue("")
             .build());
 
         // ─── 阈值设置 ───
-        unloadThreshold = sgThresholds.add(new IntSetting.Builder()
+        unloadThreshold = sgBasic.add(new IntSetting.Builder()
             .name("满载组数")
             .description("背包矿物达到多少组时触发卸货")
             .defaultValue(20)
@@ -240,7 +239,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .sliderMax(36)
             .build());
 
-        hungerThreshold = sgThresholds.add(new IntSetting.Builder()
+        hungerThreshold = sgBasic.add(new IntSetting.Builder()
             .name("饥饿阈值")
             .description("饥饿值低于此值时触发补给")
             .defaultValue(12)
@@ -248,7 +247,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .sliderMax(20)
             .build());
 
-        durabilityThreshold = sgThresholds.add(new IntSetting.Builder()
+        durabilityThreshold = sgBasic.add(new IntSetting.Builder()
             .name("耐久阈值")
             .description("工具剩余耐久低于此值时触发修补")
             .defaultValue(50)
@@ -256,8 +255,16 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .sliderMax(500)
             .build());
 
+        teleportDelay = sgBasic.add(new IntSetting.Builder()
+            .name("传送等待时长")
+            .description("执行传送指令后等待多少秒（服务器传送延迟+区块加载时间）")
+            .defaultValue(5)
+            .min(1)
+            .sliderMax(30)
+            .build());
+
         // ─── 垃圾丢弃（预设并默认勾选） ───
-        trashList = sgTrash.add(new BlockListSetting.Builder()
+        trashList = sgBasic.add(new BlockListSetting.Builder()
             .name("垃圾丢弃名单")
             .description("挖矿时自动丢弃这些方块")
             .defaultValue(List.of(
@@ -744,6 +751,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public int getUnloadThreshold() { return unloadThreshold.get(); }
     public int getHungerThreshold() { return hungerThreshold.get(); }
     public int getDurabilityThreshold() { return durabilityThreshold.get(); }
+    public int getTeleportDelay() { return teleportDelay.get(); }
 
     public BaritoneExecutor getBaritone() { return baritone; }
     public ContainerHelper getContainer() { return container; }
@@ -803,7 +811,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // 4. 确保预测器已配置
         updateOrePredictor();
 
-        // 5. 扫描周围矿石
+        // 5. 验证种子有效性：检测周围是否有真实矿石可供验证
         Block targetBlock = getTargetBlock();
         if (targetBlock == null || targetBlock == Blocks.AIR) {
             notifyError("未选择目标矿石，请先在「目标选择」中选择矿物");
@@ -815,6 +823,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         int scanRadius = 64; // 扫描范围 64 格
         BlockPos playerPos = mc.player.blockPosition();
         boolean foundFake = false;
+        int realOreCount = 0; // 真实矿石数量
 
         // 扫描立方体区域
         for (int x = -scanRadius; x <= scanRadius; x++) {
@@ -832,6 +841,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                                           blockId.contains("deepslate"));
 
                     if (isTargetOre) {
+                        realOreCount++;
                         // 对比预测位置
                         if (!orePredictor.isPredictedOreAt(checkPos)) {
                             foundFake = true;
@@ -844,12 +854,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
             if (foundFake) break;
         }
 
-        // 6. 播报结果
+        // 6. 验证种子有效性：至少需要3个矿石样本
+        if (realOreCount < 3) {
+            notifyError("§c周围矿石样本不足（需要至少3个），无法验证种子有效性");
+            notifyError("§7提示：靠近矿脉或使用 X-Ray 找到更多矿石后再检测");
+            return;
+        }
+
+        // 7. 播报结果
         lastCheckFoundFake = foundFake;
         if (foundFake) {
-            notifyError("§c检测到假矿！建议启用种子挖矿模式避开假矿");
+            notifyError("§c检测到假矿！种子错误或服务器使用了假矿");
         } else {
-            notify("§a周围未发现假矿，当前区域安全");
+            notify("§a扫描 " + realOreCount + " 个矿石，全部匹配预测位置，种子验证通过");
         }
     }
 
@@ -870,17 +887,22 @@ public final class AutoMinerModule extends YiyiaddonModule {
             
             // ═══════════════════════════════════════════════════════════════════
             //  点位设置卡片区（三列布局）
-            // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════
+            
+            // 创建三列容器
+            WTable cardRow = theme.table();
             
             // 矿物箱卡片
-            buildLocationCard(theme, table, "矿物箱", "mineral");
+            buildLocationCard(theme, cardRow, "矿物箱", "mineral");
             
             // 食物箱卡片
-            buildLocationCard(theme, table, "食物箱", "food");
+            buildLocationCard(theme, cardRow, "食物箱", "food");
             
             // 挂机修复点卡片
-            buildLocationCard(theme, table, "挂机修复点", "afk");
+            buildLocationCard(theme, cardRow, "挂机修复点", "afk");
             
+            // 将三列容器加入主表格
+            table.add(cardRow).expandX();
             table.row();
         },
             new String[]{
@@ -972,13 +994,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
         WButton setBtn = theme.button(WKCommand.hasBinding(key) ? "§a设置" : "§c设置");
         setBtn.action = () -> {
             boolean success = WKCommand.setBinding(key);
-            if (!success) {
-                // 设置失败（目标不是容器），关闭GUI
-                if (mc.screen != null) {
-                    mc.screen.onClose();
-                }
-            } else {
-                notify("§a设置成功，重新打开配置页面可看到更新");
+            // 设置成功或失败都关闭GUI（距离超限也会失败）
+            if (mc.screen != null) {
+                mc.screen.onClose();
             }
         };
         card.add(setBtn).minWidth(80).expandWidgetX();
@@ -988,7 +1006,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
         WButton delBtn = theme.button("§7删除");
         delBtn.action = () -> {
             WKCommand.removeBinding(key);
-            notify("§e已删除 " + title + " 绑定");
+            // 删除后关闭GUI
+            if (mc.screen != null) {
+                mc.screen.onClose();
+            }
         };
         card.add(delBtn).minWidth(80).expandWidgetX();
         card.row();

@@ -101,7 +101,7 @@ public class WKCommand extends Command {
 
     /**
      * 绑定矿物箱
-     * 准星对准箱子 → 检测容器类型 → 检测覆盖保护 → 记录坐标和维度
+     * 准星对准箱子 → 检测容器类型 → 检测覆盖保护 → 检测距离 → 记录坐标和维度
      */
     private int bindMineralChest() {
         // 覆盖保护：已有绑定必须先删除
@@ -128,6 +128,14 @@ public class WKCommand extends Command {
             return SINGLE_SUCCESS;
         }
 
+        // 检测与其他点位距离（32格限制）
+        String distanceError = checkDistance(data.pos, "mineral");
+        if (distanceError != null) {
+            wkError(distanceError);
+            wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
+            return SINGLE_SUCCESS;
+        }
+
         DATA_STORE.put("mineral", data);
         saveData();
 
@@ -141,7 +149,7 @@ public class WKCommand extends Command {
 
     /**
      * 绑定食物箱
-     * 准星对准箱子 → 检测容器类型 → 检测覆盖保护 → 记录坐标和维度
+     * 准星对准箱子 → 检测容器类型 → 检测覆盖保护 → 检测距离 → 记录坐标和维度
      */
     private int bindFoodChest() {
         // 覆盖保护：已有绑定必须先删除
@@ -165,6 +173,14 @@ public class WKCommand extends Command {
         WKData data = WKData.here(target);
         if (data == null) {
             wkError("无法获取当前维度信息");
+            return SINGLE_SUCCESS;
+        }
+
+        // 检测与其他点位距离（32格限制）
+        String distanceError = checkDistance(data.pos, "food");
+        if (distanceError != null) {
+            wkError(distanceError);
+            wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
             return SINGLE_SUCCESS;
         }
 
@@ -207,13 +223,21 @@ public class WKCommand extends Command {
             return SINGLE_SUCCESS;
         }
 
+        // 检测与其他点位距离（32格限制）
+        String distanceError = checkDistance(data.pos, "afk");
+        if (distanceError != null) {
+            wkError(distanceError);
+            wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
+            return SINGLE_SUCCESS;
+        }
+
         DATA_STORE.put("afk", data);
         saveData();
 
         wkInfo("");
         wkInfo("§a§l✓ 绑定成功");
         wkInfo("  §d挂机修复点 §8→ §a" + data.describe());
-        wkInfo("  §7视角：Yaw=" + String.format("%.1f", yaw) + "° Pitch=" + String.format("%.1f", pitch) + "°");
+        wkInfo("  §7视角：偏航角=" + String.format("%.1f", yaw) + "° 俯仰角=" + String.format("%.1f", pitch) + "°");
         wkInfo("");
 
         return SINGLE_SUCCESS;
@@ -320,7 +344,7 @@ public class WKCommand extends Command {
             wkInfo("    §8├─ §7坐标: §a" + data.pos.getX() + ", " + data.pos.getY() + ", " + data.pos.getZ());
             wkInfo("    §8├─ §7维度: §b" + data.dimensionName());
             if (data.yaw != 0 || data.pitch != 0) {
-                wkInfo("    §8└─ §7视角: §eYaw=" + String.format("%.1f", data.yaw) + "° Pitch=" + String.format("%.1f", data.pitch) + "°");
+                wkInfo("    §8└─ §7视角: §e偏航角=" + String.format("%.1f", data.yaw) + "° 俯仰角=" + String.format("%.1f", data.pitch) + "°");
             } else {
                 wkInfo("    §8└─ §7类型: §e容器方块");
             }
@@ -331,6 +355,57 @@ public class WKCommand extends Command {
     // ═══════════════════════════════════════════════════════════════════
     //  辅助方法：目标检测与容器判定
     // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 检测新点位与已有点位的距离（32格限制）
+     * 检测所有已绑定点位 + 新点位之间的距离，任意两点超过32格则拦截
+     * 
+     * @param newPos 新点位坐标
+     * @param newKey 新点位键名（mineral/food/afk）
+     * @return 错误信息，距离合法时返回 null
+     */
+    private String checkDistance(BlockPos newPos, String newKey) {
+        // 构建临时完整点位集合（已有 + 新点位）
+        Map<String, BlockPos> allPositions = new HashMap<>();
+        for (Map.Entry<String, WKData> entry : DATA_STORE.entrySet()) {
+            allPositions.put(entry.getKey(), entry.getValue().pos);
+        }
+        allPositions.put(newKey, newPos);
+        
+        // 检测所有点位两两之间的距离
+        String[] keys = allPositions.keySet().toArray(new String[0]);
+        for (int i = 0; i < keys.length; i++) {
+            for (int j = i + 1; j < keys.length; j++) {
+                String key1 = keys[i];
+                String key2 = keys[j];
+                
+                BlockPos pos1 = allPositions.get(key1);
+                BlockPos pos2 = allPositions.get(key2);
+                
+                double distance = Math.sqrt(pos1.distSqr(pos2));
+                
+                if (distance > 32) {
+                    String name1 = switch (key1) {
+                        case "mineral" -> "矿物箱";
+                        case "food" -> "食物箱";
+                        case "afk" -> "挂机修复点";
+                        default -> key1;
+                    };
+                    
+                    String name2 = switch (key2) {
+                        case "mineral" -> "矿物箱";
+                        case "food" -> "食物箱";
+                        case "afk" -> "挂机修复点";
+                        default -> key2;
+                    };
+                    
+                    return String.format("%s 与 %s 距离超过 32 格（%.1f 格），三个点位必须互相在 32 格范围内", 
+                        name1, name2, distance);
+                }
+            }
+        }
+        return null;
+    }
 
     /**
      * 获取准星对准的方块位置
@@ -438,8 +513,21 @@ public class WKCommand extends Command {
      * @param key "mineral" / "food" / "afk"
      */
     public static void removeBinding(String key) {
+        WKCommand cmd = new WKCommand();
+        
         if (DATA_STORE.remove(key) != null) {
             saveData();
+            
+            String name = switch (key) {
+                case "mineral" -> "矿物箱";
+                case "food" -> "食物箱";
+                case "afk" -> "挂机修复点";
+                default -> key;
+            };
+            
+            cmd.wkInfo("§e已删除 " + name + " 绑定");
+        } else {
+            cmd.wkError("该坐标本来就没有绑定");
         }
     }
 

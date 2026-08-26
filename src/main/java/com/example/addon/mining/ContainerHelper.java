@@ -201,7 +201,7 @@ public final class ContainerHelper {
 
         Inventory inventory = mc.player.getInventory();
 
-        // 简化实现：直接调用 Meteor 的 InvUtils
+        // 扫描背包侧槽位，找到矿物后 Shift 点击
         for (Slot slot : menu.slots) {
             if (slot.container != inventory) continue;
 
@@ -212,8 +212,9 @@ public final class ContainerHelper {
             if (itemId.contains("ore") || itemId.contains("raw_") || 
                 itemId.contains("diamond") || itemId.contains("emerald")) {
                 
-                // 使用 shift 点击转移
-                mc.gameMode.handleInventoryButtonClick(menu.containerId, slot.index);
+                // 使用 QUICK_MOVE（Shift 点击）转移物品
+                mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, 
+                    net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, mc.player);
                 return true;
             }
         }
@@ -250,8 +251,9 @@ public final class ContainerHelper {
             // 判断是否为食物（检查 FOOD 组件）
             var foodComp = stack.get(DataComponents.FOOD);
             if (foodComp != null) {
-                // 使用 shift 点击转移
-                mc.gameMode.handleInventoryButtonClick(menu.containerId, slot.index);
+                // 使用 QUICK_MOVE（Shift 点击）转移食物
+                mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, 
+                    net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, mc.player);
                 return true;
             }
         }

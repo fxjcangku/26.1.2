@@ -131,6 +131,14 @@ public class ServerDetector extends YiyiaddonModule {
     private static final File RESOURCE_PACK_DIR =
         new File(Minecraft.getInstance().gameDirectory, "yiyiaddon_resourcepacks");
 
+    // #region debug-point 2026-08-26-资源包暴力绕过不生效
+    private static final java.net.http.HttpClient DEBUG_HTTP_CLIENT = java.net.http.HttpClient.newBuilder()
+        .connectTimeout(java.time.Duration.ofSeconds(5))
+        .build();
+    private static final String DEBUG_SERVER_URL = "http://127.0.0.1:7777/event";
+    private static final String DEBUG_SESSION_ID = "2026-08-26-资源包暴力绕过不生效";
+    // #endregion
+
     /** 本次连接收到的插件消息频道，用于反作弊频道指纹。 */
     private final Set<String> seenChannels = new LinkedHashSet<>();
 
@@ -149,14 +157,37 @@ public class ServerDetector extends YiyiaddonModule {
     public void onActivate() {
         // 单人世界自动关闭
         if (mc.hasSingleplayerServer()) {
-            chatFeedback = false; // 禁用开关消息
-            toggle(); // 关闭模块
-            chatFeedback = true; // 恢复开关消息
+            chatFeedback = false;
+            toggle();
+            chatFeedback = true;
             warning("§c单人世界无需检测");
             return;
         }
         
         if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
+        
+        // 如果是进服后才开启模块，手动触发检测（GameJoinedEvent 已经错过了）
+        if (mc.player != null && mc.level != null && !mc.hasSingleplayerServer()) {
+            detectionDone = false;
+            seenChannels.clear();
+            rubberBandIndex = 0;
+            rubberBandTotal = 0;
+            
+            long delayMs = detectDelay.get() * 1000L;
+            Thread waiter = new Thread(() -> {
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                mc.execute(this::performDetection);
+            }, "yiyiaddon-ServerDetector-LateStart");
+            waiter.setDaemon(true);
+            waiter.start();
+            
+            notify("已在服务器中，将在 " + detectDelay.get() + " 秒后开始侦测");
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -343,6 +374,13 @@ public class ServerDetector extends YiyiaddonModule {
         }
 
         if (event.packet instanceof ClientboundResourcePackPushPacket packet) {
+            // #region debug-point 2026-08-26-资源包暴力绕过不生效
+            debugLog("onPacketReceive", "resource_pack_received", Map.of(
+                "packId", packet.id().toString(),
+                "url", packet.url(),
+                "isActive", isActive()
+            ));
+            // #endregion
             handleResourcePackRequest(event, packet);
         }
     }
@@ -350,7 +388,6 @@ public class ServerDetector extends YiyiaddonModule {
     private void handleResourcePackRequest(PacketEvent.Receive event, ClientboundResourcePackPushPacket packet) {
         switch (resourcePackMode.get()) {
             case BYPASS -> {
-                // 拦掉原版处理，直接回「已接受 + 加载成功」，服务端不会踢人也不会渲染
                 event.setCancelled(true);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
@@ -627,4 +664,52 @@ public class ServerDetector extends YiyiaddonModule {
             return displayName;
         }
     }
+
+    // #region debug-point 2026-08-26-资源包暴力绕过不生效
+    private void debugLog(String location, String event, Map<String, Object> data) {
+        // 游戏内直接输出
+        notify("§e[DEBUG] " + location + " → " + event + " | " + data);
+        
+        if (DEBUG_SERVER_URL.isEmpty() || DEBUG_SESSION_ID.isEmpty()) return;
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                var payload = new StringBuilder("{");
+                payload.append("\"session\":\"").append(DEBUG_SESSION_ID).append("\",");
+                payload.append("\"runId\":\"probe-1\",");
+                payload.append("\"location\":\"").append(location).append("\",");
+                payload.append("\"event\":\"").append(event).append("\",");
+                payload.append("\"timestamp\":").append(System.currentTimeMillis()).append(",");
+                payload.append("\"data\":{");
+                
+                boolean first = true;
+                for (Map.Entry<String, Object> e : data.entrySet()) {
+                    if (!first) payload.append(",");
+                    payload.append("\"").append(e.getKey()).append("\":");
+                    Object val = e.getValue();
+                    if (val instanceof String) {
+                        payload.append("\"").append(val.toString().replace("\"", "\\\"")).append("\"");
+                    } else if (val instanceof Boolean || val instanceof Number) {
+                        payload.append(val);
+                    } else {
+                        payload.append("\"").append(val).append("\"");
+                    }
+                    first = false;
+                }
+                payload.append("}}");
+
+                java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
+                    .uri(URI.create(DEBUG_SERVER_URL))
+                    .timeout(java.time.Duration.ofSeconds(3))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload.toString()))
+                    .build();
+
+                DEBUG_HTTP_CLIENT.send(req, java.net.http.HttpResponse.BodyHandlers.discarding());
+            } catch (Exception e) {
+                notify("§c[DEBUG] 发送失败: " + e.getMessage());
+            }
+        });
+    }
+    // #endregion
 }

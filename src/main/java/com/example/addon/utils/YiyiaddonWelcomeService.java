@@ -248,21 +248,22 @@ public final class YiyiaddonWelcomeService {
         
         for (String line : lines) {
             line = line.trim();
-            // 跳过 Markdown 标题、分隔线、空行
-            if (line.isEmpty() || line.startsWith("#") || line.startsWith("---") || line.startsWith("**")) {
+            // 跳过 Markdown 标题、分隔线、引用块、空行、编号列表（安装说明）
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("---") 
+                || line.startsWith("**") || line.startsWith(">") 
+                || line.matches("^\\d+\\..*")) {
                 continue;
             }
             
-            // 提取列表项或普通文本
+            // 只提取无序列表项（- 或 *）
             if (line.startsWith("-") || line.startsWith("*")) {
                 line = line.substring(1).trim();
-            }
-            
-            preview.append(line).append("\n");
-            count++;
-            
-            if (count >= maxLines) {
-                break;
+                preview.append(line).append("\n");
+                count++;
+                
+                if (count >= maxLines) {
+                    break;
+                }
             }
         }
         

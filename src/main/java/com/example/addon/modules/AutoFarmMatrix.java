@@ -1193,13 +1193,20 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  点位设置卡片区（三列布局）
             // ═══════════════════════════════════════════════════════════════════
+            //  点位设置卡片区（两列布局）
+            // ═══════════════════════════════════════════════════════════════
+            
+            // 创建两列容器
+            WTable cardRow = theme.table();
             
             // 卸货箱卡片
-            buildLocationCard(theme, table, "卸货箱", "dump");
+            buildLocationCard(theme, cardRow, "卸货箱", "dump");
             
             // 补货箱卡片
-            buildLocationCard(theme, table, "补货箱", "supply");
+            buildLocationCard(theme, cardRow, "补货箱", "supply");
             
+            // 将两列容器加入主表格
+            table.add(cardRow).expandX();
             table.row();
         },
             new String[]{
@@ -1311,13 +1318,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         WButton setBtn = theme.button(com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a设置" : "§c设置");
         setBtn.action = () -> {
             boolean success = com.example.addon.commands.NongChangCommand.setBinding(key);
-            if (!success) {
-                // 设置失败（目标不是容器），关闭GUI
-                if (mc.screen != null) {
-                    mc.screen.onClose();
-                }
-            } else {
-                notify("§a设置成功，重新打开配置页面可看到更新");
+            // 设置成功或失败都关闭GUI
+            if (mc.screen != null) {
+                mc.screen.onClose();
             }
         };
         card.add(setBtn).minWidth(80).expandWidgetX();
@@ -1327,7 +1330,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         WButton delBtn = theme.button("§7删除");
         delBtn.action = () -> {
             com.example.addon.commands.NongChangCommand.removeBinding(key);
-            notify("§e已删除 " + title + " 绑定");
+            // 删除后关闭GUI
+            if (mc.screen != null) {
+                mc.screen.onClose();
+            }
         };
         card.add(delBtn).minWidth(80).expandWidgetX();
         card.row();

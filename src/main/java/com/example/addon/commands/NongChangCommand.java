@@ -328,6 +328,10 @@ public class NongChangCommand extends Command {
      * 删除绑定（供模块按钮调用）
      * @param key "dump" / "supply"
      */
+    /**
+     * 删除绑定（供模块按钮调用）
+     * @param key "dump" / "supply"
+     */
     public static void removeBinding(String key) {
         NongChangCommand cmd = new NongChangCommand();
         AutoFarmMatrix module = cmd.module();
@@ -340,7 +344,13 @@ public class NongChangCommand extends Command {
         };
         
         if (type != null) {
-            cmd.unbind(type);
+            // 直接删除，不调用 unbind()（避免重复消息）
+            if (module.site(type) == null) {
+                cmd.farmError(type.cn() + "本来就没有绑定");
+            } else {
+                module.clearSite(type);
+                cmd.farmInfo("§e已删除 " + type.cn() + " 绑定");
+            }
         }
     }
 
