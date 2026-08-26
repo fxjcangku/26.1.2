@@ -81,6 +81,7 @@ public final class PinkThemeModule extends YiyiaddonModule {
     private void restoreDefault() {
         if (!(GuiThemes.get() instanceof MeteorGuiTheme theme)) return;
 
+        // 普通颜色设置（SettingColor）
         theme.accentColor.reset();
         theme.checkboxColor.reset();
         theme.plusColor.reset();
@@ -97,7 +98,17 @@ public final class PinkThemeModule extends YiyiaddonModule {
         theme.separatorEdges.reset();
         theme.sliderLeft.reset();
         theme.sliderRight.reset();
+        
+        // ThreeStateColorSetting 类型（需要通过 .get() 访问 SettingColor）
+        // 这些字段没有 reset() 方法，需要手动设置为 Meteor 默认值
+        theme.backgroundColor.get().set(13, 17, 23, 255);      // Meteor 默认背景色
+        theme.outlineColor.get().set(0, 0, 0, 255);            // Meteor 默认边框色
+        theme.scrollbarColor.get().set(145, 61, 226, 255);     // Meteor 默认滚动条色（紫色）
+        theme.sliderHandle.get().set(145, 61, 226, 255);       // Meteor 默认滑块把手色（紫色）
+        
+        // HUD 文字颜色
         Hud.get().textColors.reset();
+        
         GuiThemes.save();
     }
 

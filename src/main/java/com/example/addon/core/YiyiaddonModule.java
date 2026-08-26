@@ -54,6 +54,26 @@
 //   - 标注风险点、兼容性、性能影响
 //   - 状态机/异步/发包必须注释意图
 //   - 拒绝废话注释（如"获取XXX""设置XXX"）
+//
+// 启动播报规范（2026-08-26 新增）：
+//   ✓ 所有需要配置的模块（自动挖矿/自动农场等）必须在 onActivate() 里播报关键配置
+//   ✓ 只报影响本次运行的关键项，不把整个设置面板念一遍，避免聊天栏刷屏
+//   ✓ 播报内容包括：目标选择、模式选择、触发阈值、维度检查（若适用）
+//   ✓ 用 highlightText/Server/Location/Command 强调关键值，让用户一眼确认配置
+//   ✓ 维度不匹配时用 notifyError() 警告用户（如主世界矿跑下界、下界矿跑主世界）
+//   ✓ 把播报逻辑抽成 reportStartupInfo() 私有方法，保持 onActivate() 清晰
+//   ✓ 参考：AutoMinerModule.reportStartupInfo() 和 AutoFarmMatrix.reportStartupInfo()
+//
+// 点位绑定覆盖保护规范（2026-08-26 新增）：
+//   ✓ 所有点位绑定操作（箱子/坐标/站位）必须加覆盖保护：已有绑定不允许直接覆盖
+//   ✓ 用户尝试覆盖已有绑定时，必须拦截并提示删除指令（如 .wk remove 矿物箱）
+//   ✓ 防止误操作：手滑点错按钮/输错指令不会把已经跑了一半的点位覆盖掉
+//   ✓ 覆盖检测必须在执行绑定操作之前，检测到已有绑定立即返回失败
+//   ✓ GUI 按钮调用时返回 false 触发 screen.close()，指令调用时显示错误提示
+//   ✓ 适用范围：自动挖矿（矿物箱/食物箱/挂机修复点）、自动农场（起点/终点/卸货箱/补货箱）
+//   ✓ 参考实现：WKCommand.bindMineralChest/bindFoodChest/bindAFKPoint 的覆盖检测
+//   ✓ 参考实现：NongChangCommand.bind() 方法内的 module.getSite(type) != null 检测
+
 
 package com.example.addon.core;
 

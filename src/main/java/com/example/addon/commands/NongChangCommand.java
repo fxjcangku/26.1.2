@@ -152,6 +152,13 @@ public class NongChangCommand extends Command {
             return SINGLE_SUCCESS;
         }
 
+        // 覆盖保护：已有绑定必须先删除
+        if (module.site(type) != null) {
+            farmError(type.cn() + "已绑定，请先删除旧绑定再重新设置");
+            farmInfo("§7提示：使用 §e.farm remove " + type.cn() + " §7删除");
+            return SINGLE_SUCCESS;
+        }
+
         BlockPos target = targetBlock();
         if (target == null) {
             farmError("准星未对准任何方块，请将准星对准要绑定的方块");
@@ -261,6 +268,85 @@ public class NongChangCommand extends Command {
         if (clean.isEmpty()) return;
         mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("自动农场", "§6§l" + message)));
     }
+
+    /**
+     * 获取绑定状态（供模块调用）
+     * @param key "dump" / "supply"
+     * @return true = 已绑定，false = 未绑定
+     */
+    public static boolean hasBinding(String key) {
+        AutoFarmMatrix module = Modules.get().get(AutoFarmMatrix.class);
+        if (module == null) return false;
+        
+        SiteType type = switch (key) {
+            case "dump" -> SiteType.DUMP;
+            case "supply" -> SiteType.SUPPLY;
+            default -> null;
+        };
+        
+        if (type == null) return false;
+        return module.site(type) != null;
+    }
+
+    /**
+     * 设置绑定（供模块按钮调用）
+     * @param key "dump" / "supply"
+     * @return true = 设置成功，false = 设置失败（需关闭GUI）
+     */
+    public static boolean setBinding(String key) {
+        NongChangCommand cmd = new NongChangCommand();
+        AutoFarmMatrix module = cmd.module();
+        if (module == null) {
+            cmd.farmError("自动农场模块未加载");
+            return false;
+        }
+        
+        SiteType type = switch (key) {
+            case "dump" -> SiteType.DUMP;
+            case "supply" -> SiteType.SUPPLY;
+            default -> null;
+        };
+        
+        if (type == null) return false;
+        
+        // 检查目标方块
+        BlockPos target = cmd.targetBlock();
+        if (target == null) {
+            cmd.farmError("准星未对准任何方块，请重新设置");
+            return false;
+        }
+        if (!cmd.isContainer(target)) {
+            cmd.farmError("目标方块不是容器（箱子/桶/潜影盒等），请重新设置");
+            return false;
+        }
+        
+        cmd.bind(type);
+        return true;
+    }
+
+    /**
+     * 删除绑定（供模块按钮调用）
+     * @param key "dump" / "supply"
+     */
+    public static void removeBinding(String key) {
+        NongChangCommand cmd = new NongChangCommand();
+        AutoFarmMatrix module = cmd.module();
+        if (module == null) return;
+        
+        SiteType type = switch (key) {
+            case "dump" -> SiteType.DUMP;
+            case "supply" -> SiteType.SUPPLY;
+            default -> null;
+        };
+        
+        if (type != null) {
+            cmd.unbind(type);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  私有辅助方法
+    // ═══════════════════════════════════════════════════════════════════
 
     private AutoFarmMatrix module() {
         AutoFarmMatrix module = Modules.get().get(AutoFarmMatrix.class);
