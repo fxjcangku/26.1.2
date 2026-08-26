@@ -6,17 +6,18 @@
  *
  * 为什么需要：26.1.2（1.21.11）之后 Mojang 官方映射有大量改名，
  * 很多 AI 和教程还在用 Yarn 名或旧官方名，直接抄会编译不过。
- * 本脚本以映射原文件为唯一事实来源，逐个核对，不靠记忆。
+ * 本脚本以本地 JAR 生成的类名索引为事实来源，逐个核对，不靠记忆。
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const 根目录 = path.join(__dirname, '..');
-const 原文件 = path.join(根目录, '官方映射原文件', 'client-1.21.11.txt');
+const 索引文件 = path.join(根目录, '生成的索引文件', '类名索引-26.1.2.txt');
 
-if (!fs.existsSync(原文件)) {
-    console.error(`找不到映射原文件：${原文件}`);
+if (!fs.existsSync(索引文件)) {
+    console.error(`找不到类名索引：${索引文件}`);
+    console.error('请先运行 node Mappings/工具/从MinecraftJAR生成索引.js');
     process.exit(1);
 }
 
@@ -24,9 +25,9 @@ if (!fs.existsSync(原文件)) {
 const 全名集合 = new Set();
 const 简名映射 = new Map();
 
-for (const 行 of fs.readFileSync(原文件, 'utf8').split('\n')) {
-    if (行.startsWith(' ') || 行.startsWith('#') || !行.includes(' -> ')) continue;
-    const 完整名 = 行.split(' -> ')[0].trim();
+for (const 行 of fs.readFileSync(索引文件, 'utf8').split('\n')) {
+    if (行.startsWith('#') || !行.trim()) continue;
+    const 完整名 = 行.trim();
     if (!完整名.startsWith('net.minecraft.')) continue;
     全名集合.add(完整名);
     const 简名 = 完整名.split('.').pop();
@@ -114,7 +115,7 @@ const 输出 =
 `# 26.1.2 易错 API 对照表（Yarn / 旧官方名 → 26.1.2 官方映射）
 #
 # 版本：Minecraft 26.1.2（内部版本号 1.21.11）
-# 事实来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 事实来源：Mappings/类名索引-26.1.2.txt（由本地 Minecraft JAR 生成）
 # 生成命令：node Mappings/工具/验证易错API.js
 #
 # 图例：
@@ -131,6 +132,6 @@ const 输出 =
 ${结果行.join('\n')}
 `;
 
-fs.writeFileSync(path.join(根目录, '易错对照表-26.1.2.txt'), 输出, 'utf8');
+fs.writeFileSync(path.join(根目录, '生成的索引文件', '易错对照表-26.1.2.txt'), 输出, 'utf8');
 console.log(`已改名 ${已改名数} 个，未改名 ${未改名数} 个，待复查 ${待查数} 个`);
 console.log('输出：Mappings/易错对照表-26.1.2.txt');

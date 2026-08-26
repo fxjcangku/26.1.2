@@ -28,6 +28,9 @@ public final class YiyiaddonWelcomeService {
     private static final Pattern BODY_PATTERN = Pattern.compile("\"body\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern RELEASE_URL_PATTERN = Pattern.compile("\"html_url\"\\s*:\\s*\"([^\"]+)\"");
     
+    // 用户统计 API（部署在 Cloudflare Workers）
+    private static final String STATS_API_URL = "https://yiyiaddon-stats.你的域名.workers.dev/api/register";
+    
     // 更新检查配置
     private static final long CHECK_INTERVAL_HOURS = 24; // 每天检查一次
     private static final Path LAST_CHECK_FILE = Paths.get(FabricLoader.getInstance().getConfigDir().toString(), "yiyiaddon-last-check.txt");
@@ -54,6 +57,9 @@ public final class YiyiaddonWelcomeService {
         mc.player.sendSystemMessage(Component.literal(
             YiyiaddonModule.formatMessage("欢迎", "§f本扩展免费 为爱发电")
         ));
+
+        // 用户统计：发送到 Cloudflare Workers 并显示排名
+        registerUserAndShowRank();
 
         // 检查是否需要更新检查（频率控制）
         if (!shouldCheckUpdate()) {
@@ -271,6 +277,87 @@ public final class YiyiaddonWelcomeService {
         }
     }
 
-    private record ReleaseInfo(String version, String url, String body) {
+    /**
+     * 注册用户并显示排名
+     * 发送玩家 UUID、游戏名、扩展版本、MC版本到统计服务器
+     * 返回玩家排名并在公屏显示
+     */
+    private static void registerUserAndShowRank() {
+        new Thread(() -> {
+            try {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.player == null) return;
+
+                String uuid = mc.player.getUUID().toString();
+                String name = mc.player.getName().getString();
+                String version = getCurrentVersion();
+                String mcVersion = mc.getVersionType();
+
+                // 构造 JSON 请求体
+                String json = String.format(
+                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\"}",
+                    uuid, name, version, mcVersion
+                );
+
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(STATS_API_URL))
+                    .timeout(Duration.ofSeconds(8))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+
+                HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                    HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    String body = response.body();
+                    
+                    // 解析返回的排名和总用户数
+                    Matcher rankMatcher = Pattern.compile("\"rank\":(\\d+)").matcher(body);
+                    Matcher totalMatcher = Pattern.compile("\"total_users\":(\\d+)").matcher(body);
+                    Matcher isNewMatcher = Pattern.compile("\"is_new_user\":(true|false)").matcher(body);
+                    
+                    if (rankMatcher.find() && totalMatcher.find() && isNewMatcher.find()) {
+                        int rank = Integer.parseInt(rankMatcher.group(1));
+                        int total = Integer.parseInt(totalMatcher.group(1));
+                        boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
+                        
+                        // 在公屏显示排名信息
+                        if (mc.player != null) {
+                            mc.player.sendSystemMessage(Component.literal(
+                                "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                            ));
+                            
+                            if (isNew) {
+                                mc.player.sendSystemMessage(Component.literal(
+                                    YiyiaddonModule.formatMessage("统计", 
+                                        "§f" + name + " §e你是第 §6§l" + rank + " §e个使用该扩展的玩家 §a§l✓")
+                                ));
+                            } else {
+                                mc.player.sendSystemMessage(Component.literal(
+                                    YiyiaddonModule.formatMessage("统计", 
+                                        "§f欢迎回来 " + name + "§f！你是第 §6§l" + rank + " §f个使用该扩展的玩家")
+                                ));
+                            }
+                            
+                            mc.player.sendSystemMessage(Component.literal(
+                                YiyiaddonModule.formatMessage("统计", 
+                                    "§f当前已有 §b§l" + total + " §f位玩家使用该扩展")
+                            ));
+                            
+                            mc.player.sendSystemMessage(Component.literal(
+                                "§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                            ));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // 静默失败，不影响游戏体验
+                // 即使统计服务器挂了，玩家也能正常使用扩展
+            }
+        }, "yiyiaddon-user-register").start();
+    }
+
+    private static record ReleaseInfo(String version, String url, String body) {
     }
 }

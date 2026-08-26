@@ -3,7 +3,7 @@
  *
  * 用法：node Mappings/工具/生成分类速查表.js
  *
- * 输入：Mappings/官方映射原文件/client-1.21.11.txt
+ * 输入：Mappings/类名索引-26.1.2.txt
  * 输出：Mappings/分类速查/*.txt   按功能域拆分，每个文件带中文用途注释
  *
  * 为什么要分类：类名索引有 9848 条，平铺查不动。
@@ -14,11 +14,11 @@ const fs = require('fs');
 const path = require('path');
 
 const 根目录 = path.join(__dirname, '..');
-const 原文件 = path.join(根目录, '官方映射原文件', 'client-1.21.11.txt');
+const 索引文件 = path.join(根目录, '生成的索引文件', '类名索引-26.1.2.txt');
 const 输出目录 = path.join(根目录, '分类速查');
 
-if (!fs.existsSync(原文件)) {
-    console.error(`找不到映射原文件：${原文件}\n请先按 Mappings/说明.md 下载。`);
+if (!fs.existsSync(索引文件)) {
+    console.error(`找不到类名索引：${索引文件}\n请先运行 node Mappings/工具/从MinecraftJAR生成索引.js。`);
     process.exit(1);
 }
 
@@ -103,11 +103,11 @@ const 分类规则 = [
 
 // 读取并分类
 const 全部类名 = [];
-const 内容 = fs.readFileSync(原文件, 'utf8').split('\n');
+const 内容 = fs.readFileSync(索引文件, 'utf8').split('\n');
 
 for (const 行 of 内容) {
-    if (行.startsWith(' ') || 行.startsWith('#') || !行.includes(' -> ')) continue;
-    const 完整名 = 行.split(' -> ')[0].trim();
+    if (行.startsWith('#') || !行.trim()) continue;
+    const 完整名 = 行.trim();
     if (完整名.startsWith('net.minecraft.')) 全部类名.push(完整名);
 }
 
@@ -128,7 +128,7 @@ for (const 规则 of 分类规则) {
         `# 用途：${规则.说明}\n` +
         `# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射\n` +
         `# 数量：${命中.length} 个类（已排除内部类）\n` +
-        `# 来源：Mappings/官方映射原文件/client-1.21.11.txt\n` +
+        `# 来源：Mappings/类名索引-26.1.2.txt\n` +
         `# 生成：node Mappings/工具/生成分类速查表.js\n` +
         `#\n` +
         `# 这些是 26.1.2 里真实存在的类，可直接 import。\n` +

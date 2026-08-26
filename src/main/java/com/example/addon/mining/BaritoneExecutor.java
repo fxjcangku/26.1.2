@@ -20,6 +20,7 @@ import java.util.List;
  * · 封装 BaritoneAPI 的 #mine 调用
  * · 寻路异常处理（找不到目标、原地滞留）
  * · 地形防卡死心跳（3分钟位移<5格判定卡死）
+ * · 种子挖矿过滤（只挖预测位置的矿石）
  */
 public final class BaritoneExecutor {
 
@@ -56,8 +57,13 @@ public final class BaritoneExecutor {
                 return;
             }
 
-            // 获取方块的 Registry ID
-            String blockId = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(target).toString();
+        // 种子挖矿模式：启用位置过滤
+        if (module.isSeedMiningEnabled()) {
+            module.info("§e种子模式已启用，只挖预测位置的矿石");
+        }
+
+        // 获取方块的 Registry ID
+        String blockId = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(target).toString();
 
             // 调用 Baritone 的 mine 命令
             baritone.getCommandManager().execute("mine " + blockId);
@@ -93,6 +99,23 @@ public final class BaritoneExecutor {
         } catch (Throwable e) {
             disabled = true;
         }
+    }
+
+    /**
+     * 检查玩家视线瞄准的方块是否在预测位置内
+     * 用于种子挖矿模式的运行时过滤
+     * 
+     * @param targetPos 玩家瞄准的方块位置
+     * @return true表示允许挖掘，false表示阻止挖掘
+     */
+    public boolean isAllowedToMine(BlockPos targetPos) {
+        // 非种子挖矿模式，全部允许
+        if (!module.isSeedMiningEnabled()) {
+            return true;
+        }
+
+        // 种子挖矿模式，只允许挖预测位置的矿石
+        return module.getOrePredictor().isPredictedOreAt(targetPos);
     }
 
     /**

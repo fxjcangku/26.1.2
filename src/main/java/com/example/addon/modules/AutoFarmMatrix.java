@@ -9,6 +9,8 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
@@ -17,6 +19,7 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -394,7 +397,77 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             notifyError("Baritone 不可用，蛇形巡逻已跳过，只收站着够得到的");
         }
 
-        notify("§a已启动，当前状态：" + state.cn());
+        reportStartupInfo();
+    }
+
+    /**
+     * 启动播报：让用户一眼确认这次跑的是什么配置
+     *
+     * 只报会影响本次结果的关键项（作物、物流、安全），
+     * 不把整个设置面板念一遍，否则聊天栏刷屏反而看不清。
+     */
+    private void reportStartupInfo() {
+        notify("§a已启动，开始农场循环");
+
+        // 作物统计与种子显示
+        Set<CropProfile> enabled = getEnabledCrops();
+        if (!enabled.isEmpty()) {
+            StringBuilder crops = new StringBuilder();
+            StringBuilder seeds = new StringBuilder();
+            int count = 0;
+            for (CropProfile profile : enabled) {
+                if (count >= 3) break;
+                if (count > 0) {
+                    crops.append("§f、");
+                    seeds.append("§f、");
+                }
+                crops.append(highlightText(profile.displayName()));
+                // 只有需要种子的作物才显示种子
+                if (profile.needsSeed()) {
+                    String seedName = profile.displayName() + "种子";
+                    seeds.append(highlightText(seedName));
+                }
+                count++;
+            }
+            if (enabled.size() > 3) {
+                crops.append("§f 等 ").append(highlightText(String.valueOf(enabled.size()))).append("§f 种");
+            }
+            notify("§f收割作物：" + crops);
+            
+            // 只有存在需要种子的作物时才显示种子行
+            boolean hasSeededCrops = enabled.stream().anyMatch(CropProfile::needsSeed);
+            if (hasSeededCrops) {
+                notify("§f补种种子：" + seeds);
+            }
+        }
+
+        // 农田范围
+        FarmSite start = site(SiteType.START);
+        FarmSite end = site(SiteType.END);
+        if (start != null && end != null) {
+            BlockPos p1 = start.pos();
+            BlockPos p2 = end.pos();
+            int rangeX = Math.abs(p2.getX() - p1.getX()) + 1;
+            int rangeZ = Math.abs(p2.getZ() - p1.getZ()) + 1;
+            notify("§f农田范围：" + highlightText(rangeX + "×" + rangeZ));
+        }
+
+        // 蛇形巡逻
+        if (serpentinePatrol.get() && FarmNav.available()) {
+            notify("§f巡逻模式：" + highlightText("蛇形巡逻") + "§f（Baritone 导航全农田）");
+        } else {
+            notify("§f巡逻模式：" + highlightText("站桩模式") + "§f（只收手够得到的）");
+        }
+
+        // 安全设置
+        if (fortuneLock.get()) {
+            notify("§f时运保护：" + highlightText("已启用") + "§f（耐久 < " 
+                + highlightText(String.valueOf(fortuneLockThreshold.get())) + " 停止作业）");
+        }
+
+        // 触发阈值
+        notify("§f卸货阈值：" + highlightText(unloadThreshold.get() + " 组")
+            + "§f · 种子安全库存：" + highlightText(seedSafetyStock.get() + " 组"));
     }
 
     @Override
@@ -1116,7 +1189,19 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        return buildInfoWidget(theme,
+        return buildInfoWidget(theme, table -> {
+            // ═══════════════════════════════════════════════════════════════════
+            //  点位设置卡片区（三列布局）
+            // ═══════════════════════════════════════════════════════════════════
+            
+            // 卸货箱卡片
+            buildLocationCard(theme, table, "卸货箱", "dump");
+            
+            // 补货箱卡片
+            buildLocationCard(theme, table, "补货箱", "supply");
+            
+            table.row();
+        },
             new String[]{
                 "§l自动农场 · 使用说明"
             },
@@ -1125,18 +1210,27 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 "§f  1. 建好农田（耕地或对应底盘），规划好起点和终点坐标",
                 "§f  2. 放置卸货箱（接漏斗走物流）和补货箱（装种子）",
                 "§f  3. 在配置页面勾选要种的作物（双作物/单作物/柱状物/蔓生物）",
-                "§f  4. 用指令绑定四个锚点（起点、终点、卸货箱、补货箱）",
+                "§f  4. 配置页面顶部点击卡片按钮设置两个点位（卸货箱、补货箱）",
                 "§f  5. 主手拿时运工具（可选），背包准备好种子"
             },
             new String[]{
+                "§6§l▌ 点位设置（两种方式）",
+                "§f  · " + highlightText("方式1：配置页面按钮") + " — 打开配置页面 → 点击卡片中的设置按钮",
+                "§f    · 准星对准目标箱子后自动绑定",
+                "§f    · " + highlightText("颜色联动") + "：已设置=绿色按钮，未设置=红色按钮",
+                "§f  · " + highlightText("方式2：指令设置") + " — 使用 .farm / .nongchang 指令系统",
+                "§f    · " + highlightCommand(".farm set 起点") + " — 准星对准农田一角，绑定起点",
+                "§f    · " + highlightCommand(".farm set 终点") + " — 准星对准对角，绑定终点",
+                "§f    · " + highlightCommand(".farm set 卸货箱") + " — 准星对准箱子，绑定卸货箱",
+                "§f    · " + highlightCommand(".farm set 补货箱") + " — 准星对准箱子，绑定补货箱",
+                "§f  · " + highlightText("容器检测") + "：箱子类点位会自动检测目标是否为容器",
+                "§f    · 不是容器 → 自动关闭GUI并提示重新设置"
+            },
+            new String[]{
                 "§6§l▌ 指令系统",
-                "§f  · " + highlightCommand(".nongchang set 起点") + " — 准星对准农田一角，绑定起点",
-                "§f  · " + highlightCommand(".nongchang set 终点") + " — 准星对准对角，绑定终点",
-                "§f  · " + highlightCommand(".nongchang set 卸货箱") + " — 准星对准箱子，绑定卸货箱",
-                "§f  · " + highlightCommand(".nongchang set 补货箱") + " — 准星对准箱子，绑定补货箱",
-                "§f  · " + highlightCommand(".nongchang status") + " — 查看四个锚点的坐标和维度",
-                "§f  · " + highlightCommand(".nongchang remove 起点") + " — 解绑单个锚点",
-                "§f  · " + highlightCommand(".nongchang clear") + " — 一键清空所有锚点",
+                "§f  · " + highlightCommand(".farm status") + " — 查看四个锚点的坐标和维度",
+                "§f  · " + highlightCommand(".farm remove 起点") + " — 解绑单个锚点",
+                "§f  · " + highlightCommand(".farm clear") + " — 一键清空所有锚点",
                 "§f  · 支持中英文：" + highlightText("起点/start") + "、" + highlightText("终点/end") + "、" + highlightText("卸货箱/dump") + "、" + highlightText("补货箱/supply")
             },
             new String[]{
@@ -1194,5 +1288,55 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 "§f  · " + highlightText("防呆字牌") + "：卸货箱金色 [卸货总仓]，补货箱蓝色 [种子库]"
             }
         );
+    }
+
+    /**
+     * 构建点位设置卡片
+     * 卡片式布局，包含标题、设置按钮、删除按钮、状态显示
+     * 
+     * @param theme Meteor GUI 主题
+     * @param parentTable 父表格（横向三列排列）
+     * @param title 卡片标题（如"卸货箱"）
+     * @param key 绑定键名（"dump"/"supply"）
+     */
+    private void buildLocationCard(GuiTheme theme, WTable parentTable, String title, String key) {
+        // 创建卡片容器（垂直布局）
+        WTable card = theme.table();
+        
+        // 标题
+        card.add(theme.label("§l" + title)).expandX();
+        card.row();
+        
+        // 设置按钮（根据绑定状态改变颜色）
+        WButton setBtn = theme.button(com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a设置" : "§c设置");
+        setBtn.action = () -> {
+            boolean success = com.example.addon.commands.NongChangCommand.setBinding(key);
+            if (!success) {
+                // 设置失败（目标不是容器），关闭GUI
+                if (mc.screen != null) {
+                    mc.screen.onClose();
+                }
+            } else {
+                notify("§a设置成功，重新打开配置页面可看到更新");
+            }
+        };
+        card.add(setBtn).minWidth(80).expandWidgetX();
+        card.row();
+        
+        // 删除按钮
+        WButton delBtn = theme.button("§7删除");
+        delBtn.action = () -> {
+            com.example.addon.commands.NongChangCommand.removeBinding(key);
+            notify("§e已删除 " + title + " 绑定");
+        };
+        card.add(delBtn).minWidth(80).expandWidgetX();
+        card.row();
+        
+        // 状态显示
+        String status = com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a已设置" : "§c未设置";
+        card.add(theme.label(status)).expandX();
+        
+        // 将卡片加入父表格（横向排列）
+        parentTable.add(card).minWidth(100);
     }
 }

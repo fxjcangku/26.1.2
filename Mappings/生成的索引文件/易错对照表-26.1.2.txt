@@ -1,7 +1,7 @@
 # 26.1.2 易错 API 对照表（Yarn / 旧官方名 → 26.1.2 官方映射）
 #
 # 版本：Minecraft 26.1.2（内部版本号 1.21.11）
-# 事实来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 事实来源：Mappings/类名索引-26.1.2.txt（由本地 Minecraft JAR 生成）
 # 生成命令：node Mappings/工具/验证易错API.js
 #
 # 图例：
@@ -9,7 +9,7 @@
 #   =  名称未改变，可直接使用
 #   ?  需要人工复查
 #
-# 统计：已改名 28 个，未改名 11 个，待复查 0 个
+# 统计：已改名 27 个，未改名 11 个，待复查 1 个
 #
 # ⚠ 本项目使用 Mojang 官方映射，不是 Yarn。
 #   任何以 MinecraftClient / Text / NbtCompound / ResourceLocation 开头的代码
@@ -45,8 +45,7 @@ X  Hand                               不存在！请改用：net.minecraft.worl
    └─ 手（主手/副手）
 X  Box                                不存在！请改用：net.minecraft.world.phys.AABB
    └─ 碰撞箱
-X  DrawContext                        不存在！请改用：net.minecraft.client.gui.GuiGraphics
-   └─ GUI 绘制上下文
+?  DrawContext                        猜测的 GuiGraphics 在映射中未找到，需人工复查   GUI 绘制上下文
 =  Screen                             net.minecraft.client.gui.screens.Screen
    └─ 未改名，可直接使用。界面基类（未改名）
 =  ItemStack                          net.minecraft.world.item.ItemStack

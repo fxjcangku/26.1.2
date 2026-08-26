@@ -1,6 +1,8 @@
 package com.example.addon.modules;
 
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
+import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
 import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -9,17 +11,21 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
 
+import java.util.Set;
+
 /**
- * AutoMiner 2D ESP 渲染器
+ * AutoMiner ESP 渲染器
  * 
- * 独立类，负责渲染矿物箱/食物箱/挂机点的悬浮标签
+ * 功能：
+ * 1. 2D悬浮标签 - 矿物箱/食物箱/挂机点
+ * 2. 3D方块框线 - 种子预测的矿石位置
  */
 public class AutoMinerModule_ESP {
 
     private static final Minecraft mc = Minecraft.getInstance();
 
     /**
-     * 渲染 2D 悬浮标签
+     * 渲染 2D 悬浮标签（矿物箱/食物箱/挂机点）
      */
     public static void renderLabel(Render2DEvent event, BlockPos pos, String text, Color color, float userScale) {
         if (mc.player == null || mc.gameRenderer == null) return;
@@ -45,5 +51,55 @@ public class AutoMinerModule_ESP {
             TextRenderer.get().end();
             NametagUtils.end();
         }
+    }
+
+    /**
+     * 渲染 3D 方块框线（种子预测的矿石位置）
+     * 
+     * @param event 3D渲染事件
+     * @param predictedOres 预测的矿石位置集合
+     * @param color 渲染颜色
+     * @param lineWidth 线宽
+     */
+    public static void renderPredictedOres(Render3DEvent event, Set<BlockPos> predictedOres, Color color, double lineWidth) {
+        if (mc.player == null || predictedOres == null || predictedOres.isEmpty()) return;
+
+        for (BlockPos pos : predictedOres) {
+            // 只渲染视距内的矿石
+            double distSq = mc.player.blockPosition().distSqr(pos);
+            if (distSq > 128 * 128) continue;
+            
+            // 根据距离调整颜色透明度（近处更亮，远处更暗）
+            double distance = Math.sqrt(distSq);
+            int alpha = (int) Math.max(50, 255 - (distance / 128.0 * 200));
+            Color adjustedColor = new Color(color.r, color.g, color.b, alpha);
+            
+            // 渲染方块框线
+            event.renderer.box(pos, adjustedColor, adjustedColor, ShapeMode.Lines, 0);
+        }
+    }
+
+    /**
+     * 渲染单个方块的高亮框线（用于标记当前目标矿石）
+     * 
+     * @param event 3D渲染事件
+     * @param pos 方块位置
+     * @param color 渲染颜色
+     * @param pulse 是否启用脉冲效果
+     */
+    public static void renderTargetOre(Render3DEvent event, BlockPos pos, Color color, boolean pulse) {
+        if (mc.player == null || pos == null) return;
+
+        // 脉冲效果：颜色亮度随时间变化
+        int alpha = color.a;
+        if (pulse) {
+            long time = System.currentTimeMillis();
+            alpha = (int) (128 + Math.sin(time / 200.0) * 127);
+        }
+        
+        Color adjustedColor = new Color(color.r, color.g, color.b, alpha);
+        
+        // 渲染方块框线
+        event.renderer.box(pos, adjustedColor, adjustedColor, ShapeMode.Lines, 0);
     }
 }
