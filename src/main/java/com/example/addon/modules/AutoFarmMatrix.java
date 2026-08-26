@@ -1326,10 +1326,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             default -> "§f";
         };
         
-        // 物品图标 + 标题
-        ItemStack iconStack = new ItemStack(icon);
-        card.add(theme.item(iconStack)).center();
-        card.add(theme.label(titleColor + "§l" + title)).expandX();
+        // 标题（移除图标，直接显示文字）
+        card.add(theme.label(titleColor + "§l" + title)).expandX().center();
         card.row();
         
         // 设置按钮（根据绑定状态改变颜色）
