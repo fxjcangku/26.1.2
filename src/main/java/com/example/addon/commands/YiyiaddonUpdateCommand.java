@@ -31,7 +31,19 @@ public class YiyiaddonUpdateCommand extends Command {
         
         builder.then(literal("check").executes(context -> {
             updateInfo("§e正在检查更新...");
-            updateInfo("§7请稍等片刻");
+            
+            // 在后台线程执行检查
+            new Thread(() -> {
+                try {
+                    YiyiaddonWelcomeService.checkForUpdatesManually(mc, (result, message) -> {
+                        // 在主线程显示结果
+                        mc.execute(() -> updateInfo(message));
+                    });
+                } catch (Exception e) {
+                    mc.execute(() -> updateInfo("§c检查失败：" + e.getMessage()));
+                }
+            }, "yiyiaddon-manual-update-check").start();
+            
             return SINGLE_SUCCESS;
         }));
         

@@ -84,47 +84,8 @@ public final class YiyiaddonWelcomeService {
                 int comparison = compareVersions(currentVersion, latest.version);
                 
                 if (comparison < 0) {
-                    if (mc.player == null) return;
-                    
-                    // 更新提示（分割线样式）
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§3§m═══════════════════════════════════"
-                    ));
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§7发现§f§l新版本 §a§l" + latest.version + " §7当前 §e§l" + currentVersion
-                    ));
-                    
-                    // 显示更新内容前 3 行
-                    String preview = extractPreview(latest.body, 3);
-                    if (!preview.isEmpty()) {
-                        mc.player.sendSystemMessage(Component.literal(
-                            "§2§l更新内容："
-                        ));
-                        for (String line : preview.split("\n")) {
-                            mc.player.sendSystemMessage(Component.literal("§f" + line));
-                        }
-                        mc.player.sendSystemMessage(Component.literal(
-                            "§3§m───────────────────────────────────"
-                        ));
-                    }
-                    
-                    // 下载链接
-                    mc.player.sendSystemMessage(Component.literal("§2§l下载地址: ")
-                        .append(Component.literal("§b§n点击下载")
-                            .withStyle(style -> style
-                                .withClickEvent(new ClickEvent.OpenUrl(URI.create(latest.url)))
-                                .withHoverEvent(new HoverEvent.ShowText(
-                                    Component.literal("§7点击打开 GitHub Release\n§7下载最新版本")))
-                            )
-                        )
-                    );
-                    
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§7输入 §e§l.yiyiaddon skip §f§l跳过此版本"
-                    ));
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§3§m═══════════════════════════════════"
-                    ));
+                    // 在主线程显示更新提示
+                    showUpdateNotification(mc, currentVersion, latest);
                 }
                 
                 // 更新最后检查时间
@@ -134,6 +95,95 @@ public final class YiyiaddonWelcomeService {
                 // 静默失败，不影响游戏体验
             }
         }, "yiyiaddon-update-checker").start();
+    }
+
+    /**
+     * 手动检查更新（供指令调用）
+     * 
+     * @param mc Minecraft 实例
+     * @param callback 回调函数，参数：(成功/失败, 消息)
+     */
+    public static void checkForUpdatesManually(Minecraft mc, java.util.function.BiConsumer<Boolean, String> callback) {
+        String currentVersion = getCurrentVersion();
+        
+        try {
+            ReleaseInfo latest = fetchLatestRelease();
+            
+            if (latest == null) {
+                callback.accept(false, "§c未能获取最新版本信息（网络超时或 GitHub API 限流）");
+                return;
+            }
+            
+            // 检查是否跳过此版本
+            String skipVersion = loadSkipVersion();
+            if (skipVersion != null && skipVersion.equals(latest.version)) {
+                callback.accept(true, "§7当前版本：§e" + currentVersion + " §7最新版本：§a" + latest.version + " §7(已跳过)");
+                return;
+            }
+            
+            int comparison = compareVersions(currentVersion, latest.version);
+            
+            if (comparison < 0) {
+                callback.accept(true, "§a发现新版本 §f§l" + latest.version + " §7(当前 " + currentVersion + ")");
+                // 显示更新提示框
+                showUpdateNotification(mc, currentVersion, latest);
+            } else if (comparison == 0) {
+                callback.accept(true, "§a已是最新版本 §f§l" + currentVersion);
+            } else {
+                callback.accept(true, "§7当前版本：§e" + currentVersion + " §7最新版本：§a" + latest.version + " §7(开发版)");
+            }
+        } catch (Exception e) {
+            callback.accept(false, "§c检查失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 显示更新通知框
+     */
+    private static void showUpdateNotification(Minecraft mc, String currentVersion, ReleaseInfo latest) {
+        mc.execute(() -> {
+            if (mc.player == null) return;
+            
+            // 更新提示（分割线样式）
+            mc.player.sendSystemMessage(Component.literal(
+                "§3§m═══════════════════════════════════"
+            ));
+            mc.player.sendSystemMessage(Component.literal(
+                "§7发现§f§l新版本 §a§l" + latest.version + " §7当前 §e§l" + currentVersion
+            ));
+            
+            // 显示更新内容前 3 行
+            String preview = extractPreview(latest.body, 3);
+            if (!preview.isEmpty()) {
+                mc.player.sendSystemMessage(Component.literal(
+                    "§2§l更新内容："
+                ));
+                for (String line : preview.split("\n")) {
+                    mc.player.sendSystemMessage(Component.literal("§f" + line));
+                }
+                mc.player.sendSystemMessage(Component.literal(
+                    "§3§m───────────────────────────────────"
+                ));
+            }
+            
+            // 下载链接
+            mc.player.sendSystemMessage(Component.literal("§2§l下载地址: ")
+                .append(Component.literal("§b§n点击下载")
+                    .withStyle(style -> style
+                        .withClickEvent(new ClickEvent.OpenUrl(URI.create(latest.url)))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                            Component.literal("§7点击打开 GitHub Release\n§7下载最新版本")))
+                    )
+                )
+            );
+            
+            mc.player.sendSystemMessage(Component.literal(
+                "§7输入 §e§l.yiyiaddon skip §f§l跳过此版本"
+            ));
+            mc.player.sendSystemMessage(Component.literal(
+                "§3§m═══════════════════════════════════"
+            ));
+        });
     }
 
     private static boolean shouldCheckUpdate() {
@@ -268,7 +318,8 @@ public final class YiyiaddonWelcomeService {
             
             // 不过滤 prerelease，测试版也提示更新
             
-            String version = normalizeVersion(rawVersion);
+            // 保留完整版本号（包括 -beta 后缀），去掉 v 前缀
+            String version = rawVersion.replaceFirst("^[vV]", "");
             
             return new ReleaseInfo(version, url, body);
         } catch (Exception e) {
@@ -276,12 +327,51 @@ public final class YiyiaddonWelcomeService {
         }
     }
 
+    /**
+     * 比较两个版本号
+     * 支持语义化版本（1.2.3-beta4）
+     * 
+     * @return < 0 表示 current < latest（需要更新）
+     *         = 0 表示版本相同
+     *         > 0 表示 current > latest
+     */
     private static int compareVersions(String current, String latest) {
-        String normCurrent = normalizeVersion(current);
-        String normLatest = normalizeVersion(latest);
+        // 去掉 v 前缀
+        current = current.replaceFirst("^[vV]", "");
+        latest = latest.replaceFirst("^[vV]", "");
         
-        String[] leftParts = normCurrent.split("\\.");
-        String[] rightParts = normLatest.split("\\.");
+        // 分离主版本号和预发布标识
+        String[] currentParts = current.split("-", 2);
+        String[] latestParts = latest.split("-", 2);
+        
+        String currentMain = currentParts[0];
+        String latestMain = latestParts[0];
+        String currentPre = currentParts.length > 1 ? currentParts[1] : null;
+        String latestPre = latestParts.length > 1 ? latestParts[1] : null;
+        
+        // 先比较主版本号
+        int mainComparison = compareMainVersion(currentMain, latestMain);
+        if (mainComparison != 0) {
+            return mainComparison;
+        }
+        
+        // 主版本号相同，比较预发布标识
+        if (currentPre == null && latestPre == null) {
+            return 0; // 都是正式版，相同
+        } else if (currentPre != null && latestPre == null) {
+            return -1; // current 是测试版，latest 是正式版，current < latest
+        } else if (currentPre == null && latestPre != null) {
+            return 1; // current 是正式版，latest 是测试版，current > latest
+        } else {
+            // 都是测试版，比较预发布号
+            return currentPre.compareTo(latestPre);
+        }
+    }
+    
+    private static int compareMainVersion(String left, String right) {
+        String[] leftParts = left.split("\\.");
+        String[] rightParts = right.split("\\.");
+        
         int length = Math.max(leftParts.length, rightParts.length);
         
         for (int i = 0; i < length; i++) {
@@ -436,13 +526,6 @@ public final class YiyiaddonWelcomeService {
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§7当前已有 §2§l" + total + " §f§l位玩家使用"
                                         ));
-                                        
-                                        // 显示最近活跃信息
-                                        if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
-                                            mc.player.sendSystemMessage(Component.literal(
-                                                recentActivityInfo
-                                            ));
-                                        }
                                         
                                         // 底部分割线
                                         mc.player.sendSystemMessage(Component.literal(
