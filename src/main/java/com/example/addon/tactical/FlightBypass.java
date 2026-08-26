@@ -208,15 +208,27 @@ public class FlightBypass extends YiyiaddonModule {
      * 每N个tick发送一次onGround=true，伪装成"高频跳跃"
      */
     private void handleVanillaMimic() {
+        // 关键修复：实际控制Y轴速度让玩家飞起来
+        if (mc.options.keyJump.isDown()) {
+            Vec3 motion = mc.player.getDeltaMovement();
+            mc.player.setDeltaMovement(motion.x, 0.5, motion.z);
+        } else if (mc.options.keyShift.isDown()) {
+            Vec3 motion = mc.player.getDeltaMovement();
+            mc.player.setDeltaMovement(motion.x, -0.5, motion.z);
+        } else {
+            Vec3 motion = mc.player.getDeltaMovement();
+            mc.player.setDeltaMovement(motion.x, 0, motion.z);
+        }
+        
+        // 高频伪造 onGround 骗过反作弊
         int interval = (int) vanillaJumpInterval.get().doubleValue();
         if (tickCounter % interval == 0) {
-            // 发送带onGround=true的移动包
             Vec3 pos = mc.player.position();
             mc.player.connection.send(new ServerboundMovePlayerPacket.PosRot(
                 pos.x, pos.y, pos.z,
                 mc.player.getYRot(), mc.player.getXRot(),
-                true,  // onGround = true
-                false  // horizontalCollision = false
+                true,
+                false
             ));
         }
     }

@@ -56,7 +56,7 @@ public class NongChangCommand extends Command {
                 String icon = switch (type) {
                     case START -> "§a■";
                     case END -> "§e■";
-                    case UNLOADING -> "§6■";
+                    case DUMP -> "§6■";
                     case SUPPLY -> "§2■";
                 };
                 if (site == null) {

@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.Set;
 
 /**
@@ -147,13 +148,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("_ore") && !id.contains("nether") && !id.contains("ancient");
-            })
-            .onChanged(block -> {
-                if (!block.equals(Blocks.AIR)) {
-                    netherOreTarget.set(Blocks.AIR);
-                    blockTarget.set(Blocks.AIR);
-                }
-                updateOrePredictor();
             })
             .build());
 

@@ -126,7 +126,7 @@ public final class CommandManager {
 
         // 超时保护（使用动态设置的等待时长）
         if (executeTick > maxWaitTicks) {
-            info("§c[自动挖矿] 传送超时，重新RTP");
+            module.error("§c[自动挖矿] 传送超时，重新RTP");
             executing = false;
             // 标记需要重新传送
             module.requestRetryTeleport();

@@ -89,4 +89,25 @@ public class SoundNotifier {
             false
         );
     }
+    
+    /**
+     * 传送成功 - 提示音
+     */
+    public void notifyTeleportSuccess() {
+        playSound(1.2f);
+    }
+    
+    /**
+     * 开始挖矿 - 提示音
+     */
+    public void notifyMiningStart() {
+        playSound(1.0f);
+    }
+    
+    /**
+     * 工具耐久低 - 警告音
+     */
+    public void notifyLowDurability() {
+        playSound(0.7f);
+    }
 }

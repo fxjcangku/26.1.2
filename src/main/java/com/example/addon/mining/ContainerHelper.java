@@ -228,10 +228,8 @@ public final class ContainerHelper {
                 itemId.contains("coal") || itemId.contains("redstone") ||
                 itemId.contains("lapis") || itemId.contains("quartz")) {
                 
-                // 使用 QUICK_MOVE（Shift 点击）转移物品
-                mc.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, 
-                    net.minecraft.world.inventory.ClickType.QUICK_MOVE,
-                    mc.player);
+                // 使用 Shift+左键快速移动物品
+                InvUtils.shiftClick().slot(slot.index);
                 foundAny = true;
                 
                 // 每次只传输一个槽位，避免服务器延迟导致丢失
@@ -274,9 +272,8 @@ public final class ContainerHelper {
             // 判断是否为食物且在白名单内
             var foodComp = stack.get(DataComponents.FOOD);
             if (foodComp != null && whitelist.contains(stack.getItem())) {
-                // 使用 QUICK_MOVE（Shift 点击）转移1组食物
-                mc.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, 
-                    net.minecraft.world.inventory.ClickType.QUICK_MOVE, mc.player);
+                // 使用 Shift+左键快速移动食物
+                InvUtils.shiftClick().slot(slot.index);
                 return true;
             }
         }

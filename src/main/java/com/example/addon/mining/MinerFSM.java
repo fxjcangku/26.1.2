@@ -176,7 +176,7 @@ public final class MinerFSM {
 
         // 阶段 4：超时检测 - 如果超过设定时间还在原地，重新RTP
         if (stateTick > teleportTimeout) {
-            info("§c传送超时，重新尝试RTP");
+            module.error("§c传送超时，重新尝试RTP");
             stateTick = 0;
         }
     }
@@ -243,7 +243,7 @@ public final class MinerFSM {
 
         // 如果3分钟持续低速，判定为卡死
         if (lowSpeedTicks > STUCK_TIME_THRESHOLD) {
-            WKCommand.wkInfo("§c[自动挖矿] 检测到卡死（速度过低），重新RTP");
+            module.error("§c[自动挖矿] 检测到卡死（速度过低），重新RTP");
             module.getSoundNotifier().notifyStuck();
             module.getBaritone().stop();
             lowSpeedTicks = 0;
@@ -513,7 +513,7 @@ public final class MinerFSM {
         if (stateTick == 1) {
             tryMeteorAutoRespawn();
             module.getSoundNotifier().notifyDeath();
-            info("§c[自动挖矿] 已调用流星自动重生模块");
+            module.error("§c[自动挖矿] 已调用流星自动重生模块");
         }
 
         // 阶段 2：等待复活
@@ -651,7 +651,7 @@ public final class MinerFSM {
             case RESPAWN_WAIT -> "§6[状态] 复活完成，返回挂机点";
         };
         
-        WKCommand.wkInfo(message);
+        module.info(message);
     }
 
     private void smoothRotateTo(float targetYaw, float targetPitch) {

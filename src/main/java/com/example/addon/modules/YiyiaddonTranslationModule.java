@@ -6,10 +6,11 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
 
 public final class YiyiaddonTranslationModule extends YiyiaddonModule {
     
-    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 汉化设置", true);
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
     
     public final Setting<Boolean> simplifiedChinese = sgGeneral.add(new BoolSetting.Builder()
         .name("简体中文")

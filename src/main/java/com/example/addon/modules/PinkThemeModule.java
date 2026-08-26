@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 
@@ -17,7 +18,7 @@ import java.util.List;
 
 public final class PinkThemeModule extends YiyiaddonModule {
     
-    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 配色选择", true);
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
     
     private final Setting<Palette> palette = sgGeneral.add(new EnumSetting.Builder<Palette>()
         .name("选择颜色")

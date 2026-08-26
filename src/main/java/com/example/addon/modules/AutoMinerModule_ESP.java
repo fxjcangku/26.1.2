@@ -46,13 +46,11 @@ public class AutoMinerModule_ESP {
             // 获取维度名称
             String dimension = "§7(未知)";
             if (mc.level != null) {
-                String dimKey = mc.level.dimension().location().getPath();
-                dimension = switch (dimKey) {
-                    case "overworld" -> "§7(主世界)";
-                    case "the_nether" -> "§7(下界)";
-                    case "the_end" -> "§7(末地)";
-                    default -> "§7(" + dimKey + ")";
-                };
+                String dimKey = mc.level.dimension().toString();
+                if (dimKey.contains("overworld")) dimension = "§7(主世界)";
+                else if (dimKey.contains("nether")) dimension = "§7(下界)";
+                else if (dimKey.contains("end")) dimension = "§7(末地)";
+                else dimension = "§7(" + dimKey.substring(dimKey.lastIndexOf(':') + 1) + ")";
             }
             
             String distText = String.format("§8[%.0fm]", distance);

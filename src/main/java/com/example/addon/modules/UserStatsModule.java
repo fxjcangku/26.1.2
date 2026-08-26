@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.orbit.EventHandler;
 
 import java.net.URI;
@@ -36,7 +37,7 @@ public final class UserStatsModule extends YiyiaddonModule {
     //  设置项
     // ══════════════════════════════════════════════════════════════
     
-    private final SettingGroup sgGeneral = settings.createGroup("1️⃣ 统计设置", true);
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
     
     private final Setting<Integer> refreshInterval = sgGeneral.add(new IntSetting.Builder()
         .name("自动刷新间隔")
