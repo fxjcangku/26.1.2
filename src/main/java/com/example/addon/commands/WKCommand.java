@@ -46,11 +46,31 @@ import java.util.Map;
  */
 public class WKCommand extends Command {
 
-    private static final Path DATA_FILE = Paths.get("config", "yiyiaddon", "wk_data.json");
+    private static final Path CONFIG_DIR = Paths.get("config", "yiyiaddon", "wk");
     private static final Map<String, WKData> DATA_STORE = new HashMap<>();
+    private static String currentServer = null;
 
     static {
         loadData();
+    }
+    
+    /**
+     * 获取当前服务器标识符（用于文件名）
+     * 单人世界 → "singleplayer"
+     * 多人服务器 → IP地址（替换非法字符）
+     */
+    private static String getServerIdentifier() {
+        if (mc.getCurrentServer() != null) {
+            return mc.getCurrentServer().ip.replaceAll("[^a-zA-Z0-9._-]", "_");
+        }
+        return "singleplayer";
+    }
+    
+    /**
+     * 获取当前服务器的数据文件路径
+     */
+    private static Path getDataFile() {
+        return CONFIG_DIR.resolve(getServerIdentifier() + ".json");
     }
 
     public WKCommand() {
@@ -558,10 +578,12 @@ public class WKCommand extends Command {
     /**
      * 保存绑定数据到 JSON 文件
      * 格式：{ "mineral": {...}, "food": {...}, "afk": {...} }
+     * 每个服务器单独保存文件：config/yiyiaddon/wk/{serverip}.json
      */
     private static void saveData() {
         try {
-            Files.createDirectories(DATA_FILE.getParent());
+            Path dataFile = getDataFile();
+            Files.createDirectories(dataFile.getParent());
 
             StringBuilder json = new StringBuilder("{\n");
             int i = 0;
@@ -580,7 +602,7 @@ public class WKCommand extends Command {
             }
             json.append("}");
 
-            Files.writeString(DATA_FILE, json.toString());
+            Files.writeString(dataFile, json.toString());
 
         } catch (IOException e) {
             System.err.println("[WK] 保存数据失败: " + e.getMessage());
@@ -590,17 +612,35 @@ public class WKCommand extends Command {
     /**
      * 从 JSON 文件加载绑定数据
      * 启动时自动调用（static 初始化块）
+     * 每次进入服务器时也会调用，加载对应服务器的配置
      */
     private static void loadData() {
-        if (!Files.exists(DATA_FILE)) return;
+        String server = getServerIdentifier();
+        
+        // 如果切换了服务器，重新加载
+        if (currentServer != null && !currentServer.equals(server)) {
+            DATA_STORE.clear();
+        }
+        currentServer = server;
+        
+        Path dataFile = getDataFile();
+        if (!Files.exists(dataFile)) return;
 
         try {
-            String json = Files.readString(DATA_FILE);
+            String json = Files.readString(dataFile);
             parseJson(json);
 
         } catch (IOException e) {
             System.err.println("[WK] 加载数据失败: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 公开方法：切换服务器时重新加载配置
+     * 在模块的 onActivate 中调用
+     */
+    public static void reloadForCurrentServer() {
+        loadData();
     }
 
     private static void parseJson(String json) {

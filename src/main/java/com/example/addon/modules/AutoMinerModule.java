@@ -649,6 +649,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
+        // 重新加载当前服务器的点位配置
+        WKCommand.reloadForCurrentServer();
+        
         // 启动自检：缺项一次列全，配好一项下次就少一条
         if (!reportSelfCheck(selfCheck())) return;
 
