@@ -58,10 +58,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     //  UI 配置面板（分组折叠）
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgCrops = settings.createGroup("1️⃣ 作物选择", true);
-    private final SettingGroup sgLogistics = settings.createGroup("2️⃣ 后勤设置", false);
-    private final SettingGroup sgSafety = settings.createGroup("3️⃣ 安全设置", false);
-    private final SettingGroup sgRender = settings.createGroup("4️⃣ 显示设置", false);
+    private final SettingGroup sgCrops = settings.createGroup("作物选择", true);
+    private final SettingGroup sgLogistics = settings.createGroup("后勤设置", false);
+    private final SettingGroup sgSafety = settings.createGroup("安全设置", false);
+    private final SettingGroup sgRender = settings.createGroup("显示设置", false);
 
     // ─── 作物分类选择器 ───
     private final Setting<List<Block>> cropsDouble;

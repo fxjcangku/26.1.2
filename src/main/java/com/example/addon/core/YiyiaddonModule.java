@@ -50,7 +50,6 @@
 //   ✓ UI 元素（HUD、聊天消息、设置面板）必须使用中文
 //   ✓ 不凭记忆写 API，有疑问先用 `node Mappings\工具\查JARAPI.js` 查询
 //   ✓ 26.1.2 使用官方非混淆命名（Identifier/Minecraft/Component/Level）
-//   ✓ 配置分组统一编号前缀：1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣（确保所有模块一致）
 //
 // 注释原则：
 //   - 写"为什么这样做"，不写"做了什么"
@@ -411,21 +410,6 @@ import java.util.function.Consumer;
 //     事件回调第一行统一写 `if (!isActive()) return;`
 //
 //   【3.4 Meteor 设置项与配置分组规范】
-//
-//   配置分组命名统一规范（2026-08-27 新增）：
-//     ✓ 所有模块的配置分组必须使用统一的编号前缀 + Emoji
-//     ✓ 格式："{编号} {中文名称}"（编号使用 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 等 Emoji）
-//     ✓ 第一组默认展开：createGroup("1️⃣ 目标选择", true)
-//     ✓ 其余组默认收起：createGroup("2️⃣ 基础设置", false)
-//     ✓ 分组按逻辑顺序编号，确保配置页面整洁统一
-//
-//   示例（自动挖矿模块）：
-//     private final SettingGroup sgTarget = settings.createGroup("1️⃣ 目标选择", true);
-//     private final SettingGroup sgBasic = settings.createGroup("2️⃣ 基础设置", false);
-//     private final SettingGroup sgThreshold = settings.createGroup("3️⃣ 阈值设置", false);
-//     private final SettingGroup sgBaritone = settings.createGroup("4️⃣ Baritone设置", false);
-//     private final SettingGroup sgSeedMining = settings.createGroup("5️⃣ 种子挖矿", false);
-//     private final SettingGroup sgDisplay = settings.createGroup("6️⃣ 显示设置", false);
 //
 //   Meteor 设置项（常用类型）：
 //     private final SettingGroup sgX = settings.createGroup("组名");

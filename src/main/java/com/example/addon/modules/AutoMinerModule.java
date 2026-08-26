@@ -56,10 +56,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
     //  UI 配置面板 - 按使用频率分组
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgEssential = settings.createGroup("1️⃣ 常用设置", true);
-    private final SettingGroup sgBaritone = settings.createGroup("2️⃣ Baritone调优", false);
-    private final SettingGroup sgAdvanced = settings.createGroup("3️⃣ 高级功能", false);
-    private final SettingGroup sgVisual = settings.createGroup("4️⃣ 可视化设置", false);
+    private final SettingGroup sgEssential = settings.createGroup("常用设置", true);
+    private final SettingGroup sgBaritone = settings.createGroup("Baritone调优", false);
+    private final SettingGroup sgAdvanced = settings.createGroup("高级功能", false);
+    private final SettingGroup sgVisual = settings.createGroup("可视化设置", false);
 
     // ─── 目标选择（互斥） ───
     private final Setting<Block> overworldOreTarget;
@@ -137,7 +137,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考下面使用说明。");
 
         // ═══════════════════════════════════════════════════════════
-        //  1️⃣ 常用设置 - 经常调整的核心配置
+        //  常用设置 - 经常调整的核心配置
         // ═══════════════════════════════════════════════════════════
         
         // ─── 目标选择（互斥） ───
