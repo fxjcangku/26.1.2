@@ -250,26 +250,83 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .name("垃圾丢弃名单")
             .description("挖矿时自动丢弃这些方块")
             .defaultValue(List.of(
+                // 基础废料
                 Blocks.COBBLESTONE,
                 Blocks.COBBLED_DEEPSLATE,
                 Blocks.DIRT,
-                Blocks.NETHERRACK,
+                Blocks.GRAVEL,
+                Blocks.SAND,
+                // 矿洞常见废料
                 Blocks.DIORITE,
                 Blocks.GRANITE,
                 Blocks.ANDESITE,
-                Blocks.GRAVEL,
-                Blocks.TUFF
+                Blocks.TUFF,
+                Blocks.CALCITE,
+                Blocks.DRIPSTONE_BLOCK,
+                Blocks.POINTED_DRIPSTONE,
+                // 下界废料
+                Blocks.NETHERRACK,
+                Blocks.SOUL_SAND,
+                Blocks.SOUL_SOIL,
+                Blocks.BLACKSTONE,
+                Blocks.BASALT,
+                // 植物
+                Blocks.VINE,
+                Blocks.GLOW_LICHEN,
+                Blocks.MOSS_BLOCK,
+                Blocks.MOSS_CARPET
             ))
             .build());
 
         foodWhitelist = sgEssential.add(new ItemListSetting.Builder()
             .name("食物白名单")
-            .description("从食物箱只拿这些食物")
+            .description("从食物箱只拿这些食物（自动过滤所有可食用物品）")
             .defaultValue(List.of(
+                // 熟肉类（高饱和）
                 Items.COOKED_BEEF,
                 Items.COOKED_PORKCHOP,
+                Items.COOKED_MUTTON,
+                Items.COOKED_CHICKEN,
+                Items.COOKED_RABBIT,
+                Items.COOKED_COD,
+                Items.COOKED_SALMON,
+                // 金色食物（超高饱和）
+                Items.GOLDEN_CARROT,
+                Items.GOLDEN_APPLE,
+                Items.ENCHANTED_GOLDEN_APPLE,
+                // 面包和烘焙
                 Items.BREAD,
-                Items.GOLDEN_CARROT
+                Items.BAKED_POTATO,
+                Items.COOKIE,
+                Items.PUMPKIN_PIE,
+                Items.CAKE,
+                // 蔬菜水果
+                Items.CARROT,
+                Items.POTATO,
+                Items.BEETROOT,
+                Items.APPLE,
+                Items.MELON_SLICE,
+                Items.SWEET_BERRIES,
+                Items.GLOW_BERRIES,
+                // 炖菜
+                Items.MUSHROOM_STEW,
+                Items.RABBIT_STEW,
+                Items.BEETROOT_SOUP,
+                Items.SUSPICIOUS_STEW,
+                // 生肉（备用）
+                Items.BEEF,
+                Items.PORKCHOP,
+                Items.MUTTON,
+                Items.CHICKEN,
+                Items.RABBIT,
+                Items.COD,
+                Items.SALMON,
+                Items.TROPICAL_FISH,
+                Items.PUFFERFISH,
+                // 其他
+                Items.DRIED_KELP,
+                Items.HONEY_BOTTLE,
+                Items.CHORUS_FRUIT
             ))
             .filter(item -> {
                 ItemStack stack = new ItemStack(item);
@@ -331,7 +388,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // ────────────── 矿点刷新（优先挖近矿） ──────────────
         mineGoalUpdateInterval = sgBaritone.add(new IntSetting.Builder()
             .name("矿点刷新间隔")
-            .description("每隔多少tick重新扫描一次矿点（值越小越优先挖近矿，以自身为圆心递增扫描）")
+            .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿，默认10tick约0.5秒）")
             .defaultValue(10)
             .min(1)
             .sliderMax(100)
@@ -340,7 +397,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
             .name("矿点缓存数量")
-            .description("Baritone 一次缓存的最大矿点数量")
+            .description("Baritone一次缓存的最大矿点数量（默认64，增大可提前规划路径）")
             .defaultValue(64)
             .min(1)
             .sliderMax(256)
