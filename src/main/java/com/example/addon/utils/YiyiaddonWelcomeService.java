@@ -86,37 +86,30 @@ public final class YiyiaddonWelcomeService {
                 if (comparison < 0) {
                     if (mc.player == null) return;
                     
-                    // 更新提示（护眼配色模板：深青边框 + 深绿强调）
+                    // 更新提示（分割线样式）
                     mc.player.sendSystemMessage(Component.literal(
-                        "§3╭───────────────────────────╮"
+                        "§3§m═══════════════════════════════════"
                     ));
                     mc.player.sendSystemMessage(Component.literal(
-                        "§3│ §7发现§f§l新版本 §a§l" + latest.version
-                    ));
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§3│ §7当前版本 §e§l" + currentVersion
+                        "§7发现§f§l新版本 §a§l" + latest.version + " §7当前 §e§l" + currentVersion
                     ));
                     
                     // 显示更新内容前 3 行
                     String preview = extractPreview(latest.body, 3);
                     if (!preview.isEmpty()) {
                         mc.player.sendSystemMessage(Component.literal(
-                            "§3├───────────────────────────┤"
-                        ));
-                        mc.player.sendSystemMessage(Component.literal(
-                            "§3│ §2§l更新内容："
+                            "§2§l更新内容："
                         ));
                         for (String line : preview.split("\n")) {
-                            mc.player.sendSystemMessage(Component.literal("§3│ §f" + line));
+                            mc.player.sendSystemMessage(Component.literal("§f" + line));
                         }
+                        mc.player.sendSystemMessage(Component.literal(
+                            "§3§m───────────────────────────────────"
+                        ));
                     }
                     
-                    mc.player.sendSystemMessage(Component.literal(
-                        "§3├───────────────────────────┤"
-                    ));
-                    
-                    // 下载链接（深绿前缀 + 下划线可点击链接）
-                    mc.player.sendSystemMessage(Component.literal("§3│ §2§l下载地址: ")
+                    // 下载链接
+                    mc.player.sendSystemMessage(Component.literal("§2§l下载地址: ")
                         .append(Component.literal("§b§n点击下载")
                             .withStyle(style -> style
                                 .withClickEvent(new ClickEvent.OpenUrl(URI.create(latest.url)))
@@ -127,10 +120,10 @@ public final class YiyiaddonWelcomeService {
                     );
                     
                     mc.player.sendSystemMessage(Component.literal(
-                        "§3│ §7输入 §e§l.yiyiaddon skip §f§l跳过"
+                        "§7输入 §e§l.yiyiaddon skip §f§l跳过此版本"
                     ));
                     mc.player.sendSystemMessage(Component.literal(
-                        "§3╰───────────────────────────╯"
+                        "§3§m═══════════════════════════════════"
                     ));
                 }
                 
@@ -273,14 +266,7 @@ public final class YiyiaddonWelcomeService {
             String url = urlMatcher.group(1).replace("\\/", "/");
             String body = bodyMatcher.find() ? bodyMatcher.group(1) : "";
             
-            // 检测是否为 prerelease（测试版）
-            boolean isPrerelease = prereleaseMatcher.find() && "true".equals(prereleaseMatcher.group(1));
-            
-            // 如果是 prerelease，跳过此版本（只检测正式版）
-            // 但如果版本号本身带 beta，仍然返回（用户可能手动创建了非 prerelease 的 beta 版）
-            if (isPrerelease && !rawVersion.toLowerCase().contains("beta")) {
-                return null;
-            }
+            // 不过滤 prerelease，测试版也提示更新
             
             String version = normalizeVersion(rawVersion);
             
@@ -389,24 +375,21 @@ public final class YiyiaddonWelcomeService {
                                         // 检测正版/离线（正版绿色，离线红色）
                                         String accountType = isOnlineMode(mc) ? "§a§l[正版]" : "§c§l[离线]";
                                         
-                                        // 顶部边框（护眼深青色）
+                                        // 顶部分割线
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3╭───────────────────────────╮"
+                                            "§3§m═══════════════════════════════════"
                                         ));
                                         
                                         // 欢迎消息（护眼配色：深青边框+深绿强调）
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3│ §7本扩展已整合§f§l简体中文汉化"
+                                            "§7本扩展已整合§f§l简体中文汉化§7跟汉化§f§lBaritone"
                                         ));
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3│ §7跟汉化§f§lBaritone§7不用单独安装"
-                                        ));
-                                        mc.player.sendSystemMessage(Component.literal(
-                                            "§3│ §7免费 为爱发电 §8| §f版本 " + versionDisplay
+                                            "§7免费 为爱发电 §8| §f版本 " + versionDisplay
                                         ));
                                         
                                         // GitHub 仓库链接（深绿前缀 + 下划线可点击链接）
-                                        mc.player.sendSystemMessage(Component.literal("§3│ §2§lGitHub: ")
+                                        mc.player.sendSystemMessage(Component.literal("§2§lGitHub: ")
                                             .append(Component.literal("§b§n" + REPOSITORY_URL.replace("https://", ""))
                                                 .withStyle(style -> style
                                                     .withClickEvent(new ClickEvent.OpenUrl(URI.create(REPOSITORY_URL)))
@@ -417,7 +400,7 @@ public final class YiyiaddonWelcomeService {
                                         );
                                         
                                         // Bug 反馈链接（深绿前缀 + 下划线可点击链接）
-                                        mc.player.sendSystemMessage(Component.literal("§3│ §2§lBug反馈: ")
+                                        mc.player.sendSystemMessage(Component.literal("§2§lBug反馈: ")
                                             .append(Component.literal("§b§n点击反馈")
                                                 .withStyle(style -> style
                                                     .withClickEvent(new ClickEvent.OpenUrl(
@@ -428,9 +411,9 @@ public final class YiyiaddonWelcomeService {
                                             )
                                         );
                                         
-                                        // 中间分隔线（护眼深青色）
+                                        // 中间分割线
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3├───────────────────────────┤"
+                                            "§3§m───────────────────────────────────"
                                         ));
                                         
                                         // 统计信息（账户类型+玩家名加粗）
@@ -451,19 +434,19 @@ public final class YiyiaddonWelcomeService {
                                         }
                                         
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3│ §7当前已有 §2§l" + total + " §f§l位玩家使用"
+                                            "§7当前已有 §2§l" + total + " §f§l位玩家使用"
                                         ));
                                         
                                         // 显示最近活跃信息
                                         if (recentActivityInfo != null && !recentActivityInfo.isEmpty()) {
                                             mc.player.sendSystemMessage(Component.literal(
-                                                "§3│ " + recentActivityInfo
+                                                recentActivityInfo
                                             ));
                                         }
                                         
-                                        // 底部边框（护眼深青色）
+                                        // 底部分割线
                                         mc.player.sendSystemMessage(Component.literal(
-                                            "§3╰───────────────────────────╯"
+                                            "§3§m═══════════════════════════════════"
                                         ));
                                     }
                                 });
@@ -525,12 +508,12 @@ public final class YiyiaddonWelcomeService {
                     
                     // 构建活跃信息
                     StringBuilder info = new StringBuilder();
-                    info.append("§f§l24h §7活跃：§b§l").append(activeCount).append(" §f§l人");
+                    info.append("§f§l24h §7活跃 §b§l").append(activeCount).append(" §f§l人");
                     
                     if (recentUserName != null) {
                         long hoursAgo = (System.currentTimeMillis() / 1000 - recentUserTime) / 3600;
-                        String timeDesc = hoursAgo == 0 ? "§a§l刚刚在线" : "§7" + hoursAgo + "§f§lh §7前在线";
-                        info.append(" §7§l| §7最近活跃：§e§l").append(recentUserName).append(" ").append(timeDesc);
+                        String timeDesc = hoursAgo == 0 ? "§a§l刚刚在线" : "§7" + hoursAgo + "§f§lh §7前";
+                        info.append(" §7§l| §7最近 §e§l").append(recentUserName).append(" ").append(timeDesc);
                     }
                     
                     return info.toString();
