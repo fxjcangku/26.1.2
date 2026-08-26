@@ -1249,12 +1249,47 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // 创建卡片容器（垂直布局）
         WTable card = theme.table();
         
-        // 标题
-        card.add(theme.label("§l" + title)).expandX();
+        // 获取当前绑定状态
+        boolean isBound = WKCommand.hasBinding(key);
+        WKCommand.WKData data = WKCommand.getBinding(key);
+        
+        // 图标 + 标题（添加emoji提升视觉效果）
+        String icon = switch (key) {
+            case "mineral" -> "📦";
+            case "food" -> "🍖";
+            case "afk" -> "🛠";
+            default -> "■";
+        };
+        
+        String titleColor = switch (key) {
+            case "mineral" -> "§6";
+            case "food" -> "§2";
+            case "afk" -> "§d";
+            default -> "§f";
+        };
+        
+        card.add(theme.label(icon + " " + titleColor + "§l" + title)).expandX().center();
         card.row();
         
-        // 设置按钮（根据绑定状态改变颜色）
-        WButton setBtn = theme.button(WKCommand.hasBinding(key) ? "§a设置" : "§c设置");
+        // 状态显示（更详细的信息）
+        if (isBound && data != null) {
+            String coords = String.format("§7%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
+            card.add(theme.label(coords)).expandX().center();
+            card.row();
+            
+            String dimName = "§7" + data.dimensionName();
+            card.add(theme.label(dimName)).expandX().center();
+            card.row();
+        } else {
+            card.add(theme.label("§8▬▬▬▬▬▬▬▬")).expandX().center();
+            card.row();
+            card.add(theme.label("§7暂未绑定")).expandX().center();
+            card.row();
+        }
+        
+        // 设置按钮（根据绑定状态改变颜色和文字）
+        String setBtnText = isBound ? "§a✓ 设置" : "§c✗ 设置";
+        WButton setBtn = theme.button(setBtnText);
         setBtn.action = () -> {
             WKCommand.setBinding(key);
             // 关闭整个Shift界面，而非单个模块配置GUI
@@ -1263,19 +1298,17 @@ public final class AutoMinerModule extends YiyiaddonModule {
         card.add(setBtn).expandX();
         card.row();
         
-        // 删除按钮
-        WButton delBtn = theme.button("§7删除");
+        // 删除按钮（只有已绑定时才显示为可用状态）
+        String delBtnText = isBound ? "§e删除" : "§8删除";
+        WButton delBtn = theme.button(delBtnText);
         delBtn.action = () -> {
-            WKCommand.removeBinding(key);
-            // 关闭整个Shift界面
-            mc.setScreen(null);
+            if (isBound) {
+                WKCommand.removeBinding(key);
+                // 关闭整个Shift界面
+                mc.setScreen(null);
+            }
         };
         card.add(delBtn).expandX();
-        card.row();
-        
-        // 状态显示
-        String status = WKCommand.hasBinding(key) ? "§a已设置" : "§c未设置";
-        card.add(theme.label(status)).expandX();
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();
