@@ -1256,12 +1256,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
         boolean isBound = WKCommand.hasBinding(key);
         WKCommand.WKData data = WKCommand.getBinding(key);
         
-        // 图标 + 标题（添加emoji提升视觉效果）
-        String icon = switch (key) {
-            case "mineral" -> "📦";
-            case "food" -> "🍖";
-            case "afk" -> "🛠";
-            default -> "■";
+        // MC官方物品图标
+        Item icon = switch (key) {
+            case "mineral" -> Items.CHEST;        // 矿物箱用箱子图标
+            case "food" -> Items.BREAD;           // 食物箱用面包图标
+            case "afk" -> Items.TARGET;           // 挂机点用标靶图标
+            default -> Items.BARRIER;
         };
         
         String titleColor = switch (key) {
@@ -1271,7 +1271,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
             default -> "§f";
         };
         
-        card.add(theme.label(icon + " " + titleColor + "§l" + title)).expandX().center();
+        // 物品图标 + 标题（使用ItemStack展示MC官方图标）
+        ItemStack iconStack = new ItemStack(icon);
+        card.add(theme.item(iconStack)).center();
+        card.add(theme.label(titleColor + "§l" + title)).expandX();
         card.row();
         
         // 状态显示（更详细的信息）

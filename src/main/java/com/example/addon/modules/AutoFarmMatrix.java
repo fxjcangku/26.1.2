@@ -8,6 +8,9 @@ import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
@@ -1310,8 +1313,23 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 创建卡片容器（垂直布局）
         WTable card = theme.table();
         
-        // 标题
-        card.add(theme.label("§l" + title)).expandX();
+        // MC官方物品图标
+        Item icon = switch (key) {
+            case "dump" -> Items.CHEST;           // 卸货箱用箱子图标
+            case "supply" -> Items.CHEST;         // 补货箱用箱子图标
+            default -> Items.BARRIER;
+        };
+        
+        String titleColor = switch (key) {
+            case "dump" -> "§6";
+            case "supply" -> "§2";
+            default -> "§f";
+        };
+        
+        // 物品图标 + 标题
+        ItemStack iconStack = new ItemStack(icon);
+        card.add(theme.item(iconStack)).center();
+        card.add(theme.label(titleColor + "§l" + title)).expandX();
         card.row();
         
         // 设置按钮（根据绑定状态改变颜色）

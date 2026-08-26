@@ -149,7 +149,7 @@ public class WKCommand extends Command {
         }
 
         // 检测与其他点位距离（32格限制）
-        String distanceError = checkDistance(data.pos, "mineral");
+        String distanceError = validateBinding("mineral", data.pos);
         if (distanceError != null) {
             wkError(distanceError);
             wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
@@ -195,7 +195,7 @@ public class WKCommand extends Command {
         }
 
         // 检测与其他点位距离（32格限制）
-        String distanceError = checkDistance(data.pos, "food");
+        String distanceError = validateBinding("food", data.pos);
         if (distanceError != null) {
             wkError(distanceError);
             wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
@@ -240,7 +240,7 @@ public class WKCommand extends Command {
         }
 
         // 检测与其他点位距离（32格限制）
-        String distanceError = checkDistance(data.pos, "afk");
+        String distanceError = validateBinding("afk", data.pos);
         if (distanceError != null) {
             wkError(distanceError);
             wkInfo("§7提示：靠近其他点位后再设置，或删除旧点位重新规划");
@@ -369,14 +369,44 @@ public class WKCommand extends Command {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * 检测新点位与已有点位的距离（32格限制）
-     * 检测所有已绑定点位 + 新点位之间的距离，任意两点超过32格则拦截
+     * 绑定点位时的安全检查
+     * ▸ 限制1：三个点位必须在同一维度
+     * ▸ 限制2：三个点位必须互相在 32 格范围内（防止 Baritone 长距离乱寻路）
      * 
-     * ▸ newPos 新点位坐标
-     * ▸ newKey 新点位键名（mineral/food/afk）
-     * ▸ 返回错误信息，距离合法时返回 null
+     * @return 错误信息，通过检查返回 null
      */
-    private String checkDistance(BlockPos newPos, String newKey) {
+    private String validateBinding(String newKey, BlockPos newPos) {
+        if (mc.player == null || mc.level == null) return "玩家或世界未加载";
+        
+        String currentDimension = mc.level.dimension().toString();
+        
+        // 检查1：维度检查
+        for (Map.Entry<String, WKData> entry : DATA_STORE.entrySet()) {
+            if (entry.getKey().equals(newKey)) continue;
+            
+            WKData existingData = entry.getValue();
+            if (!existingData.dimension.equals(currentDimension)) {
+                String existingName = switch (entry.getKey()) {
+                    case "mineral" -> "矿物箱";
+                    case "food" -> "食物箱";
+                    case "afk" -> "挂机修复点";
+                    default -> entry.getKey();
+                };
+                
+                String currentDimName = currentDimension.contains("overworld") ? "主世界" :
+                                       currentDimension.contains("nether") ? "下界" :
+                                       currentDimension.contains("end") ? "末地" : "未知维度";
+                
+                String existingDimName = existingData.dimension.contains("overworld") ? "主世界" :
+                                        existingData.dimension.contains("nether") ? "下界" :
+                                        existingData.dimension.contains("end") ? "末地" : "未知维度";
+                
+                return String.format("§c跨维度绑定被拒绝！\n§7%s 位于 §e%s§7，但你现在在 §e%s\n§7三个点位必须在同一维度，防止 Baritone 跨维度乱寻路", 
+                    existingName, existingDimName, currentDimName);
+            }
+        }
+        
+        // 检查2：距离检查
         // 构建临时完整点位集合（已有 + 新点位）
         Map<String, BlockPos> allPositions = new HashMap<>();
         for (Map.Entry<String, WKData> entry : DATA_STORE.entrySet()) {
