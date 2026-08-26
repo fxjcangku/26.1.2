@@ -1302,7 +1302,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     /**
      * 构建点位设置卡片
-     * 卡片式布局，包含标题、设置按钮、删除按钮、状态显示
+     * 卡片式布局，包含标题、坐标显示、维度显示、设置按钮、删除按钮
      * 
      * @param theme Meteor GUI 主题
      * @param parentTable 父表格（横向三列排列）
@@ -1313,12 +1313,14 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 创建卡片容器（垂直布局）
         WTable card = theme.table();
         
-        // MC官方物品图标
-        Item icon = switch (key) {
-            case "dump" -> Items.CHEST;           // 卸货箱用箱子图标
-            case "supply" -> Items.CHEST;         // 补货箱用箱子图标
-            default -> Items.BARRIER;
+        // 获取当前绑定状态
+        boolean isBound = com.example.addon.commands.NongChangCommand.hasBinding(key);
+        com.example.addon.farm.SiteType siteType = switch (key) {
+            case "dump" -> com.example.addon.farm.SiteType.DUMP;
+            case "supply" -> com.example.addon.farm.SiteType.SUPPLY;
+            default -> null;
         };
+        com.example.addon.farm.FarmSite data = (siteType != null) ? site(siteType) : null;
         
         String titleColor = switch (key) {
             case "dump" -> "§6";
@@ -1326,9 +1328,26 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             default -> "§f";
         };
         
-        // 标题（移除图标，直接显示文字）
+        // 标题
         card.add(theme.label(titleColor + "§l" + title)).expandX().center();
         card.row();
+        
+        // 坐标和维度显示
+        if (isBound && data != null) {
+            String coords = String.format("§7%d, %d, %d", 
+                data.pos().getX(), data.pos().getY(), data.pos().getZ());
+            card.add(theme.label(coords)).expandX().center();
+            card.row();
+            
+            String dimName = "§7" + getDimensionName(data.dimension());
+            card.add(theme.label(dimName)).expandX().center();
+            card.row();
+        } else {
+            card.add(theme.label("§8▬▬▬▬▬▬▬▬")).expandX().center();
+            card.row();
+            card.add(theme.label("§7暂未绑定")).expandX().center();
+            card.row();
+        }
         
         // 设置按钮
         WButton setBtn = theme.button("设置");
@@ -1342,17 +1361,24 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 删除按钮
         WButton delBtn = theme.button("删除");
         delBtn.action = () -> {
-            com.example.addon.commands.NongChangCommand.removeBinding(key);
-            mc.setScreen(null);
+            if (isBound) {
+                com.example.addon.commands.NongChangCommand.removeBinding(key);
+                mc.setScreen(null);
+            }
         };
         card.add(delBtn).expandX();
-        card.row();
-        
-        // 状态显示
-        String status = com.example.addon.commands.NongChangCommand.hasBinding(key) ? "§a已设置" : "§c未设置";
-        card.add(theme.label(status)).expandX();
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();
+    }
+    
+    /**
+     * 获取维度中文名
+     */
+    private String getDimensionName(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dim) {
+        if (dim == net.minecraft.world.level.Level.OVERWORLD) return "主世界";
+        if (dim == net.minecraft.world.level.Level.NETHER) return "下界";
+        if (dim == net.minecraft.world.level.Level.END) return "末地";
+        return "自定义维度";
     }
 }
