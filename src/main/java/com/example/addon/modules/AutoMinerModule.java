@@ -144,7 +144,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         overworldOreTarget = sgEssential.add(new BlockSetting.Builder()
             .name("主世界矿石")
             .description("选择主世界矿石（含深层变种）")
-            .defaultValue(Blocks.AIR)
+            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("_ore") && !id.contains("nether") && !id.contains("ancient");
@@ -154,7 +154,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         netherOreTarget = sgEssential.add(new BlockSetting.Builder()
             .name("下界矿石")
             .description("选择下界矿石（下界金矿、下界石英矿、远古残骸）")
-            .defaultValue(Blocks.AIR)
+            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("nether") && (id.contains("ore") || id.contains("quartz")) 
@@ -165,14 +165,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
         blockTarget = sgEssential.add(new BlockSetting.Builder()
             .name("普通方块")
             .description("选择普通方块（石头、泥土、原木等）")
-            .defaultValue(Blocks.AIR)
+            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
             .build());
 
         // ─── 指令配置 ───
         wildCommand = sgEssential.add(new StringSetting.Builder()
             .name("去野外指令")
             .description("传送到挖矿区域的指令（支持带/或不带/；如需打开GUI选择请启用下方开关）")
-            .defaultValue("")
+            .defaultValue("") // 默认留空，需玩家配置
             .build());
 
         rtpGuiEnabled = sgEssential.add(new BoolSetting.Builder()
@@ -191,40 +191,40 @@ public final class AutoMinerModule extends YiyiaddonModule {
         unloadCommand = sgEssential.add(new StringSetting.Builder()
             .name("满载卸货指令")
             .description("传送到卸货箱的指令（支持带/或不带/）")
-            .defaultValue("")
+            .defaultValue("") // 默认留空，需玩家配置
             .build());
 
         supplyCommand = sgEssential.add(new StringSetting.Builder()
             .name("补给指令")
             .description("传送到食物箱的指令（支持带/或不带/）")
-            .defaultValue("")
+            .defaultValue("") // 默认留空，需玩家配置
             .build());
 
         afkCommand = sgEssential.add(new StringSetting.Builder()
             .name("挂机点指令")
             .description("传送到挂机修补点（支持带/或不带/；自动联动杀戮光环，修好后自动RTP）")
-            .defaultValue("")
+            .defaultValue("") // 默认留空，需玩家配置
             .build());
 
         respawnCommand = sgEssential.add(new StringSetting.Builder()
             .name("死亡重返指令")
             .description("复活后返回挂机点（支持带/或不带/；死亡瞬间自动调用流星自动重生）")
-            .defaultValue("")
+            .defaultValue("") // 默认留空，需玩家配置
             .build());
 
         // ─── 阈值设置 ───
         unloadThreshold = sgEssential.add(new IntSetting.Builder()
             .name("满载组数")
             .description("背包矿物达到多少组时触发卸货（1组=64个）")
-            .defaultValue(20)
+            .defaultValue(20) // 默认20组（1280个矿物）
             .min(1)
             .sliderMax(36)
             .build());
 
         hungerThreshold = sgEssential.add(new IntSetting.Builder()
-            .name("食物数量")
-            .description("背包食物少于此数量时触发补给（单位：组，1组=64个）")
-            .defaultValue(5)
+            .name("食物阈值")
+            .description("背包食物少于此数量时触发补给（单位：个）")
+            .defaultValue(32) // 默认半组（32个食物）
             .min(1)
             .sliderMax(64)
             .build());
@@ -232,7 +232,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         durabilityThreshold = sgEssential.add(new IntSetting.Builder()
             .name("耐久阈值")
             .description("工具剩余耐久低于此值时前往挂机点联动杀戮光环修补")
-            .defaultValue(50)
+            .defaultValue(100) // 默认100耐久
             .min(1)
             .sliderMax(500)
             .build());
@@ -240,7 +240,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         teleportDelay = sgEssential.add(new IntSetting.Builder()
             .name("传送等待时长")
             .description("执行传送指令后等待秒数（包括服务器延迟+区块加载）；超时自动重新RTP")
-            .defaultValue(5)
+            .defaultValue(8) // 默认8秒（适应大部分服务器）
             .min(1)
             .sliderMax(30)
             .build());
@@ -741,7 +741,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     }
 
     /**
-     * 启动自检：目标单选、三个WK坐标、五条指令
+     * 启动自检：目标单选、三个WK坐标、五条指令、装备检测
      *
      * 收集全部缺项而不是遇到第一个就返回，这样用户一次就能看到还差什么，
      * 配好一项下次启动就少一条，不用反复试错。
@@ -785,7 +785,47 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (afkCommand.get().isEmpty()) missing.add("「挂机点指令」未填写 — 填传送到挂机点的指令");
         if (respawnCommand.get().isEmpty()) missing.add("「死亡重返指令」未填写 — 填复活后回矿区的指令");
 
-        // 4. 种子挖矿（可选功能，仅在启用时检测）
+        // 4. 装备检测（镐子、武器、半组食物）
+        if (mc.player != null) {
+            boolean hasPickaxe = false;
+            boolean hasWeapon = false;
+            int foodCount = 0;
+
+            // 遍历背包+快捷栏（槽位0-35）
+            for (int i = 0; i < 36; i++) {
+                ItemStack stack = mc.player.getInventory().getItem(i);
+                if (stack.isEmpty()) continue;
+
+                String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+                
+                // 检测镐子（任意材质）
+                if (itemId.contains("pickaxe")) {
+                    hasPickaxe = true;
+                }
+                
+                // 检测武器（剑、斧头、铲子）
+                if (itemId.contains("sword") || itemId.contains("axe") || itemId.contains("shovel")) {
+                    hasWeapon = true;
+                }
+                
+                // 统计食物数量
+                if (stack.has(DataComponents.FOOD)) {
+                    foodCount += stack.getCount();
+                }
+            }
+
+            if (!hasPickaxe) {
+                missing.add("背包缺少镐子 — 请至少携带一把镐子（任意材质）");
+            }
+            if (!hasWeapon) {
+                missing.add("背包缺少武器 — 请携带剑/斧头/铲子（用于挂机修补时杀怪）");
+            }
+            if (foodCount < 32) {
+                missing.add("食物不足 — 当前仅有 " + foodCount + " 个，建议携带至少半组（32个）");
+            }
+        }
+
+        // 5. 种子挖矿（可选功能，仅在启用时检测）
         if (seedMiningEnabled.get()) {
             String seedStr = worldSeed.get().trim();
             if (seedStr.isEmpty()) {
