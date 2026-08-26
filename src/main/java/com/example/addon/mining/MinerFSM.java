@@ -143,6 +143,26 @@ public final class MinerFSM {
         transitionTo(MinerState.GO_WILD);
     }
 
+    /**
+     * 检查目标维度是否有矿石生成
+     * 允许在末地启动（通过RTP传送到主世界挖矿）
+     */
+    private boolean checkDimensionValidity() {
+        if (mc.level == null || mc.player == null) return false;
+        
+        String dim = mc.level.dimension().toString();
+        boolean isOverworld = dim.contains("overworld");
+        boolean isNether = dim.contains("nether");
+        boolean isEnd = dim.contains("end");
+        
+        // 末地启动时提示但不阻止（用户可以通过RTP去主世界）
+        if (isEnd) {
+            module.info("当前在末地，请使用RTP传送到主世界开始挖矿");
+        }
+        
+        return true;  // 移除维度限制
+    }
+
     private void tickGoWild() {
         CommandManager cmdMgr = module.getCmdManager();
 
