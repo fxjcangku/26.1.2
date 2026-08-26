@@ -69,7 +69,7 @@ public final class PinkThemeModule extends YiyiaddonModule {
         theme.backgroundColor.get().set(color(selected.background));
         theme.outlineColor.get().set(color(selected.outline));
         theme.scrollbarColor.get().set(color(selected.accent));
-        theme.sliderHandle.get().set(color(selected.light));
+        theme.sliderHandle.get().set(color(selected.accent));
         applyHud(selected);
         GuiThemes.save();
     }
