@@ -296,7 +296,59 @@ public class AntiKickBypass extends YiyiaddonModule {
     private final Random random = new Random();
 
     public AntiKickBypass() {
-        super(CATEGORY_TACTICAL, "anti-kick-bypass", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。");
+        super(CATEGORY_TACTICAL, "anti-kick-bypass", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。点击按钮查看说明。");
+    }
+
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        settings.add(new ButtonSetting.Builder()
+            .name("查看使用说明")
+            .action(() -> mc.setScreen(new AntiKickBypassHelpScreen(theme)))
+            .build()
+        );
+        return super.getWidget(theme);
+    }
+
+    // 使用说明窗口
+    private static class AntiKickBypassHelpScreen extends com.example.addon.core.HelpScreen {
+        public AntiKickBypassHelpScreen(GuiTheme theme) {
+            super(theme, "终极防踢");
+            
+            addSection("功能概览", new String[]{
+                "§8├─ §f伪装客户端 §8- §7改Brand、拦截Mod频道",
+                "§8├─ §f聊天排队 §8- §7自动排队防刷屏",
+                "§8├─ §f防挂机 §8- §7假装在操作",
+                "§8├─ §f限制发包 §8- §7防止挖太快/放太快被踢",
+                "§8├─ §f拉回处理 §8- §7被拉回时自动断流",
+                "§8├─ §f拉回分析 §8- §7记录什么操作容易被拉回",
+                "§8└─ §f模拟真人 §8- §7视角抖动、网络延迟"
+            });
+            
+            addSection("使用建议", new String[]{
+                "§8├─ §e伪装客户端 §8- §7必开，让服务器认为你是原版",
+                "§8├─ §e聊天排队 §8- §7建议开启，避免刷屏被踢",
+                "§8├─ §e防挂机 §8- §7挂机时开启，模拟真人操作",
+                "§8├─ §e限制发包 §8- §7根据服务器调整，避免CPS过高",
+                "§8├─ §e拉回处理 §8- §7被拉回时开启，自动暂停操作",
+                "§8├─ §e拉回分析 §8- §7调试用，记录拉回原因",
+                "§8└─ §e模拟真人 §8- §7可选，增加真实感"
+            });
+            
+            addSection("参数建议", new String[]{
+                "§6▸ §f发包限速 §8- §e20-30包/秒 §7(普通服务器)",
+                "§6▸ §f挖掘限速 §8- §e15-20次/秒 §7(高级反作弊)",
+                "§6▸ §f放置限速 §8- §e10-15次/秒 §7(高级反作弊)",
+                "§6▸ §f视角抖动 §8- §e0.1-0.3度 §7(微小抖动)",
+                "§6▸ §f网络延迟 §8- §e20-80毫秒 §7(模拟卡顿)"
+            });
+            
+            addSection("注意事项", new String[]{
+                "§c⚠ §f单人世界自动禁用，多人世界自动启用",
+                "§c⚠ §f拉回分析会记录大量数据，调试完记得关闭",
+                "§c⚠ §f模拟真人功能会影响操作手感，按需开启",
+                "§c⚠ §f限速参数过低会影响游戏体验，过高会被检测"
+            });
+        }
     }
 
     @Override

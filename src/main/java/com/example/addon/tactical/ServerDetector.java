@@ -185,7 +185,67 @@ public class ServerDetector extends YiyiaddonModule {
     // #endregion
 
     public ServerDetector() {
-        super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。");
+        super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。点击按钮查看说明。");
+    }
+
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        settings.add(new ButtonSetting.Builder()
+            .name("查看使用说明")
+            .action(() -> mc.setScreen(new ServerDetectorHelpScreen(theme)))
+            .build()
+        );
+        return super.getWidget(theme);
+    }
+
+    // 使用说明窗口
+    private static class ServerDetectorHelpScreen extends com.example.addon.core.HelpScreen {
+        public ServerDetectorHelpScreen(GuiTheme theme) {
+            super(theme, "服务器检测");
+            
+            addSection("检测功能", new String[]{
+                "§8├─ §f服务器核心识别",
+                "§8│   §7Paper / Purpur / Leaves / Folia / 混合端",
+                "§8│   §7代理层识别（Velocity / BungeeCord / Waterfall）",
+                "§8│",
+                "§8├─ §f反作弊检测",
+                "§8│   §7通过指令树与插件频道识别",
+                "§8│   §7覆盖国际主流与国内常见实现",
+                "§8│   §7GrimAC / Matrix / Vulcan / Spartan / AAC等",
+                "§8│",
+                "§8└─ §f资源包处理",
+                "§8    §7自动下载到本地（支持断点续传）",
+                "§8    §7暴力绕过：自动拒绝或接受"
+            });
+            
+            addSection("使用方式", new String[]{
+                "§a[1] §f加入服务器时自动启动检测",
+                "§a[2] §f等待 §e3-5秒 §f让服务器发送完整信息",
+                "§a[3] §f检测完成后在聊天栏显示结果",
+                "§a[4] §f结果会保存到TacticalFSM供其他模块使用"
+            });
+            
+            addSection("资源包模式", new String[]{
+                "§6▸ §f暴力拒绝 §8- §7自动拒绝所有资源包",
+                "§6▸ §f暴力接受 §8- §7自动接受所有资源包",
+                "§6▸ §f下载到本地 §8- §7保存到 §e.minecraft/resourcepacks/",
+                "§6▸ §f询问玩家 §8- §7弹窗让你手动选择"
+            });
+            
+            addSection("检测原理", new String[]{
+                "§8├─ §7Brand字符串 §8- §7最容易被改，只作线索",
+                "§8├─ §7插件消息频道 §8- §7反作弊开的校验频道",
+                "§8├─ §7指令树命名空间 §8- §7插件注册的实际结果（主要依据）",
+                "§8└─ §7拉回频率 §8- §7说明反作弊存在且激进"
+            });
+            
+            addSection("注意事项", new String[]{
+                "§c⚠ §f检测结果不是100%准确，仅供参考",
+                "§c⚠ §f资源包下载需要网络连接，国外服务器可能较慢",
+                "§c⚠ §f暴力拒绝可能被服务器踢出（部分服务器强制资源包）",
+                "§c⚠ §f单人世界自动禁用，仅在多人服务器生效"
+            });
+        }
     }
 
     @Override

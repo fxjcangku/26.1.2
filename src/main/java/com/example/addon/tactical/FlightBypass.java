@@ -98,7 +98,58 @@ public class FlightBypass extends YiyiaddonModule {
     private long pendingDestroyAt = 0L;
 
     public FlightBypass() {
-        super(CATEGORY_TACTICAL, "flight-bypass", "Four modes to bypass GrimAC/Matrix advanced anti-cheat.");
+        super(CATEGORY_TACTICAL, "flight-bypass", "四种飞行模式绕过GrimAC/Matrix高级反作弊。点击按钮查看说明。");
+    }
+
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        settings.add(new ButtonSetting.Builder()
+            .name("查看使用说明")
+            .action(() -> mc.setScreen(new FlightBypassHelpScreen(theme)))
+            .build()
+        );
+        return super.getWidget(theme);
+    }
+
+    // 使用说明窗口
+    private static class FlightBypassHelpScreen extends com.example.addon.core.HelpScreen {
+        public FlightBypassHelpScreen(GuiTheme theme) {
+            super(theme, "飞行绕过");
+            
+            addSection("飞行模式", new String[]{
+                "§8├─ §e原版模拟 §8- §7高频跳跃伪装",
+                "§8│   §7适用于低级反作弊，检测宽松的服务器",
+                "§8│",
+                "§8├─ §e安全滑翔 §8- §7微下降规避重力检测",
+                "§8│   §7适用于高级反作弊，如GrimAC/Matrix",
+                "§8│",
+                "§8├─ §e烟花火箭 §8- §7模拟鞘翅加速",
+                "§8│   §7发送烟花使用包，需要装备鞘翅",
+                "§8│",
+                "§8└─ §e序列垫脚 §8- §7预测方块放置",
+                "§8    §780-120ms随机延迟，每5次留一次痕迹"
+            });
+            
+            addSection("参数调整", new String[]{
+                "§6▸ §f跳跃间隔 §8- §e3 tick §7(原版模拟模式)",
+                "§6▸ §f下降速度 §8- §e0.03 §7(安全滑翔模式)",
+                "§6▸ §f放置延迟 §8- §e80-120ms §7(序列垫脚模式)",
+                "§6▸ §f留痕频率 §8- §e1/5 §7(序列垫脚模式)"
+            });
+            
+            addSection("自动适配", new String[]{
+                "§a[1] §f加入服务器时自动检测反作弊类型",
+                "§a[2] §f检测到GrimAC/Matrix时自动切换安全模式",
+                "§a[3] §f模块启动时根据反作弊调整参数"
+            });
+            
+            addSection("注意事项", new String[]{
+                "§c⚠ §f原版模拟和烟花火箭对高级反作弊无效",
+                "§c⚠ §f安全滑翔会持续下降，需要间歇性上升补偿",
+                "§c⚠ §f序列垫脚需要背包里有方块（圆石/泥土等）",
+                "§c⚠ §f被拉回时会自动触发断流联动（需开启终极防踢）"
+            });
+        }
     }
 
     @Override
