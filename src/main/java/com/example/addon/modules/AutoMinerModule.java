@@ -44,6 +44,8 @@ import java.util.Set;
  * · 耐久修补 - 联动 KillAura 打怪修装备
  * · 死亡自愈 - 自动复活+死亡返回挂机修复点
  * · 防卡死 - 区块加载检测、掉落虚空检测、指令延迟校验
+ * 
+ * 界面说明：点击"查看使用说明"按钮查看详细配置教程
  */
 public final class AutoMinerModule extends YiyiaddonModule {
 
@@ -137,7 +139,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     public AutoMinerModule() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动挖矿",
-            "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考下面使用说明。");
+            "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考使用说明。");
 
         // ═══════════════════════════════════════════════════════════
         //  目标选择 - 挖什么
