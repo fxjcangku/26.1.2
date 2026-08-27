@@ -471,7 +471,7 @@ public class ServerDetector extends YiyiaddonModule {
                 
 
                 
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
                 conn.setConnectTimeout(30000);
                 conn.setReadTimeout(30000);
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
