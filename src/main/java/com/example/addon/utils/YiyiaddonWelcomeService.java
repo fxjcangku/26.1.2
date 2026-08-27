@@ -446,6 +446,9 @@ public final class YiyiaddonWelcomeService {
                         int total = Integer.parseInt(totalMatcher.group(1));
                         boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
                         
+                        // 获取 IP 地址和国家信息（带代理检测）
+                        IpInfo ipInfo = fetchIpAndCountryWithProxyDetection();
+                        
                         // 先获取最近活跃信息（在子线程完成所有 I/O），然后一次性显示
                         String recentActivityInfo = fetchRecentActivity();
                         
@@ -528,6 +531,24 @@ public final class YiyiaddonWelcomeService {
                                             "§7当前已有 §2§l" + total + " §f§l位玩家使用"
                                         ));
                                         
+                                        // IP 和国家信息（带国旗 emoji 和代理检测）
+                                        if (ipInfo != null && ipInfo.ip != null) {
+                                            String flag = countryCodeToFlag(ipInfo.countryCode);
+                                            String countryDisplay = ipInfo.countryCode != null 
+                                                ? " §8| " + flag + " §e§l" + ipInfo.countryCode 
+                                                : "";
+                                            
+                                            // 显示代理状态
+                                            String proxyStatus = "";
+                                            if (ipInfo.isProxy && ipInfo.proxyType != null) {
+                                                proxyStatus = " §c§l[" + ipInfo.proxyType + "]";
+                                            }
+                                            
+                                            mc.player.sendSystemMessage(Component.literal(
+                                                "§7IP: §b" + ipInfo.ip + countryDisplay + proxyStatus
+                                            ));
+                                        }
+                                        
                                         // 底部分割线
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§3§m═══════════════════════════════════"
@@ -544,6 +565,206 @@ public final class YiyiaddonWelcomeService {
                 System.err.println("[YiyiaddonWelcomeService] 统计请求失败: " + e.getMessage());
             }
         }, "yiyiaddon-user-register").start();
+    }
+    
+    /**
+     * 获取客户端 IP 地址和国家代码（带代理检测和网络测试）
+     * 三重降级策略：ipapi.co -> ip-api.com -> cloudflare
+     * 
+     * @return IP 信息对象，失败返回备用信息
+     */
+    private static IpInfo fetchIpAndCountryWithProxyDetection() {
+        // 收集多个来源的 IP 进行对比（检测代理）
+        IpInfo result1 = tryFetchFromIpApiCoWithProxy();
+        IpInfo result2 = tryFetchFromIpApiWithProxy();
+        IpInfo result3 = tryFetchFromCloudflareSimple();
+        
+        // 判断是否使用代理
+        boolean isUsingProxy = false;
+        String proxyType = null;
+        
+        // 策略 1: API 返回的代理标记
+        if (result1 != null && result1.isProxy) {
+            isUsingProxy = true;
+            proxyType = result1.proxyType;
+        } else if (result2 != null && result2.isProxy) {
+            isUsingProxy = true;
+            proxyType = result2.proxyType;
+        }
+        
+        // 策略 2: IP 不一致检测（多个 API 返回不同 IP）
+        if (result1 != null && result2 != null && !result1.ip.equals(result2.ip)) {
+            isUsingProxy = true;
+            if (proxyType == null) proxyType = "VPN";
+        }
+        
+        // 选择最可靠的结果
+        IpInfo selected = result1 != null ? result1 : (result2 != null ? result2 : result3);
+        
+        if (selected != null) {
+            return new IpInfo(selected.ip, selected.countryCode, isUsingProxy, proxyType);
+        }
+        
+        // 完全失败，进行端口连通性测试
+        if (!testNetworkConnectivity()) {
+            return new IpInfo("Network Offline", "??", false, null);
+        } else {
+            return new IpInfo("Unknown", "??", false, null);
+        }
+    }
+    
+    /**
+     * 测试网络连通性（多端口测试）
+     */
+    private static boolean testNetworkConnectivity() {
+        String[] testHosts = {
+            "1.1.1.1:443",      // Cloudflare HTTPS
+            "8.8.8.8:443",      // Google DNS HTTPS
+            "1.1.1.1:80",       // Cloudflare HTTP
+        };
+        
+        for (String hostPort : testHosts) {
+            try {
+                String[] parts = hostPort.split(":");
+                String host = parts[0];
+                int port = Integer.parseInt(parts[1]);
+                
+                java.net.Socket socket = new java.net.Socket();
+                socket.connect(new java.net.InetSocketAddress(host, port), 2000);
+                socket.close();
+                return true;
+            } catch (Exception ignored) {
+            }
+        }
+        
+        return false;
+    }
+    
+    private static IpInfo tryFetchFromIpApiCoWithProxy() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://ipapi.co/json/"))
+                .timeout(Duration.ofSeconds(3))
+                .header("User-Agent", "yiyiaddon-minecraft-client")
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("\"ip\":\\s*\"([^\"]+)\"").matcher(body);
+                Matcher countryMatcher = Pattern.compile("\"country_code\":\\s*\"([^\"]+)\"").matcher(body);
+                
+                String ip = ipMatcher.find() ? ipMatcher.group(1) : null;
+                String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
+                
+                // 检测代理/VPN/TOR
+                boolean isProxy = false;
+                String proxyType = null;
+                
+                if (body.contains("\"is_tor\":true") || body.contains("\"tor\":true")) {
+                    isProxy = true;
+                    proxyType = "TOR";
+                } else if (body.contains("\"is_proxy\":true") || body.contains("\"proxy\":true")) {
+                    isProxy = true;
+                    proxyType = "PROXY";
+                } else if (body.contains("\"is_vpn\":true") || body.contains("\"vpn\":true")) {
+                    isProxy = true;
+                    proxyType = "VPN";
+                }
+                
+                if (ip != null && countryCode != null) {
+                    return new IpInfo(ip, countryCode, isProxy, proxyType);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    private static IpInfo tryFetchFromIpApiWithProxy() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://ip-api.com/json/?fields=query,countryCode,proxy,mobile,hosting"))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("\"query\":\\s*\"([^\"]+)\"").matcher(body);
+                Matcher countryMatcher = Pattern.compile("\"countryCode\":\\s*\"([^\"]+)\"").matcher(body);
+                
+                String ip = ipMatcher.find() ? ipMatcher.group(1) : null;
+                String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
+                
+                // 检测代理/VPN
+                boolean isProxy = body.contains("\"proxy\":true") || body.contains("\"hosting\":true");
+                String proxyType = null;
+                
+                if (body.contains("\"proxy\":true")) {
+                    proxyType = "PROXY";
+                } else if (body.contains("\"hosting\":true")) {
+                    proxyType = "VPN";
+                }
+                
+                if (ip != null && countryCode != null) {
+                    return new IpInfo(ip, countryCode, isProxy, proxyType);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    private static IpInfo tryFetchFromCloudflareSimple() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://1.1.1.1/cdn-cgi/trace"))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("ip=([^\\s]+)").matcher(body);
+                Matcher countryMatcher = Pattern.compile("loc=([A-Z]{2})").matcher(body);
+                
+                String ip = ipMatcher.find() ? ipMatcher.group(1) : null;
+                String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
+                
+                if (ip != null && countryCode != null) {
+                    return new IpInfo(ip, countryCode, false, null);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    /**
+     * 将国家代码转换为国旗 emoji
+     * 使用 Unicode 区域指示符号（Regional Indicator Symbols）
+     * 原理：国旗 emoji = U+1F1E6~U+1F1FF 组合（A-Z 映射）
+     */
+    private static String countryCodeToFlag(String countryCode) {
+        if (countryCode == null || countryCode.length() != 2) {
+            return "🌐"; // 未知国家用地球图标
+        }
+        
+        countryCode = countryCode.toUpperCase();
+        int firstLetter = countryCode.charAt(0) - 'A' + 0x1F1E6;
+        int secondLetter = countryCode.charAt(1) - 'A' + 0x1F1E6;
+        
+        return new String(Character.toChars(firstLetter)) + new String(Character.toChars(secondLetter));
     }
     
     /**
@@ -610,5 +831,8 @@ public final class YiyiaddonWelcomeService {
     }
 
     private static record ReleaseInfo(String version, String url, String body) {
+    }
+    
+    private static record IpInfo(String ip, String countryCode, boolean isProxy, String proxyType) {
     }
 }

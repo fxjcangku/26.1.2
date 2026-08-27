@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yiyiaddon 用户管理后台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-0: #05070C;
+            --bg-1: #0A0D12;
+            --bg-2: #0F131C;
+            --bg-3: #161D2B;
+            --bg-4: #1E2636;
+            --accent: #38BDF8;
+            --accent-dim: #0E7490;
+            --text: #E2E8F0;
+            --text-dim: #94A3B8;
+            --success: #6EE7B7;
+            --danger: #F87171;
+            --warning: #FBBF24;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg-0);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: clamp(320px, 90vw, 1400px);
+            margin: 0 auto;
+            padding: clamp(1rem, 3vw, 2rem);
+        }
+        
+        header {
+            background: var(--bg-2);
+            padding: clamp(1.5rem, 4vw, 2.5rem) 0;
+            border-radius: 999px;
+            margin-bottom: clamp(1.5rem, 4vw, 3rem);
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: clamp(1.75rem, 5vw, 2.5rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: var(--text-dim);
+            font-size: clamp(0.875rem, 2.5vw, 1rem);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-2);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--bg-3);
+        }
+        
+        .stat-label {
+            color: var(--text-dim);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 999px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9375rem;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-0);
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-dim);
+            transform: translateY(-2px);
+        }
+        
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 999px;
+            border: 1px solid var(--bg-3);
+            background: var(--bg-2);
+            color: var(--text);
+            font-size: 0.9375rem;
+        }
+        
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .table-container {
+            background: var(--bg-1);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--bg-3);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: var(--bg-2);
+        }
+        
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.875rem;
+            letter-spacing: 0.025em;
+        }
+        
+        td {
+            padding: 1rem;
+            border-top: 1px solid var(--bg-3);
+            font-size: 0.9375rem;
+        }
+        
+        tbody tr {
+            transition: background 0.15s;
+        }
+        
+        tbody tr:hover {
+            background: var(--bg-2);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-online {
+            background: rgba(110, 231, 183, 0.15);
+            color: var(--success);
+        }
+        
+        .badge-offline {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--text-dim);
+        }
+        
+        .badge-proxy {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--danger);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-dim);
+        }
+        
+        .error {
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            padding: 1rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+        
+        .flag {
+            font-size: 1.25rem;
+            margin-right: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+            }
+            
+            table {
+                min-width: 600px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 Yiyiaddon 用户管理后台</h1>
+            <p class="subtitle">实时监控玩家数据 · Cloudflare Workers 驱动</p>
+        </header>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">累计用户</div>
+                <div class="stat-value" id="totalUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">累计进入次数</div>
+                <div class="stat-value" id="totalUses">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h 活跃</div>
+                <div class="stat-value" id="activeUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">在线玩家</div>
+                <div class="stat-value" id="onlineUsers">0</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" onclick="loadData()">🔄 刷新数据</button>
+            <input type="text" class="search-box" id="searchBox" placeholder="搜索玩家名称、UUID、IP..." onkeyup="filterTable()">
+        </div>
+        
+        <div id="errorContainer"></div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>玩家名称</th>
+                        <th>UUID</th>
+                        <th>版本</th>
+                        <th>MC版本</th>
+                        <th>IP地址</th>
+                        <th>国家</th>
+                        <th>最后上线</th>
+                        <th>使用次数</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="10" class="loading">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'https://yiyiaddon-stats.fxjggyx.workers.dev/api/stats';
+        
+        let allUsers = [];
+        
+        async function loadData() {
+            try {
+                document.getElementById('errorContainer').innerHTML = '';
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
+                
+                const response = await fetch(API_URL + '?t=' + Date.now());
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                
+                const data = await response.json();
+                
+                // 更新统计卡片
+                document.getElementById('totalUsers').textContent = data.total_users || 0;
+                document.getElementById('totalUses').textContent = data.total_uses || 0;
+                document.getElementById('activeUsers').textContent = data.active_users_24h || 0;
+                
+                // 计算在线玩家（5分钟内活跃）
+                const now = Date.now();
+                const onlineCount = (data.recent_users || []).filter(u => 
+                    (now - u.last_seen * 1000) < 300000
+                ).length;
+                document.getElementById('onlineUsers').textContent = onlineCount;
+                
+                // 保存所有用户数据
+                allUsers = data.recent_users || [];
+                
+                // 渲染表格
+                renderTable(allUsers);
+                
+            } catch (error) {
+                document.getElementById('errorContainer').innerHTML = `
+                    <div class="error">❌ 加载失败: ${error.message}</div>
+                `;
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="loading">加载失败</td></tr>';
+            }
+        }
+        
+        function renderTable(users) {
+            const tbody = document.getElementById('tableBody');
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="loading">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = users.map((user, index) => {
+                const now = Date.now();
+                const lastSeenMs = user.last_seen * 1000;
+                const hoursAgo = Math.floor((now - lastSeenMs) / 3600000);
+                const minutesAgo = Math.floor((now - lastSeenMs) / 60000);
+                
+                let timeDisplay;
+                let statusBadge;
+                
+                if (minutesAgo < 5) {
+                    timeDisplay = '刚刚在线';
+                    statusBadge = '<span class="badge badge-online">● 在线</span>';
+                } else if (hoursAgo < 1) {
+                    timeDisplay = minutesAgo + ' 分钟前';
+                    statusBadge = '<span class="badge badge-offline">○ 离线</span>';
+                } else if (hoursAgo < 24) {
+                    timeDisplay = hoursAgo + ' 小时前';
+                    statusBadge = '<span class="badge badge-offline">○ 离线</span>';
+                } else {
+                    const daysAgo = Math.floor(hoursAgo / 24);
+                    timeDisplay = daysAgo + ' 天前';
+                    statusBadge = '<span class="badge badge-offline">○ 离线</span>';
+                }
+                
+                const flag = user.country ? countryCodeToFlag(user.country) : '🌐';
+                const country = user.country || '未知';
+                const ip = user.ip || '未知';
+                
+                return `
+                    <tr>
+                        <td>#${index + 1}</td>
+                        <td><strong>${escapeHtml(user.name)}</strong></td>
+                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(user.uuid).substring(0, 8)}...</td>
+                        <td>${escapeHtml(user.version)}</td>
+                        <td>${escapeHtml(user.minecraft_version || 'N/A')}</td>
+                        <td style="font-family: monospace;">${escapeHtml(ip)}</td>
+                        <td><span class="flag">${flag}</span>${country}</td>
+                        <td>${timeDisplay}</td>
+                        <td>${user.usage_count || 1}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function filterTable() {
+            const searchText = document.getElementById('searchBox').value.toLowerCase();
+            
+            if (!searchText) {
+                renderTable(allUsers);
+                return;
+            }
+            
+            const filtered = allUsers.filter(user => 
+                user.name.toLowerCase().includes(searchText) ||
+                user.uuid.toLowerCase().includes(searchText) ||
+                (user.ip && user.ip.toLowerCase().includes(searchText)) ||
+                (user.country && user.country.toLowerCase().includes(searchText))
+            );
+            
+            renderTable(filtered);
+        }
+        
+        function countryCodeToFlag(code) {
+            if (!code || code.length !== 2) return '🌐';
+            const codePoints = code
+                .toUpperCase()
+                .split('')
+                .map(char => 127397 + char.charCodeAt(0));
+            return String.fromCodePoint(...codePoints);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 自动刷新（每30秒）
+        setInterval(loadData, 30000);
+        
+        // 页面加载时获取数据
+        loadData();
+    </script>
+</body>
+</html>

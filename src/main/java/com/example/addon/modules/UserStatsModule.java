@@ -4,6 +4,7 @@ import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
@@ -17,6 +18,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -68,11 +70,16 @@ public final class UserStatsModule extends YiyiaddonModule {
         .build();
     
     private int totalUsers = 0;              // 总用户数
+    private int totalUses = 0;
     private int activeUsers24h = 0;          // 24小时内活跃用户数
     private List<RecentUser> recentUsers = new ArrayList<>();  // 最近活跃用户
     private long lastUpdateTime = 0;         // 上次更新时间戳
     private boolean isLoading = false;       // 是否正在加载
     private String errorMessage = null;      // 错误信息
+    private String clientIp = null;          // 客户端 IP
+    private String clientCountry = null;     // 客户端国家代码
+    private boolean isUsingProxy = false;    // 是否使用代理/VPN
+    private String proxyType = null;         // 代理类型（VPN/Proxy/TOR）
     
     private int tickCounter = 0;             // Tick 计数器
     
@@ -117,30 +124,55 @@ public final class UserStatsModule extends YiyiaddonModule {
         
         isLoading = true;
         errorMessage = null;
+        reloadCurrentScreen();
         
         new Thread(() -> {
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(AddonTemplate.STATS_API_URL + "/api/stats"))
-                    .timeout(Duration.ofSeconds(8))
-                    .GET()
-                    .build();
+                // 先获取 IP 和国家信息（三重降级策略）
+                fetchIpAndCountry();
                 
-                HttpResponse<String> response = HTTP_CLIENT.send(request, 
-                    HttpResponse.BodyHandlers.ofString());
-                
-                if (response.statusCode() == 200) {
-                    parseStatsResponse(response.body());
-                    lastUpdateTime = System.currentTimeMillis();
-                } else {
-                    errorMessage = "HTTP " + response.statusCode();
+                Exception lastFailure = null;
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(AddonTemplate.STATS_API_URL + "/api/stats?t=" + System.currentTimeMillis()))
+                            .timeout(Duration.ofSeconds(12))
+                            .header("Accept", "application/json")
+                            .GET()
+                            .build();
+                        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                        if (response.statusCode() != 200) throw new IllegalStateException("HTTP " + response.statusCode());
+                        parseStatsResponse(response.body());
+                        if (errorMessage == null) lastUpdateTime = System.currentTimeMillis();
+                        lastFailure = null;
+                        break;
+                    } catch (Exception e) {
+                        lastFailure = e;
+                        if (attempt < 3) Thread.sleep(attempt * 500L);
+                    }
+                }
+                if (lastFailure != null) {
+                    String message = lastFailure.getMessage();
+                    errorMessage = message == null || message.isBlank()
+                        ? lastFailure.getClass().getSimpleName()
+                        : lastFailure.getClass().getSimpleName() + "：" + message;
                 }
             } catch (Exception e) {
-                errorMessage = e.getClass().getSimpleName();
+                String message = e.getMessage();
+                errorMessage = message == null || message.isBlank()
+                    ? e.getClass().getSimpleName()
+                    : e.getClass().getSimpleName() + "：" + message;
             } finally {
                 isLoading = false;
+                reloadCurrentScreen();
             }
         }, "yiyiaddon-stats-refresh").start();
+    }
+
+    private void reloadCurrentScreen() {
+        mc.execute(() -> {
+            if (mc.screen instanceof WidgetScreen screen) screen.reload();
+        });
     }
     
     /**
@@ -151,34 +183,44 @@ public final class UserStatsModule extends YiyiaddonModule {
         try {
             // 解析总用户数
             Matcher totalMatcher = Pattern.compile("\"total_users\":(\\d+)").matcher(json);
-            if (totalMatcher.find()) {
-                totalUsers = Integer.parseInt(totalMatcher.group(1));
-            }
+            if (!totalMatcher.find()) throw new IllegalArgumentException("缺少 total_users");
+            int parsedTotalUsers = Integer.parseInt(totalMatcher.group(1));
+
+            Matcher usesMatcher = Pattern.compile("\"total_uses\":(\\d+)").matcher(json);
+            int parsedTotalUses = usesMatcher.find() ? Integer.parseInt(usesMatcher.group(1)) : parsedTotalUsers;
             
             // 解析 24h 活跃用户数
-            Matcher activeMatcher = Pattern.compile("\"active_24h\":(\\d+)").matcher(json);
-            if (activeMatcher.find()) {
-                activeUsers24h = Integer.parseInt(activeMatcher.group(1));
-            }
+            Matcher activeMatcher = Pattern.compile("\"(?:active_24h|active_users_24h)\":(\\d+)").matcher(json);
+            int parsedActiveUsers24h = activeMatcher.find() ? Integer.parseInt(activeMatcher.group(1)) : 0;
             
             // 解析最近活跃用户列表
             List<RecentUser> newRecentUsers = new ArrayList<>();
             Pattern userPattern = Pattern.compile(
-                "\\{\"name\":\"([^\"]+)\",\"last_seen\":(\\d+)\\}"
+                "\\{\"name\":\"([^\"]+)\"[^}]*?\"last_seen\":(?:\"([^\"]+)\"|(\\d+))[^}]*}"
             );
             Matcher userMatcher = userPattern.matcher(json);
             
             while (userMatcher.find()) {
                 String name = userMatcher.group(1);
-                long lastSeen = Long.parseLong(userMatcher.group(2));
+                long lastSeen = userMatcher.group(3) != null
+                    ? normalizeTimestamp(Long.parseLong(userMatcher.group(3)))
+                    : Instant.parse(userMatcher.group(2)).getEpochSecond();
                 newRecentUsers.add(new RecentUser(name, lastSeen));
             }
             
+            totalUsers = parsedTotalUsers;
+            totalUses = parsedTotalUses;
+            activeUsers24h = parsedActiveUsers24h;
             recentUsers = newRecentUsers;
+            errorMessage = null;
             
         } catch (Exception e) {
             errorMessage = "解析失败: " + e.getMessage();
         }
+    }
+
+    private long normalizeTimestamp(long timestamp) {
+        return timestamp > 10_000_000_000L ? timestamp / 1000 : timestamp;
     }
     
     // ══════════════════════════════════════════════════════════════
@@ -192,7 +234,7 @@ public final class UserStatsModule extends YiyiaddonModule {
             table.add(theme.horizontalSeparator()).expandX();
             table.row();
             
-            WButton refreshButton = table.add(theme.button(isLoading ? "加载中..." : "立即刷新")).expandX().widget();
+            WButton refreshButton = table.add(theme.button(isLoading ? "§e加载中..." : "§a立即刷新")).expandX().widget();
             refreshButton.action = this::refreshStats;
         }, buildStatsSections());
     }
@@ -207,9 +249,25 @@ public final class UserStatsModule extends YiyiaddonModule {
         // 构建统计数据区
         List<String> statsSection = new ArrayList<>();
         statsSection.add("§6§l▌ 实时统计");
-        statsSection.add("§f  · 总用户数：" + highlightText(String.valueOf(totalUsers)) + " §7人");
+        statsSection.add("§f  · 累计使用用户：" + highlightText(String.valueOf(totalUsers)) + " §7人");
+        statsSection.add("§f  · 累计进入次数：" + highlightText(String.valueOf(totalUses)) + " §7次");
         statsSection.add("§f  · 24h 活跃：" + highlightText(String.valueOf(activeUsers24h)) + " §7人");
         statsSection.add("§f  · 最近活跃玩家数：" + highlightText(String.valueOf(recentUsers.size())) + " §7人");
+        
+        // 显示客户端 IP 和国家信息（带国旗和代理检测）
+         if (clientIp != null) {
+             String flag = countryCodeToFlag(clientCountry);
+             String countryDisplay = clientCountry != null ? flag + " §e§l" + clientCountry : "§7未知";
+             
+             // 显示代理状态
+             String proxyStatus = "";
+             if (isUsingProxy && proxyType != null) {
+                 proxyStatus = " §c§l[" + proxyType + "]";
+             }
+             
+             statsSection.add("§f  · 你的 IP：§b" + clientIp + " §8| " + countryDisplay + proxyStatus);
+         }
+        
         statsSection.add(formatUpdateTime());
         statsSection.add(formatStatus());
         sections.add(statsSection.toArray(new String[0]));
@@ -241,10 +299,11 @@ public final class UserStatsModule extends YiyiaddonModule {
         // 添加使用说明
         sections.add(new String[]{
             "§e§l▌ 使用说明",
-            "§f  · " + highlightText("进入世界") + "：统计信息自动显示在聊天栏",
+            "§f  · " + highlightText("进入世界") + "：本模块打开后自动请求最新统计",
             "§f  · " + highlightText("查看详情") + "：打开本模块查看完整列表",
             "§f  · " + highlightText("自动刷新") + "：根据设定间隔定时更新数据",
-            "§f  · " + highlightText("手动刷新") + "：点击下方按钮立即获取"
+            "§f  · " + highlightText("手动刷新") + "：点击绿色按钮立即获取最新数据",
+            "§f  · " + highlightText("聊天栏") + "：不再发送统计公屏消息"
         });
         
         // 添加当前在线标识
@@ -296,6 +355,227 @@ public final class UserStatsModule extends YiyiaddonModule {
     //  数据类
     // ══════════════════════════════════════════════════════════════
     
+    // ══════════════════════════════════════════════════════════════
+    //  IP 地理位置查询（三重降级策略 + VPN/代理检测）
+    // ══════════════════════════════════════════════════════════════
+    
+    private void fetchIpAndCountry() {
+        // 重置状态
+        isUsingProxy = false;
+        proxyType = null;
+        
+        // 收集多个来源的 IP 进行对比（检测代理）
+        String ip1 = null, ip2 = null, ip3 = null;
+        String country1 = null, country2 = null, country3 = null;
+        
+        // 策略 1: ipapi.co（提供代理检测信息）
+        IpResult result1 = tryFetchFromIpApiCoWithProxy();
+        if (result1 != null) {
+            ip1 = result1.ip;
+            country1 = result1.country;
+            if (result1.isProxy) {
+                isUsingProxy = true;
+                proxyType = result1.proxyType;
+            }
+        }
+        
+        // 策略 2: ip-api.com（提供代理和移动网络检测）
+        IpResult result2 = tryFetchFromIpApiWithProxy();
+        if (result2 != null) {
+            ip2 = result2.ip;
+            country2 = result2.country;
+            if (result2.isProxy) {
+                isUsingProxy = true;
+                if (proxyType == null) proxyType = result2.proxyType;
+            }
+        }
+        
+        // 策略 3: cloudflare trace
+        IpResult result3 = tryFetchFromCloudflareSimple();
+        if (result3 != null) {
+            ip3 = result3.ip;
+            country3 = result3.country;
+        }
+        
+        // 对比 IP 一致性（如果多个 API 返回的 IP 不同，可能使用了代理）
+        if (ip1 != null && ip2 != null && !ip1.equals(ip2)) {
+            isUsingProxy = true;
+            if (proxyType == null) proxyType = "VPN";
+        }
+        
+        // 选择最可靠的结果（优先使用第一个成功的）
+        if (ip1 != null) {
+            clientIp = ip1;
+            clientCountry = country1;
+        } else if (ip2 != null) {
+            clientIp = ip2;
+            clientCountry = country2;
+        } else if (ip3 != null) {
+            clientIp = ip3;
+            clientCountry = country3;
+        } else {
+            // 完全失败，进行端口连通性测试
+            if (!testNetworkConnectivity()) {
+                clientIp = "Network Offline";
+                clientCountry = "??";
+            } else {
+                clientIp = "Unknown";
+                clientCountry = "??";
+            }
+        }
+    }
+    
+    /**
+     * 测试网络连通性（多端口测试）
+     * 测试常用公共服务器的端口是否可达
+     */
+    private boolean testNetworkConnectivity() {
+        String[] testHosts = {
+            "1.1.1.1:443",      // Cloudflare HTTPS
+            "8.8.8.8:443",      // Google DNS HTTPS
+            "1.1.1.1:80",       // Cloudflare HTTP
+        };
+        
+        for (String hostPort : testHosts) {
+            try {
+                String[] parts = hostPort.split(":");
+                String host = parts[0];
+                int port = Integer.parseInt(parts[1]);
+                
+                java.net.Socket socket = new java.net.Socket();
+                socket.connect(new java.net.InetSocketAddress(host, port), 2000);
+                socket.close();
+                return true; // 只要有一个端口通就认为网络正常
+            } catch (Exception ignored) {
+            }
+        }
+        
+        return false; // 所有端口都不通
+    }
+    
+    private IpResult tryFetchFromIpApiCoWithProxy() {
+        try {
+            // ipapi.co 提供 VPN/代理检测字段
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://ipapi.co/json/"))
+                .timeout(Duration.ofSeconds(3))
+                .header("User-Agent", "yiyiaddon-minecraft-client")
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("\"ip\":\\s*\"([^\"]+)\"").matcher(body);
+                Matcher countryMatcher = Pattern.compile("\"country_code\":\\s*\"([^\"]+)\"").matcher(body);
+                
+                // 检测是否为代理/VPN/TOR
+                boolean isProxy = body.contains("\"threat\"") || body.contains("\"proxy\"");
+                String proxyType = null;
+                
+                if (body.contains("\"is_tor\":true") || body.contains("\"tor\":true")) {
+                    isProxy = true;
+                    proxyType = "TOR";
+                } else if (body.contains("\"is_proxy\":true") || body.contains("\"proxy\":true")) {
+                    isProxy = true;
+                    proxyType = "PROXY";
+                } else if (body.contains("\"is_vpn\":true") || body.contains("\"vpn\":true")) {
+                    isProxy = true;
+                    proxyType = "VPN";
+                }
+                
+                if (ipMatcher.find() && countryMatcher.find()) {
+                    return new IpResult(ipMatcher.group(1), countryMatcher.group(1), isProxy, proxyType);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    private IpResult tryFetchFromIpApiWithProxy() {
+        try {
+            // ip-api.com 提供 proxy/mobile 检测字段
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://ip-api.com/json/?fields=query,countryCode,proxy,mobile,hosting"))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("\"query\":\\s*\"([^\"]+)\"").matcher(body);
+                Matcher countryMatcher = Pattern.compile("\"countryCode\":\\s*\"([^\"]+)\"").matcher(body);
+                
+                // 检测代理/VPN
+                boolean isProxy = body.contains("\"proxy\":true") || body.contains("\"hosting\":true");
+                String proxyType = null;
+                
+                if (body.contains("\"proxy\":true")) {
+                    proxyType = "PROXY";
+                } else if (body.contains("\"hosting\":true")) {
+                    proxyType = "VPN"; // 托管IP通常是VPN
+                }
+                
+                if (ipMatcher.find() && countryMatcher.find()) {
+                    return new IpResult(ipMatcher.group(1), countryMatcher.group(1), isProxy, proxyType);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    private IpResult tryFetchFromCloudflareSimple() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://1.1.1.1/cdn-cgi/trace"))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                Matcher ipMatcher = Pattern.compile("ip=([^\\s]+)").matcher(body);
+                Matcher countryMatcher = Pattern.compile("loc=([A-Z]{2})").matcher(body);
+                
+                if (ipMatcher.find() && countryMatcher.find()) {
+                    return new IpResult(ipMatcher.group(1), countryMatcher.group(1), false, null);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+    
+    /**
+     * 将国家代码转换为国旗 emoji
+     * CN -> 🇨🇳, US -> 🇺🇸, AU -> 🇦🇺 等
+     */
+    private static String countryCodeToFlag(String countryCode) {
+        if (countryCode == null || countryCode.length() != 2) {
+            return "🌐";
+        }
+        
+        countryCode = countryCode.toUpperCase();
+        int firstLetter = countryCode.charAt(0) - 'A' + 0x1F1E6;
+        int secondLetter = countryCode.charAt(1) - 'A' + 0x1F1E6;
+        
+        return new String(Character.toChars(firstLetter)) + new String(Character.toChars(secondLetter));
+    }
+    
+    // ══════════════════════════════════════════════════════════════
+    //  数据类
+    // ══════════════════════════════════════════════════════════════
+    
     private record RecentUser(String name, long lastSeen) {
+    }
+    
+    private record IpResult(String ip, String country, boolean isProxy, String proxyType) {
     }
 }

@@ -42,23 +42,21 @@ export default {
         const isNewUser = !existingUser;
 
         if (isNewUser) {
-          // 新用户：插入记录
           await env.DB.prepare(
-            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen) 
-             VALUES (?, ?, ?, ?, ?, ?)`
+            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count) 
+             VALUES (?, ?, ?, ?, ?, ?, 1)`
           ).bind(uuid, name, version, minecraft_version || 'unknown', now, now).run();
         } else {
-          // 老用户：更新信息
           await env.DB.prepare(
             `UPDATE users 
-             SET name = ?, version = ?, minecraft_version = ?, last_seen = ? 
+             SET name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1 
              WHERE uuid = ?`
           ).bind(name, version, minecraft_version || 'unknown', now, uuid).run();
         }
 
         // 获取总用户数和当前用户排名
         const stats = await env.DB.prepare(
-          'SELECT COUNT(*) as total FROM users'
+          'SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users'
         ).first();
 
         const rank = isNewUser ? stats.total : await getUserRank(env.DB, uuid);
@@ -68,6 +66,7 @@ export default {
           is_new_user: isNewUser,
           rank: rank,
           total_users: stats.total,
+          total_uses: stats.total_uses,
           message: isNewUser 
             ? `欢迎！你是第 ${rank} 个使用该扩展的玩家` 
             : `欢迎回来！你是第 ${rank} 个使用该扩展的玩家`
@@ -81,20 +80,23 @@ export default {
     // 获取统计信息（管理员接口）
     if (url.pathname === '/api/stats' && request.method === 'GET') {
       try {
-        const stats = await env.DB.prepare(
-          'SELECT COUNT(*) as total FROM users'
-        ).first();
-
-        const recentUsers = await env.DB.prepare(
-          'SELECT name, version, last_seen FROM users ORDER BY last_seen DESC LIMIT 10'
-        ).all();
+        const now = Date.now();
+        const activeSince = now - 24 * 60 * 60 * 1000;
+        const [stats, active, recentUsers] = await env.DB.batch([
+          env.DB.prepare('SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users'),
+          env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_seen >= ?').bind(activeSince),
+          env.DB.prepare('SELECT name, version, last_seen FROM users ORDER BY last_seen DESC LIMIT 50')
+        ]);
 
         return jsonResponse({
-          total_users: stats.total,
+          total_users: stats.results[0].total,
+          total_uses: stats.results[0].total_uses,
+          active_users_24h: active.results[0].total,
+          generated_at: now,
           recent_users: recentUsers.results.map(u => ({
             name: u.name,
             version: u.version,
-            last_seen: new Date(u.last_seen).toISOString()
+            last_seen: u.last_seen
           }))
         });
 
@@ -113,7 +115,7 @@ export default {
 
       try {
         const users = await env.DB.prepare(
-          'SELECT uuid, name, version, minecraft_version, first_seen, last_seen FROM users ORDER BY first_seen ASC'
+          'SELECT uuid, name, version, minecraft_version, first_seen, last_seen, usage_count FROM users ORDER BY first_seen ASC'
         ).all();
 
         return jsonResponse({
@@ -125,7 +127,8 @@ export default {
             version: u.version,
             minecraft_version: u.minecraft_version,
             first_seen: new Date(u.first_seen).toISOString(),
-            last_seen: new Date(u.last_seen).toISOString()
+            last_seen: new Date(u.last_seen).toISOString(),
+            usage_count: u.usage_count
           }))
         });
 
@@ -159,6 +162,7 @@ function jsonResponse(data, status = 200) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store',
     },
   });
 }
