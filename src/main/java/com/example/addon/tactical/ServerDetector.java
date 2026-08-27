@@ -160,7 +160,7 @@ public class ServerDetector extends YiyiaddonModule {
         Thread 上报线程 = new Thread(() -> {
             HttpURLConnection 连接 = null;
             try {
-                连接 = (HttpURLConnection) new URL(调试地址).openConnection();
+                连接 = (HttpURLConnection) URI.create(调试地址).toURL().openConnection();
                 连接.setRequestMethod("POST");
                 连接.setConnectTimeout(500);
                 连接.setReadTimeout(500);

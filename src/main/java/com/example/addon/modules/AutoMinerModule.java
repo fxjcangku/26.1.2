@@ -262,7 +262,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         trashList = sgItems.add(new BlockListSetting.Builder()
             .name("垃圾丢弃名单")
             .description("挖矿时自动丢弃这些方块（点击选择添加，推荐：圆石、石头、泥土、闪长岩、花岗岩、安山岩等）")
-            .defaultValue(List.of(
+            .defaultValue(new ArrayList<>(List.of(
                 Blocks.COBBLESTONE,
                 Blocks.COBBLED_DEEPSLATE,
                 Blocks.STONE,
@@ -273,18 +273,18 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 Blocks.GRANITE,
                 Blocks.ANDESITE,
                 Blocks.TUFF
-            ))
+            )))
             .build());
 
         foodWhitelist = sgItems.add(new ItemListSetting.Builder()
             .name("食物白名单")
             .description("从食物箱只拿这些食物（推荐：熟牛肉、熟猪排、金胡萝卜、面包）")
-            .defaultValue(List.of(
+            .defaultValue(new ArrayList<>(List.of(
                 Items.COOKED_BEEF,
                 Items.COOKED_PORKCHOP,
                 Items.GOLDEN_CARROT,
                 Items.BREAD
-            ))
+            )))
             .filter(item -> {
                 ItemStack stack = new ItemStack(item);
                 return stack.has(DataComponents.FOOD);
@@ -294,13 +294,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
             .name("搭路方块白名单")
             .description("Baritone搭桥/填坑时使用这些方块（点击选择添加，推荐：圆石、深层圆石、泥土、石头等）")
-            .defaultValue(List.of(
+            .defaultValue(new ArrayList<>(List.of(
                 Blocks.COBBLESTONE,
                 Blocks.COBBLED_DEEPSLATE,
                 Blocks.DIRT,
                 Blocks.STONE,
                 Blocks.NETHERRACK
-            ))
+            )))
             .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
             .build());
 
