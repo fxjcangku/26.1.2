@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
- * 终极防踢模块（全功能整合版）
+ * 发包防踢模块（全功能整合版）
  * 
  * 包含 7 大功能：
  * 1. 伪装客户端 - 改 Brand、拦截 Mod 频道
@@ -312,7 +312,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     // 使用说明窗口
     private static class AntiKickBypassHelpScreen extends com.example.addon.core.HelpScreen {
         public AntiKickBypassHelpScreen(GuiTheme theme) {
-            super(theme, "终极防踢");
+            super(theme, "发包防踢");
             
             addSection("功能概览", new String[]{
                 "§8├─ §f伪装客户端 §8- §7改Brand、拦截Mod频道",
