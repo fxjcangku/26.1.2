@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS users (
     last_seen INTEGER NOT NULL,             -- 最后使用时间（Unix 时间戳）
     usage_count INTEGER NOT NULL DEFAULT 1,
     server_ip TEXT,
-    server_name TEXT
+    server_name TEXT,
+    client_ip TEXT,
+    client_country TEXT,
+    is_premium INTEGER DEFAULT 0
 );
 
 -- 索引：加速排名查询

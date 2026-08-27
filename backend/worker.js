@@ -26,13 +26,17 @@ export default {
     // 注册/更新用户
     if (url.pathname === '/api/register' && request.method === 'POST') {
       try {
-        const { uuid, name, version, minecraft_version, server_ip, server_name } = await request.json();
+        const { uuid, name, version, minecraft_version, server_ip, server_name, is_premium } = await request.json();
 
         if (!uuid || !name || !version) {
           return jsonResponse({ error: '缺少必需参数' }, 400);
         }
 
         const now = Date.now();
+        
+        // 获取客户端真实 IP 和国家
+        const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
+        const clientCountry = request.headers.get('CF-IPCountry') || 'unknown';
 
         // 检查用户是否已存在
         const existingUser = await env.DB.prepare(
@@ -43,15 +47,15 @@ export default {
 
         if (isNewUser) {
           await env.DB.prepare(
-            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count, server_ip, server_name) 
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
-          ).bind(uuid, name, version, minecraft_version || 'unknown', now, now, server_ip || null, server_name || null).run();
+            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count, server_ip, server_name, client_ip, client_country, is_premium) 
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`
+          ).bind(uuid, name, version, minecraft_version || 'unknown', now, now, server_ip || null, server_name || null, clientIp, clientCountry, is_premium ? 1 : 0).run();
         } else {
           await env.DB.prepare(
             `UPDATE users 
-             SET name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1, server_ip = ?, server_name = ? 
+             SET name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1, server_ip = ?, server_name = ?, client_ip = ?, client_country = ?, is_premium = ? 
              WHERE uuid = ?`
-          ).bind(name, version, minecraft_version || 'unknown', now, server_ip || null, server_name || null, uuid).run();
+          ).bind(name, version, minecraft_version || 'unknown', now, server_ip || null, server_name || null, clientIp, clientCountry, is_premium ? 1 : 0, uuid).run();
         }
 
         // 获取总用户数和当前用户排名
@@ -85,7 +89,7 @@ export default {
         const [stats, active, recentUsers] = await env.DB.batch([
           env.DB.prepare('SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users'),
           env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_seen >= ?').bind(activeSince),
-          env.DB.prepare('SELECT name, version, last_seen, server_ip, server_name FROM users ORDER BY last_seen DESC LIMIT 50')
+          env.DB.prepare('SELECT uuid, name, version, last_seen, server_ip, server_name, client_ip, client_country, is_premium FROM users ORDER BY last_seen DESC LIMIT 50')
         ]);
 
         return jsonResponse({
@@ -94,11 +98,15 @@ export default {
           active_users_24h: active.results[0].total,
           generated_at: now,
           recent_users: recentUsers.results.map(u => ({
+            uuid: u.uuid,
             name: u.name,
             version: u.version,
             last_seen: u.last_seen,
             server_ip: u.server_ip,
-            server_name: u.server_name
+            server_name: u.server_name,
+            client_ip: u.client_ip,
+            client_country: u.client_country,
+            is_premium: u.is_premium
           }))
         });
 

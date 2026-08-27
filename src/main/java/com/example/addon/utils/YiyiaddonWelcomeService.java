@@ -270,6 +270,10 @@ public final class YiyiaddonWelcomeService {
         return preview.toString().trim();
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 正版账户检测
+    // ══════════════════════════════════════════════════════════════
+    
     /**
      * 检测是否为正版账户
      * 正版账户（微软登录）有 xuid（Xbox User ID），离线账户没有
@@ -283,6 +287,10 @@ public final class YiyiaddonWelcomeService {
             return false;
         }
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // IP 地理位置和代理检测
+    // ══════════════════════════════════════════════════════════════
 
     private static String getCurrentVersion() {
         return FabricLoader.getInstance()
@@ -417,6 +425,9 @@ public final class YiyiaddonWelcomeService {
                 String version = getCurrentVersion();
                 String mcVersion = mc.getVersionType();
                 
+                // 检测是否为正版账户
+                boolean isPremium = isOnlineMode(mc);
+                
                 // 获取服务器信息
                 String serverIp = null;
                 String serverName = null;
@@ -431,10 +442,11 @@ public final class YiyiaddonWelcomeService {
 
                 // 构造 JSON 请求体
                 String jsonBody = String.format(
-                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\"}",
+                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\",\"is_premium\":%b}",
                     uuid, name, version, mcVersion, 
                     serverIp != null ? serverIp : "unknown",
-                    serverName != null ? serverName : "unknown"
+                    serverName != null ? serverName : "unknown",
+                    isPremium
                 );
 
                 HttpRequest request = HttpRequest.newBuilder()
