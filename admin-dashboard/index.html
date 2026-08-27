@@ -266,8 +266,10 @@
                         <th>UUID</th>
                         <th>版本</th>
                         <th>MC版本</th>
-                        <th>IP地址</th>
+                        <th>客户端IP</th>
                         <th>国家</th>
+                        <th>服务器IP</th>
+                        <th>服务器名称</th>
                         <th>最后上线</th>
                         <th>使用次数</th>
                         <th>状态</th>
@@ -275,7 +277,7 @@
                 </thead>
                 <tbody id="tableBody">
                     <tr>
-                        <td colspan="10" class="loading">加载中...</td>
+                        <td colspan="12" class="loading">加载中...</td>
                     </tr>
                 </tbody>
             </table>
@@ -290,7 +292,7 @@
         async function loadData() {
             try {
                 document.getElementById('errorContainer').innerHTML = '';
-                document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="12" class="loading">加载中...</td></tr>';
                 
                 const response = await fetch(API_URL + '?t=' + Date.now());
                 if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -319,7 +321,7 @@
                 document.getElementById('errorContainer').innerHTML = `
                     <div class="error">❌ 加载失败: ${error.message}</div>
                 `;
-                document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="loading">加载失败</td></tr>';
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="12" class="loading">加载失败</td></tr>';
             }
         }
         
@@ -327,7 +329,7 @@
             const tbody = document.getElementById('tableBody');
             
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="loading">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="loading">暂无数据</td></tr>';
                 return;
             }
             
@@ -358,6 +360,8 @@
                 const flag = user.country ? countryCodeToFlag(user.country) : '🌐';
                 const country = user.country || '未知';
                 const ip = user.ip || '未知';
+                const serverIp = user.server_ip || '未知';
+                const serverName = user.server_name || '未知';
                 
                 return `
                     <tr>
@@ -368,6 +372,8 @@
                         <td>${escapeHtml(user.minecraft_version || 'N/A')}</td>
                         <td style="font-family: monospace;">${escapeHtml(ip)}</td>
                         <td><span class="flag">${flag}</span>${country}</td>
+                        <td style="font-family: monospace; color: var(--accent);">${escapeHtml(serverIp)}</td>
+                        <td style="color: var(--success);">${escapeHtml(serverName)}</td>
                         <td>${timeDisplay}</td>
                         <td>${user.usage_count || 1}</td>
                         <td>${statusBadge}</td>
@@ -388,7 +394,9 @@
                 user.name.toLowerCase().includes(searchText) ||
                 user.uuid.toLowerCase().includes(searchText) ||
                 (user.ip && user.ip.toLowerCase().includes(searchText)) ||
-                (user.country && user.country.toLowerCase().includes(searchText))
+                (user.country && user.country.toLowerCase().includes(searchText)) ||
+                (user.server_ip && user.server_ip.toLowerCase().includes(searchText)) ||
+                (user.server_name && user.server_name.toLowerCase().includes(searchText))
             );
             
             renderTable(filtered);

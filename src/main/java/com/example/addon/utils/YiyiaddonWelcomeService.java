@@ -416,11 +416,25 @@ public final class YiyiaddonWelcomeService {
                 String name = mc.player.getName().getString();
                 String version = getCurrentVersion();
                 String mcVersion = mc.getVersionType();
+                
+                // 获取服务器信息
+                String serverIp = null;
+                String serverName = null;
+                
+                if (mc.getCurrentServer() != null) {
+                    serverIp = mc.getCurrentServer().ip;
+                    serverName = mc.getCurrentServer().name;
+                } else if (mc.isLocalServer()) {
+                    serverIp = "localhost";
+                    serverName = "单人游戏";
+                }
 
                 // 构造 JSON 请求体
                 String jsonBody = String.format(
-                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\"}",
-                    uuid, name, version, mcVersion
+                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\"}",
+                    uuid, name, version, mcVersion, 
+                    serverIp != null ? serverIp : "unknown",
+                    serverName != null ? serverName : "unknown"
                 );
 
                 HttpRequest request = HttpRequest.newBuilder()

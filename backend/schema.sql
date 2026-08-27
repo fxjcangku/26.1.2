@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
     minecraft_version TEXT DEFAULT 'unknown', -- Minecraft 版本
     first_seen INTEGER NOT NULL,            -- 首次使用时间（Unix 时间戳）
     last_seen INTEGER NOT NULL,             -- 最后使用时间（Unix 时间戳）
-    usage_count INTEGER NOT NULL DEFAULT 1
+    usage_count INTEGER NOT NULL DEFAULT 1,
+    server_ip TEXT,
+    server_name TEXT
 );
 
 -- 索引：加速排名查询

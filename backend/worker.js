@@ -26,7 +26,7 @@ export default {
     // 注册/更新用户
     if (url.pathname === '/api/register' && request.method === 'POST') {
       try {
-        const { uuid, name, version, minecraft_version } = await request.json();
+        const { uuid, name, version, minecraft_version, server_ip, server_name } = await request.json();
 
         if (!uuid || !name || !version) {
           return jsonResponse({ error: '缺少必需参数' }, 400);
@@ -43,15 +43,15 @@ export default {
 
         if (isNewUser) {
           await env.DB.prepare(
-            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count) 
-             VALUES (?, ?, ?, ?, ?, ?, 1)`
-          ).bind(uuid, name, version, minecraft_version || 'unknown', now, now).run();
+            `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count, server_ip, server_name) 
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
+          ).bind(uuid, name, version, minecraft_version || 'unknown', now, now, server_ip || null, server_name || null).run();
         } else {
           await env.DB.prepare(
             `UPDATE users 
-             SET name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1 
+             SET name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1, server_ip = ?, server_name = ? 
              WHERE uuid = ?`
-          ).bind(name, version, minecraft_version || 'unknown', now, uuid).run();
+          ).bind(name, version, minecraft_version || 'unknown', now, server_ip || null, server_name || null, uuid).run();
         }
 
         // 获取总用户数和当前用户排名
@@ -85,7 +85,7 @@ export default {
         const [stats, active, recentUsers] = await env.DB.batch([
           env.DB.prepare('SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users'),
           env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_seen >= ?').bind(activeSince),
-          env.DB.prepare('SELECT name, version, last_seen FROM users ORDER BY last_seen DESC LIMIT 50')
+          env.DB.prepare('SELECT name, version, last_seen, server_ip, server_name FROM users ORDER BY last_seen DESC LIMIT 50')
         ]);
 
         return jsonResponse({
@@ -96,7 +96,9 @@ export default {
           recent_users: recentUsers.results.map(u => ({
             name: u.name,
             version: u.version,
-            last_seen: u.last_seen
+            last_seen: u.last_seen,
+            server_ip: u.server_ip,
+            server_name: u.server_name
           }))
         });
 
