@@ -6,6 +6,8 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.network.protocol.Packet;
@@ -296,25 +298,22 @@ public class AntiKickBypass extends YiyiaddonModule {
     private final Random random = new Random();
 
     public AntiKickBypass() {
-        super(CATEGORY_TACTICAL, "anti-kick-bypass", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。点击按钮查看说明。");
+        super(CATEGORY_TACTICAL, "发包防踢", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。点击按钮查看说明。");
     }
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        settings.add(new ButtonSetting.Builder()
-            .name("查看使用说明")
-            .action(() -> mc.setScreen(new AntiKickBypassHelpScreen(theme)))
-            .build()
-        );
-        return super.getWidget(theme);
+        return buildInfoWidget(theme, table -> {
+            WButton helpBtn = theme.button("查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+        }, new String[0]);
     }
 
-    // 使用说明窗口
-    private static class AntiKickBypassHelpScreen extends com.example.addon.core.HelpScreen {
-        public AntiKickBypassHelpScreen(GuiTheme theme) {
-            super(theme, "发包防踢");
-            
-            addSection("功能概览", new String[]{
+    private String[] buildHelpContent() {
+        return com.example.addon.ui.HelpScreen.buildHelpContent(
+            new com.example.addon.ui.HelpScreen.HelpSection("功能概览",
                 "§8├─ §f伪装客户端 §8- §7改Brand、拦截Mod频道",
                 "§8├─ §f聊天排队 §8- §7自动排队防刷屏",
                 "§8├─ §f防挂机 §8- §7假装在操作",
@@ -322,9 +321,9 @@ public class AntiKickBypass extends YiyiaddonModule {
                 "§8├─ §f拉回处理 §8- §7被拉回时自动断流",
                 "§8├─ §f拉回分析 §8- §7记录什么操作容易被拉回",
                 "§8└─ §f模拟真人 §8- §7视角抖动、网络延迟"
-            });
+            ),
             
-            addSection("使用建议", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("使用建议",
                 "§8├─ §e伪装客户端 §8- §7必开，让服务器认为你是原版",
                 "§8├─ §e聊天排队 §8- §7建议开启，避免刷屏被踢",
                 "§8├─ §e防挂机 §8- §7挂机时开启，模拟真人操作",
@@ -332,23 +331,23 @@ public class AntiKickBypass extends YiyiaddonModule {
                 "§8├─ §e拉回处理 §8- §7被拉回时开启，自动暂停操作",
                 "§8├─ §e拉回分析 §8- §7调试用，记录拉回原因",
                 "§8└─ §e模拟真人 §8- §7可选，增加真实感"
-            });
+            ),
             
-            addSection("参数建议", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("参数建议",
                 "§6▸ §f发包限速 §8- §e20-30包/秒 §7(普通服务器)",
                 "§6▸ §f挖掘限速 §8- §e15-20次/秒 §7(高级反作弊)",
                 "§6▸ §f放置限速 §8- §e10-15次/秒 §7(高级反作弊)",
                 "§6▸ §f视角抖动 §8- §e0.1-0.3度 §7(微小抖动)",
                 "§6▸ §f网络延迟 §8- §e20-80毫秒 §7(模拟卡顿)"
-            });
+            ),
             
-            addSection("注意事项", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
                 "§c⚠ §f单人世界自动禁用，多人世界自动启用",
                 "§c⚠ §f拉回分析会记录大量数据，调试完记得关闭",
                 "§c⚠ §f模拟真人功能会影响操作手感，按需开启",
                 "§c⚠ §f限速参数过低会影响游戏体验，过高会被检测"
-            });
-        }
+            )
+        );
     }
 
     @Override
@@ -697,56 +696,4 @@ public class AntiKickBypass extends YiyiaddonModule {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  UI 界面
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Override
-    public WWidget getWidget(GuiTheme theme) {
-        return buildInfoWidget(theme,
-            table -> {
-                addUniformButton(theme, table, "清空拉回分析数据", () -> {
-                    rubberBandHistory.clear();
-                    notify("§a已清空");
-                });
-                table.row();
-            },
-            new String[]{ "§l终极防踢 · 使用说明" },
-            new String[]{
-                "§e§l▌ 快速开始",
-                "§f  1. 打开这个模块（终极防踢）",
-                "§f  2. 打开「服务器检测」模块",
-                "§f  3. 打开「飞行绕过」模块",
-                "§f  4. 进服务器，自动运行"
-            },
-            new String[]{
-                "§a§l▌ 7 大功能",
-                "§f  ① 伪装客户端 - 让服务器以为你是原版玩家",
-                "§f  ② 聊天排队 - 发消息太快时自动排队",
-                "§f  ③ 防挂机 - 假装你在操作",
-                "§f  ④ 限制发包 - 防止挖/放太快被踢",
-                "§f  ⑤ 拉回处理 - 被拉回时自动发确认包",
-                "§f  ⑥ 拉回分析 - 记录什么操作容易被拉回",
-                "§f  ⑦ 模拟真人 - 视角抖动 + 网络延迟"
-            },
-            new String[]{
-                "§b§l▌ 当前状态",
-                "§f  · 聊天队列：§e" + chatQueue.size() + "§f 条排队中",
-                "§f  · 本次拦截：§e" + throttledCount.get() + "§f 个包",
-                "§f  · 拉回记录：§e" + rubberBandHistory.size() + "§f 次",
-                "§f  · 延迟队列：§e" + delayQueue.size() + "§f 个包"
-            },
-            new String[]{
-                "§d§l▌ 推荐设置",
-                "§f  · 挖掘上限：§e8§f 个/秒（原版 5，留点余量）",
-                "§f  · 放置上限：§e8§f 个/秒（原版 4，留点余量）",
-                "§f  · 视角抖动：§e2°§f（太大会被识别）",
-                "§f  · 网络延迟：§e默认关闭§f（开了会卡，慎用）"
-            },
-            new String[]{
-                "§d§l▌ 注意事项",
-                "§f  · 「网络延迟」会让你操作变卡，不建议开",
-                "§f  · 被拉回 10 次后会自动给你分析报告",
-                "§f  · 如果一直被拉回，去「飞行绕过」换模式",
-                "§f  · 高级反作弊服务器建议全部开启"
-            }
-        );
-    }
 }

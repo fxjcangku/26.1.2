@@ -6,6 +6,8 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -98,25 +100,22 @@ public class FlightBypass extends YiyiaddonModule {
     private long pendingDestroyAt = 0L;
 
     public FlightBypass() {
-        super(CATEGORY_TACTICAL, "flight-bypass", "四种飞行模式绕过GrimAC/Matrix高级反作弊。点击按钮查看说明。");
+        super(CATEGORY_TACTICAL, "飞行绕过", "四种飞行模式绕过GrimAC/Matrix高级反作弊。点击按钮查看说明。");
     }
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        settings.add(new ButtonSetting.Builder()
-            .name("查看使用说明")
-            .action(() -> mc.setScreen(new FlightBypassHelpScreen(theme)))
-            .build()
-        );
-        return super.getWidget(theme);
+        return buildInfoWidget(theme, table -> {
+            WButton helpBtn = theme.button("查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+        }, new String[0]);
     }
 
-    // 使用说明窗口
-    private static class FlightBypassHelpScreen extends com.example.addon.core.HelpScreen {
-        public FlightBypassHelpScreen(GuiTheme theme) {
-            super(theme, "飞行绕过");
-            
-            addSection("飞行模式", new String[]{
+    private String[] buildHelpContent() {
+        return com.example.addon.ui.HelpScreen.buildHelpContent(
+            new com.example.addon.ui.HelpScreen.HelpSection("飞行模式",
                 "§8├─ §e原版模拟 §8- §7高频跳跃伪装",
                 "§8│   §7适用于低级反作弊，检测宽松的服务器",
                 "§8│",
@@ -128,28 +127,28 @@ public class FlightBypass extends YiyiaddonModule {
                 "§8│",
                 "§8└─ §e序列垫脚 §8- §7预测方块放置",
                 "§8    §780-120ms随机延迟，每5次留一次痕迹"
-            });
+            ),
             
-            addSection("参数调整", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("参数调整",
                 "§6▸ §f跳跃间隔 §8- §e3 tick §7(原版模拟模式)",
                 "§6▸ §f下降速度 §8- §e0.03 §7(安全滑翔模式)",
                 "§6▸ §f放置延迟 §8- §e80-120ms §7(序列垫脚模式)",
                 "§6▸ §f留痕频率 §8- §e1/5 §7(序列垫脚模式)"
-            });
+            ),
             
-            addSection("自动适配", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("自动适配",
                 "§a[1] §f加入服务器时自动检测反作弊类型",
                 "§a[2] §f检测到GrimAC/Matrix时自动切换安全模式",
                 "§a[3] §f模块启动时根据反作弊调整参数"
-            });
+            ),
             
-            addSection("注意事项", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
                 "§c⚠ §f原版模拟和烟花火箭对高级反作弊无效",
                 "§c⚠ §f安全滑翔会持续下降，需要间歇性上升补偿",
                 "§c⚠ §f序列垫脚需要背包里有方块（圆石/泥土等）",
                 "§c⚠ §f被拉回时会自动触发断流联动（需开启发包防踢）"
-            });
-        }
+            )
+        );
     }
 
     @Override
@@ -436,36 +435,6 @@ public class FlightBypass extends YiyiaddonModule {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  UI 面板
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Override
-    public WWidget getWidget(GuiTheme theme) {
-        return buildInfoWidget(theme,
-            new String[]{ "§l飞行绕过 · 使用说明" },
-            new String[]{
-                "§e§l▌ 当前模式",
-                "§f  " + mode.get().displayName
-            },
-            new String[]{
-                "§a§l▌ 模式说明",
-                "§f  1. §e原版模拟§r - 高频跳跃伪装（适合低级反作弊）",
-                "§f  2. §e安全滑翔§r - 微下降规避重力检测（推荐）",
-                "§f  3. §e烟花火箭§r - 模拟鞘翅加速（需要副手有烟花）",
-                "§f  4. §e序列垫脚§r - 预测方块放置（最安全但慢）"
-            },
-            new String[]{
-                "§b§l▌ 智能联动",
-                "§f  · 检测到 Matrix/GrimAC 时自动切换安全模式",
-                "§f  · 收到拉回包时触发防踢模块断流",
-                "§f  · 拉回包冷却期间自动暂停飞行"
-            },
-            new String[]{
-                "§c§l▌ 注意事项",
-                "§f  · 序列垫脚模式需要主手持有方块",
-                "§f  · 烟花模式需要副手持有烟花火箭",
-                "§f  · 在高级反作弊服务器建议使用安全滑翔"
-            }
-        );
-    }
 
     /** 飞行模式枚举 */
     public enum FlightMode {

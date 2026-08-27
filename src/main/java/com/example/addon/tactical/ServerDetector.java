@@ -7,6 +7,8 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
@@ -190,20 +192,17 @@ public class ServerDetector extends YiyiaddonModule {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        settings.add(new ButtonSetting.Builder()
-            .name("查看使用说明")
-            .action(() -> mc.setScreen(new ServerDetectorHelpScreen(theme)))
-            .build()
-        );
-        return super.getWidget(theme);
+        return buildInfoWidget(theme, table -> {
+            WButton helpBtn = theme.button("查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+        }, new String[0]);
     }
 
-    // 使用说明窗口
-    private static class ServerDetectorHelpScreen extends com.example.addon.core.HelpScreen {
-        public ServerDetectorHelpScreen(GuiTheme theme) {
-            super(theme, "服务器检测");
-            
-            addSection("检测功能", new String[]{
+    private String[] buildHelpContent() {
+        return com.example.addon.ui.HelpScreen.buildHelpContent(
+            new com.example.addon.ui.HelpScreen.HelpSection("检测功能",
                 "§8├─ §f服务器核心识别",
                 "§8│   §7Paper / Purpur / Leaves / Folia / 混合端",
                 "§8│   §7代理层识别（Velocity / BungeeCord / Waterfall）",
@@ -216,36 +215,36 @@ public class ServerDetector extends YiyiaddonModule {
                 "§8└─ §f资源包处理",
                 "§8    §7自动下载到本地（支持断点续传）",
                 "§8    §7暴力绕过：自动拒绝或接受"
-            });
+            ),
             
-            addSection("使用方式", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("使用方式",
                 "§a[1] §f加入服务器时自动启动检测",
                 "§a[2] §f等待 §e3-5秒 §f让服务器发送完整信息",
                 "§a[3] §f检测完成后在聊天栏显示结果",
                 "§a[4] §f结果会保存到TacticalFSM供其他模块使用"
-            });
+            ),
             
-            addSection("资源包模式", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("资源包模式",
                 "§6▸ §f暴力拒绝 §8- §7自动拒绝所有资源包",
                 "§6▸ §f暴力接受 §8- §7自动接受所有资源包",
                 "§6▸ §f下载到本地 §8- §7保存到 §e.minecraft/resourcepacks/",
                 "§6▸ §f询问玩家 §8- §7弹窗让你手动选择"
-            });
+            ),
             
-            addSection("检测原理", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("检测原理",
                 "§8├─ §7Brand字符串 §8- §7最容易被改，只作线索",
                 "§8├─ §7插件消息频道 §8- §7反作弊开的校验频道",
                 "§8├─ §7指令树命名空间 §8- §7插件注册的实际结果（主要依据）",
                 "§8└─ §7拉回频率 §8- §7说明反作弊存在且激进"
-            });
+            ),
             
-            addSection("注意事项", new String[]{
+            new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
                 "§c⚠ §f检测结果不是100%准确，仅供参考",
                 "§c⚠ §f资源包下载需要网络连接，国外服务器可能较慢",
                 "§c⚠ §f暴力拒绝可能被服务器踢出（部分服务器强制资源包）",
                 "§c⚠ §f单人世界自动禁用，仅在多人服务器生效"
-            });
-        }
+            )
+        );
     }
 
     @Override
@@ -589,52 +588,6 @@ public class ServerDetector extends YiyiaddonModule {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  UI 面板
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Override
-    public WWidget getWidget(GuiTheme theme) {
-        return buildInfoWidget(theme,
-            table -> {
-                addUniformButton(theme, table, "打开资源包位置", this::openResourcePackFolder);
-                table.row();
-            },
-            new String[]{ "§l服务器检测 · 使用说明" },
-            new String[]{
-                "§e§l▌ 侦测结果",
-                "§f  · 核心：§a" + TacticalFSM.getDetectedServerCore(),
-                "§f  · 反作弊：§c" + TacticalFSM.getDetectedAntiCheat(),
-                "§f  · 已记录插件频道：§e" + seenChannels.size() + "§f 个",
-                "§f  · 近期拉回次数：§e" + rubberBandTotal,
-                "§f  · 侦测状态：" + (detectionDone ? "§a已完成" : "§7等待进服")
-            },
-            new String[]{
-                "§a§l▌ 识别层级（可信度由高到低）",
-                "§f  1. 插件频道 — 反作弊主动开的校验通道，命中基本确诊",
-                "§f  2. 指令树 — 插件注册的实际结果，伪造成本高，主要依据",
-                "§f  3. brand / version — 服务端可随手改写，仅作线索",
-                "§f  4. 拉回频率 — 只能确认存在移动校验，认不出型号"
-            },
-            new String[]{
-                "§b§l▌ 资源包模式",
-                "§f  · §e暴力绕过§f — 回假包骗过服务端，不下载不渲染",
-                "§f  · §e自动白嫖§f — 异步下载存本地，SHA-1 校验后回成功",
-                "§f  · §e原版处理§f — 不干预，走原版弹窗流程"
-            },
-            new String[]{
-                "§d§l▌ 下载增强",
-                "§f  · 断点续传：重试时用 Range 接着传，大包不必从零开始",
-                "§f    服务端不支持 Range 时会自动改为整包重下",
-                "§f  · 重试 §e" + downloadRetries.get() + "§f 次，指数退避（0.5s 起，上限 8s）",
-                "§f  · 读取超时 §e" + downloadTimeout.get() + "§f 秒，慢速服建议调大",
-                "§f  · 伪装浏览器 UA，绕过 CDN 的 403 拦截"
-            },
-            new String[]{
-                "§c§l▌ 注意",
-                "§f  · 指令树需等服务端下发完成，侦测延迟太短会漏判",
-                "§f  · 反作弊报「未发现」只代表没抓到指纹，不等于没装",
-                "§f  · 侦测到高风险反作弊会自动通知飞行模块降级"
-            }
-        );
-    }
 
     /** 资源包处理模式。 */
     public enum ResourcePackMode {
