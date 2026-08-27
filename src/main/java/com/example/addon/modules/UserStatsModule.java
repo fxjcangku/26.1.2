@@ -187,6 +187,23 @@ public final class UserStatsModule extends YiyiaddonModule {
     
     @Override
     public WWidget getWidget(GuiTheme theme) {
+        // 创建带按钮的面板
+        return buildInfoWidget(theme, table -> {
+            table.add(theme.horizontalSeparator()).expandX();
+            table.row();
+            
+            WButton refreshButton = table.add(theme.button(isLoading ? "加载中..." : "立即刷新")).expandX().widget();
+            refreshButton.action = this::refreshStats;
+        }, buildStatsSections());
+    }
+    
+    /**
+     * 构建统计信息的各个区域
+     * 每次调用都重新生成，确保数据实时更新
+     */
+    private String[][] buildStatsSections() {
+        List<String[]> sections = new ArrayList<>();
+        
         // 构建统计数据区
         List<String> statsSection = new ArrayList<>();
         statsSection.add("§6§l▌ 实时统计");
@@ -195,8 +212,6 @@ public final class UserStatsModule extends YiyiaddonModule {
         statsSection.add("§f  · 最近活跃玩家数：" + highlightText(String.valueOf(recentUsers.size())) + " §7人");
         statsSection.add(formatUpdateTime());
         statsSection.add(formatStatus());
-        
-        List<String[]> sections = new ArrayList<>();
         sections.add(statsSection.toArray(new String[0]));
         
         // 添加最近活跃用户列表（工整对齐）
@@ -239,14 +254,7 @@ public final class UserStatsModule extends YiyiaddonModule {
             "§f  最近 24h 内有 " + highlightText(String.valueOf(activeUsers24h)) + " §f位玩家活跃"
         });
         
-        // 创建带按钮的面板
-        return buildInfoWidget(theme, table -> {
-            table.add(theme.horizontalSeparator()).expandX();
-            table.row();
-            
-            WButton refreshButton = table.add(theme.button(isLoading ? "加载中..." : "立即刷新")).expandX().widget();
-            refreshButton.action = this::refreshStats;
-        }, sections.toArray(new String[0][]));
+        return sections.toArray(new String[0][]);
     }
     
     // ══════════════════════════════════════════════════════════════
