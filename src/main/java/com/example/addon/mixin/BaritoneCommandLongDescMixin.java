@@ -9,6 +9,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Baritone 指令详细说明翻译 Mixin
+ * 
+ * 拦截 Baritone 所有指令类的 getLongDesc() 方法，返回中文化的详细说明
+ * 目标：37个 Baritone 默认指令类
+ */
 @Mixin(targets = {
     "baritone.command.defaults.AxisCommand",
     "baritone.command.defaults.BlacklistCommand",
@@ -51,6 +57,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
     "baritone.command.defaults.WaypointsCommand"
 }, remap = false)
 public abstract class BaritoneCommandLongDescMixin {
+    
+    /**
+     * 翻译 Baritone 指令的详细说明
+     * 
+     * 注入点：getLongDesc() 方法头部
+     * 效果：返回中文化的多行指令说明
+     */
     @Inject(method = "getLongDesc()Ljava/util/List;", at = @At("HEAD"), cancellable = true, require = 0)
     private void yiyiaddon$translateLongDescription(CallbackInfoReturnable<List<String>> info) {
         if (!YiyiaddonTranslator.enabled()) return;

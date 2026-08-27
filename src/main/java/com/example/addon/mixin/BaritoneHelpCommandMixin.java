@@ -12,28 +12,50 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Baritone Help 指令翻译 Mixin
+ * 
+ * 拦截 HelpCommand 类的多处文本输出，实现帮助系统的完整中文化
+ * 包括：指令描述、提示文字、列表标题等
+ */
 @Mixin(value = HelpCommand.class, remap = false)
 public abstract class BaritoneHelpCommandMixin {
+    
+    /**
+     * 翻译 help 指令自身的简短描述
+     */
     @Inject(method = "getShortDesc()Ljava/lang/String;", at = @org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable = true)
     private void yiyiaddon$translateShortDescription(CallbackInfoReturnable<String> info) {
         if (YiyiaddonTranslator.enabled()) info.setReturnValue("查看全部命令或指定命令的帮助");
     }
 
+    /**
+     * 翻译"点击返回帮助菜单"提示
+     */
     @ModifyConstant(method = "execute(Ljava/lang/String;Lbaritone/api/command/argument/IArgConsumer;)V", constant = @Constant(stringValue = "Click to return to the help menu"))
     private String yiyiaddon$translateReturnHint(String value) {
         return YiyiaddonTranslator.enabled() ? "点击返回帮助菜单" : value;
     }
 
+    /**
+     * 翻译"所有 Baritone 命令"标题
+     */
     @ModifyConstant(method = "lambda$execute$1()V", constant = @Constant(stringValue = "All Baritone commands (clickable):"))
     private String yiyiaddon$translateCommandListTitle(String value) {
         return YiyiaddonTranslator.enabled() ? "所有 Baritone 命令（可点击）：" : value;
     }
 
+    /**
+     * 翻译"点击查看完整帮助"提示
+     */
     @ModifyConstant(method = "lambda$execute$2(Ljava/lang/String;Lbaritone/api/command/ICommand;)Lnet/minecraft/network/chat/Component;", constant = @Constant(stringValue = "\n\nClick to view full help"))
     private static String yiyiaddon$translateFullHelpHint(String value) {
         return YiyiaddonTranslator.enabled() ? "\n\n点击查看完整帮助" : value;
     }
 
+    /**
+     * 拦截指令列表中的描述文本，返回中文化版本
+     */
     @Redirect(
         method = "lambda$execute$2(Ljava/lang/String;Lbaritone/api/command/ICommand;)Lnet/minecraft/network/chat/Component;",
         at = @At(value = "INVOKE", target = "Lbaritone/api/command/ICommand;getShortDesc()Ljava/lang/String;")
@@ -42,6 +64,9 @@ public abstract class BaritoneHelpCommandMixin {
         return yiyiaddon$translateShortDescription(command.getShortDesc());
     }
 
+    /**
+     * 拦截详细帮助页面中的描述文本，返回中文化版本
+     */
     @Redirect(
         method = "execute(Ljava/lang/String;Lbaritone/api/command/argument/IArgConsumer;)V",
         at = @At(value = "INVOKE", target = "Lbaritone/api/command/ICommand;getShortDesc()Ljava/lang/String;")
@@ -50,6 +75,12 @@ public abstract class BaritoneHelpCommandMixin {
         return yiyiaddon$translateShortDescription(command.getShortDesc());
     }
 
+    /**
+     * 核心翻译方法：将英文指令描述转换为中文
+     * 
+     * @param text 英文描述
+     * @return 中文描述（如果未找到映射则返回原文）
+     */
     private static String yiyiaddon$translateShortDescription(String text) {
         if (!YiyiaddonTranslator.enabled()) return text;
         return switch (text) {

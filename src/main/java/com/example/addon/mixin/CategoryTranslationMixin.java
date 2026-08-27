@@ -10,10 +10,23 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Meteor 模块分类翻译 Mixin
+ * 
+ * 拦截 Category 构造函数，将英文分类名转换为中文
+ * 影响范围：模块列表左侧的分类标签
+ */
 @Mixin(value = Category.class, remap = false)
 public abstract class CategoryTranslationMixin {
-    @Mutable @Shadow @Final public String name;
+    
+    @Mutable 
+    @Shadow 
+    @Final 
+    public String name;
 
+    /**
+     * 在构造函数结束时替换分类名为中文
+     */
     @Inject(method = "<init>(Ljava/lang/String;)V", at = @At("RETURN"))
     private void yiyiaddon$localize(String value, CallbackInfo info) {
         name = YiyiaddonTranslator.localizeCategory(name);

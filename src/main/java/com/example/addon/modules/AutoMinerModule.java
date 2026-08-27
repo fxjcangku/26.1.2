@@ -1146,7 +1146,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  假矿检测按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            WButton checkFakeBtn = theme.button("🔍 检测假矿");
+            WButton checkFakeBtn = theme.button("检测假矿");
             checkFakeBtn.action = this::checkFakeOres;
             table.add(checkFakeBtn).expandX().minWidth(200);
             table.row();
