@@ -493,41 +493,33 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private List<String> selfCheck() {
         List<String> missing = new ArrayList<>();
 
-        // 1. 至少勾选一种作物
+        // 作物选择检测
         if (getEnabledCrops().isEmpty()) {
-            missing.add("未勾选作物 — 在「作物图鉴」里至少勾选一种");
+            missing.add("§e作物§f·未勾选");
         }
 
-        // 2. 四锚点全部绑定
+        // 点位绑定检测
         FarmSite start = site(SiteType.START);
         FarmSite end = site(SiteType.END);
         FarmSite dump = site(SiteType.DUMP);
         FarmSite supply = site(SiteType.SUPPLY);
 
-        if (start == null) {
-            missing.add("起点未绑定 — 准星对准农田一角，输入 " + highlightCommand(".nongchang set 起点"));
-        }
-        if (end == null) {
-            missing.add("终点未绑定 — 准星对准对角，输入 " + highlightCommand(".nongchang set 终点"));
-        }
-        if (dump == null) {
-            missing.add("卸货箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".nongchang set 卸货箱"));
-        }
-        if (supply == null) {
-            missing.add("补货箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".nongchang set 补货箱"));
-        }
+        if (start == null) missing.add("§a起点§f·未绑定");
+        if (end == null) missing.add("§a终点§f·未绑定");
+        if (dump == null) missing.add("§6卸货箱§f·未绑定");
+        if (supply == null) missing.add("§2补货箱§f·未绑定");
 
-        // 3. 已绑定的锚点必须在当前维度（未绑定的上面已经报过，不重复报）
-        if (start != null && !start.inCurrentDimension()) missing.add("起点不在当前维度 — 回到绑定时的维度，或重新绑定");
-        if (end != null && !end.inCurrentDimension()) missing.add("终点不在当前维度 — 回到绑定时的维度，或重新绑定");
-        if (dump != null && !dump.inCurrentDimension()) missing.add("卸货箱不在当前维度 — 回到绑定时的维度，或重新绑定");
-        if (supply != null && !supply.inCurrentDimension()) missing.add("补货箱不在当前维度 — 回到绑定时的维度，或重新绑定");
+        // 维度检测
+        if (start != null && !start.inCurrentDimension()) missing.add("§a起点§f·不在当前维度");
+        if (end != null && !end.inCurrentDimension()) missing.add("§a终点§f·不在当前维度");
+        if (dump != null && !dump.inCurrentDimension()) missing.add("§6卸货箱§f·不在当前维度");
+        if (supply != null && !supply.inCurrentDimension()) missing.add("§2补货箱§f·不在当前维度");
 
-        // 4. 农田范围有效（体积 > 0）
+        // 农田范围检测
         if (start != null && end != null) {
             scanner.setBounds(start.pos(), end.pos());
             if (scanner.volume() == 0) {
-                missing.add("农田范围无效 — 起点和终点重合了，重新绑定其中一个");
+                missing.add("§c农田范围§f·起点终点重合了");
             }
         }
 
@@ -1329,42 +1321,43 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         };
         
         // 标题
-        card.add(theme.label(titleColor + title)).expandX();
+        card.add(theme.label(titleColor + title)).expandX().center();
         card.row();
         
         // 坐标和维度显示
         if (isBound && data != null) {
             String coords = String.format("%d, %d, %d", 
                 data.pos().getX(), data.pos().getY(), data.pos().getZ());
-            card.add(theme.label("§f" + coords)).expandX();
+            card.add(theme.label("§f" + coords)).expandX().center();
             card.row();
             
             String dimName = getDimensionName(data.dimension());
-            card.add(theme.label("§7" + dimName)).expandX();
+            card.add(theme.label("§7" + dimName)).expandX().center();
             card.row();
         } else {
-            card.add(theme.label("§8暂未绑定")).expandX();
+            card.add(theme.label("§8暂未绑定")).expandX().center();
             card.row();
         }
         
-        // 设置按钮
-        WButton setBtn = theme.button("设置");
+        // 设置按钮（已绑定=亮绿色，未绑定=暗灰色）
+        String setBtnColor = isBound ? "§a" : "§8";
+        WButton setBtn = theme.button(setBtnColor + "设置");
         setBtn.action = () -> {
             com.example.addon.commands.NongChangCommand.setBinding(key);
             mc.setScreen(null);
         };
-        card.add(setBtn).expandX();
+        card.add(setBtn).expandX().center();
         card.row();
         
-        // 删除按钮
-        WButton delBtn = theme.button("删除");
+        // 删除按钮（红色）
+        WButton delBtn = theme.button("§c删除");
         delBtn.action = () -> {
             if (isBound) {
                 com.example.addon.commands.NongChangCommand.removeBinding(key);
                 mc.setScreen(null);
             }
         };
-        card.add(delBtn).expandX();
+        card.add(delBtn).expandX().center();
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();

@@ -37,10 +37,10 @@ import java.util.Set;
  * 
  * 核心能力：
  * · Baritone 驱动采掘 - 单目标矿石锁定，深层变种自动支持
- * · 状态机全生命周期管理 - 去野外/卸货/补给/挂机修复点修补/死亡复活
- * · 物流自动化 - 卸货箱倒产物，食物箱拿食物，垃圾丢弃
+ * · 状态机全生命周期管理 - 前往挖矿/返回卸货/前往补给/前往修复点修补/死亡返回
+ * · 物流自动化 - 返回卸货箱倒产物，前往食物箱拿食物，垃圾丢弃
  * · 耐久修补 - 联动 KillAura 打怪修装备
- * · 死亡自愈 - 自动复活+回归挂机修复点
+ * · 死亡自愈 - 自动复活+死亡返回挂机修复点
  * · 防卡死 - 区块加载检测、掉落虚空检测、指令延迟校验
  */
 public final class AutoMinerModule extends YiyiaddonModule {
@@ -53,13 +53,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final SoundNotifier soundNotifier = new SoundNotifier();
 
     // ═══════════════════════════════════════════════════════════════════
-    //  UI 配置面板 - 按使用频率分组
+    //  UI 配置面板 - 人性化分组
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgEssential = settings.createGroup("常用设置", true);
+    private final SettingGroup sgTarget = settings.createGroup("目标选择", true);
+    private final SettingGroup sgCommand = settings.createGroup("传送指令", false);
+    private final SettingGroup sgThreshold = settings.createGroup("触发条件", false);
+    private final SettingGroup sgItems = settings.createGroup("物品管理", false);
     private final SettingGroup sgBaritone = settings.createGroup("Baritone调优", false);
-    private final SettingGroup sgAdvanced = settings.createGroup("高级功能", false);
-    private final SettingGroup sgVisual = settings.createGroup("可视化设置", false);
 
     // ─── 目标选择（互斥） ───
     private final Setting<Block> overworldOreTarget;
@@ -126,7 +127,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Integer> legitMineYLevel;
     private final Setting<Boolean> legitMineIncludeDiagonals;
 
-    // ─── 显示设置 ───
+    // ─── 显示设置（私有字段，不在界面显示） ───
     private final Setting<Double> espScale;
     private final Setting<SettingColor> mineralChestColor;
     private final Setting<SettingColor> foodChestColor;
@@ -137,24 +138,23 @@ public final class AutoMinerModule extends YiyiaddonModule {
             "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考下面使用说明。");
 
         // ═══════════════════════════════════════════════════════════
-        //  常用设置 - 经常调整的核心配置
+        //  目标选择 - 挖什么
         // ═══════════════════════════════════════════════════════════
         
-        // ─── 目标选择（互斥） ───
-        overworldOreTarget = sgEssential.add(new BlockSetting.Builder()
+        overworldOreTarget = sgTarget.add(new BlockSetting.Builder()
             .name("主世界矿石")
             .description("选择主世界矿石（含深层变种）")
-            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
+            .defaultValue(Blocks.AIR)
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("_ore") && !id.contains("nether") && !id.contains("ancient");
             })
             .build());
 
-        netherOreTarget = sgEssential.add(new BlockSetting.Builder()
+        netherOreTarget = sgTarget.add(new BlockSetting.Builder()
             .name("下界矿石")
             .description("选择下界矿石（下界金矿、下界石英矿、远古残骸）")
-            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
+            .defaultValue(Blocks.AIR)
             .filter(block -> {
                 String id = BuiltInRegistries.BLOCK.getKey(block).toString();
                 return id.contains("nether") && (id.contains("ore") || id.contains("quartz")) 
@@ -162,91 +162,100 @@ public final class AutoMinerModule extends YiyiaddonModule {
             })
             .build());
 
-        blockTarget = sgEssential.add(new BlockSetting.Builder()
+        blockTarget = sgTarget.add(new BlockSetting.Builder()
             .name("普通方块")
             .description("选择普通方块（石头、泥土、原木等）")
-            .defaultValue(Blocks.AIR) // 默认不选，需玩家手动配置
+            .defaultValue(Blocks.AIR)
             .build());
 
-        // ─── 指令配置 ───
-        wildCommand = sgEssential.add(new StringSetting.Builder()
-            .name("去野外指令")
-            .description("传送到挖矿区域的指令（支持带/或不带/；如需打开GUI选择请启用下方开关）")
-            .defaultValue("") // 默认留空，需玩家配置
+        // ═══════════════════════════════════════════════════════════
+        //  传送指令 - 去哪里
+        // ═══════════════════════════════════════════════════════════
+        
+        wildCommand = sgCommand.add(new StringSetting.Builder()
+            .name("前往挖矿指令")
+            .description("传送到挖矿区域的指令（支持带/或不带/）")
+            .defaultValue("")
             .build());
 
-        rtpGuiEnabled = sgEssential.add(new BoolSetting.Builder()
+        rtpGuiEnabled = sgCommand.add(new BoolSetting.Builder()
             .name("RTP需要GUI选择")
-            .description("指令后自动扫描GUI点击匹配按钮（纯文本匹配，忽略颜色代码和空格）")
+            .description("指令后自动扫描GUI点击匹配按钮")
             .defaultValue(false)
             .build());
 
-        rtpGuiKeyword = sgEssential.add(new StringSetting.Builder()
+        rtpGuiKeyword = sgCommand.add(new StringSetting.Builder()
             .name("GUI按钮关键词")
             .description("输入纯文本（如'主世界'会匹配'§a主 §e世 §b界'），自动忽略颜色和空格")
             .defaultValue("主世界")
             .visible(rtpGuiEnabled::get)
             .build());
 
-        unloadCommand = sgEssential.add(new StringSetting.Builder()
-            .name("满载卸货指令")
-            .description("传送到卸货箱的指令（支持带/或不带/）")
-            .defaultValue("") // 默认留空，需玩家配置
+        unloadCommand = sgCommand.add(new StringSetting.Builder()
+            .name("返回卸货指令")
+            .description("传送到卸货箱的指令")
+            .defaultValue("")
             .build());
 
-        supplyCommand = sgEssential.add(new StringSetting.Builder()
-            .name("补给指令")
-            .description("传送到食物箱的指令（支持带/或不带/）")
-            .defaultValue("") // 默认留空，需玩家配置
+        supplyCommand = sgCommand.add(new StringSetting.Builder()
+            .name("前往补给指令")
+            .description("传送到食物箱的指令")
+            .defaultValue("")
             .build());
 
-        afkCommand = sgEssential.add(new StringSetting.Builder()
-            .name("挂机点指令")
-            .description("传送到挂机修补点（支持带/或不带/；自动联动杀戮光环，修好后自动RTP）")
-            .defaultValue("") // 默认留空，需玩家配置
+        afkCommand = sgCommand.add(new StringSetting.Builder()
+            .name("前往修复指令")
+            .description("传送到挂机修补点")
+            .defaultValue("")
             .build());
 
-        respawnCommand = sgEssential.add(new StringSetting.Builder()
-            .name("死亡重返指令")
-            .description("复活后返回挂机点（支持带/或不带/；死亡瞬间自动调用流星自动重生）")
-            .defaultValue("") // 默认留空，需玩家配置
+        respawnCommand = sgCommand.add(new StringSetting.Builder()
+            .name("死亡返回指令")
+            .description("复活后返回挂机点")
+            .defaultValue("")
             .build());
 
-        // ─── 阈值设置 ───
-        unloadThreshold = sgEssential.add(new IntSetting.Builder()
-            .name("满载组数")
-            .description("背包矿物达到多少组时触发卸货（1组=64个）")
-            .defaultValue(20) // 默认20组（1280个矿物）
-            .min(1)
-            .sliderMax(36)
-            .build());
-
-        hungerThreshold = sgEssential.add(new IntSetting.Builder()
-            .name("食物阈值")
-            .description("背包食物少于此数量时触发补给（单位：个）")
-            .defaultValue(32) // 默认半组（32个食物）
-            .min(1)
-            .sliderMax(64)
-            .build());
-
-        durabilityThreshold = sgEssential.add(new IntSetting.Builder()
-            .name("耐久阈值")
-            .description("工具剩余耐久低于此值时前往挂机点联动杀戮光环修补")
-            .defaultValue(100) // 默认100耐久
-            .min(1)
-            .sliderMax(500)
-            .build());
-
-        teleportDelay = sgEssential.add(new IntSetting.Builder()
+        teleportDelay = sgCommand.add(new IntSetting.Builder()
             .name("传送等待时长")
-            .description("执行传送指令后等待秒数（包括服务器延迟+区块加载）；超时自动重新RTP")
-            .defaultValue(8) // 默认8秒（适应大部分服务器）
+            .description("执行传送指令后等待秒数")
+            .defaultValue(8)
             .min(1)
             .sliderMax(30)
             .build());
 
-        // ─── 垃圾与食物 ───
-        trashList = sgEssential.add(new BlockListSetting.Builder()
+        // ═══════════════════════════════════════════════════════════
+        //  触发条件 - 什么时候做什么
+        // ═══════════════════════════════════════════════════════════
+        
+        unloadThreshold = sgThreshold.add(new IntSetting.Builder()
+            .name("满载组数")
+            .description("背包矿物达到多少组时触发卸货")
+            .defaultValue(20)
+            .min(1)
+            .sliderMax(36)
+            .build());
+
+        hungerThreshold = sgThreshold.add(new IntSetting.Builder()
+            .name("食物阈值")
+            .description("背包食物少于此数量时触发补给")
+            .defaultValue(32)
+            .min(1)
+            .sliderMax(64)
+            .build());
+
+        durabilityThreshold = sgThreshold.add(new IntSetting.Builder()
+            .name("耐久阈值")
+            .description("工具剩余耐久低于此值时前往挂机点修补")
+            .defaultValue(100)
+            .min(1)
+            .sliderMax(500)
+            .build());
+
+        // ═══════════════════════════════════════════════════════════
+        //  物品管理 - 拿什么扔什么
+        // ═══════════════════════════════════════════════════════════
+        
+        trashList = sgItems.add(new BlockListSetting.Builder()
             .name("垃圾丢弃名单")
             .description("挖矿时自动丢弃这些方块")
             .defaultValue(List.of(
@@ -278,9 +287,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
             ))
             .build());
 
-        foodWhitelist = sgEssential.add(new ItemListSetting.Builder()
+        foodWhitelist = sgItems.add(new ItemListSetting.Builder()
             .name("食物白名单")
-            .description("从食物箱只拿这些食物（自动过滤所有可食用物品）")
+            .description("从食物箱只拿这些食物")
             .defaultValue(List.of(
                 // 熟肉类（高饱和）
                 Items.COOKED_BEEF,
@@ -334,10 +343,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
             })
             .build());
 
-        // ─── 搭路方块白名单 ───
-        placeBlocks = sgEssential.add(new BlockListSetting.Builder()
+        placeBlocks = sgItems.add(new BlockListSetting.Builder()
             .name("搭路方块白名单")
-            .description("Baritone搭桥/填坑时优先使用这些方块（会自动排除在垃圾丢弃外）")
+            .description("Baritone搭桥/填坑时使用这些方块")
             .defaultValue(List.of(
                 Blocks.COBBLESTONE,
                 Blocks.DIRT,
@@ -348,7 +356,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .build());
 
         // ═══════════════════════════════════════════════════════════
-        //  2️⃣ Baritone调优 - 寻路与挖掘参数
+        //  Baritone调优 - 寻路与挖掘参数
         // ═══════════════════════════════════════════════════════════
         
         // ─── 种子挖矿 ───
@@ -588,41 +596,41 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .build());
 
         // ═══════════════════════════════════════════════════════════
-        //  3️⃣ 高级功能 - 语音播报（默认启用，不显示在界面）
+        //  语音播报和可视化设置（代码默认值，不显示在界面）
         // ═══════════════════════════════════════════════════════════
         
         // 语音播报默认启用，音量1.0
         soundNotifier.setEnabled(true);
         soundNotifier.setVolume(1.0f);
-
-        // ═══════════════════════════════════════════════════════════
-        //  4️⃣ 可视化设置 - ESP显示
-        // ═══════════════════════════════════════════════════════════
         
-        espScale = sgVisual.add(new DoubleSetting.Builder()
-            .name("ESP字体大小")
-            .description("三个坐标点悬浮标签的字体缩放倍数")
-            .defaultValue(1.0)
-            .min(0.5)
-            .sliderMax(3.0)
+        // ESP字体大小默认2.0（两倍），不添加到界面
+        espScale = settings.getDefaultGroup().add(new DoubleSetting.Builder()
+            .name("_esp_scale_internal")
+            .description("")
+            .defaultValue(2.0)
+            .visible(() -> false)
             .build());
-
-        mineralChestColor = sgVisual.add(new ColorSetting.Builder()
-            .name("矿物箱颜色")
-            .description("矿物箱ESP标签的颜色")
+        
+        // ESP颜色默认值，不添加到界面
+        mineralChestColor = settings.getDefaultGroup().add(new ColorSetting.Builder()
+            .name("_mineral_color_internal")
+            .description("")
             .defaultValue(new SettingColor(255, 215, 0))
+            .visible(() -> false)
             .build());
-
-        foodChestColor = sgVisual.add(new ColorSetting.Builder()
-            .name("食物箱颜色")
-            .description("食物箱ESP标签的颜色")
+            
+        foodChestColor = settings.getDefaultGroup().add(new ColorSetting.Builder()
+            .name("_food_color_internal")
+            .description("")
             .defaultValue(new SettingColor(100, 255, 100))
+            .visible(() -> false)
             .build());
-
-        afkPointColor = sgVisual.add(new ColorSetting.Builder()
-            .name("挂机修复点颜色")
-            .description("挂机修复点ESP标签的颜色")
+            
+        afkPointColor = settings.getDefaultGroup().add(new ColorSetting.Builder()
+            .name("_afk_color_internal")
+            .description("")
             .defaultValue(new SettingColor(255, 100, 255))
+            .visible(() -> false)
             .build());
     }
 
@@ -794,7 +802,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private List<String> selfCheck() {
         List<String> missing = new ArrayList<>();
 
-        // 1. 目标单选
+        // 目标选择检测
         Block overworld = overworldOreTarget.get();
         Block nether = netherOreTarget.get();
         Block block = blockTarget.get();
@@ -805,79 +813,55 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (block != null && !block.equals(Blocks.AIR)) selectedCount++;
 
         if (selectedCount == 0) {
-            missing.add("未选择目标 — 在「主世界矿石/下界矿石/普通方块」里选一个");
+            missing.add("§e目标§f·未选择");
         } else if (selectedCount > 1) {
-            missing.add("目标选了 " + selectedCount + " 个 — 只能选一个，取消多余的");
+            missing.add("§e目标§f·选了" + selectedCount + "个（只能选1个）");
         }
 
-        // 2. 三个 WK 坐标
-        if (WKCommand.getMineralChest() == null) {
-            missing.add("矿物箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".wk set 矿物箱"));
-        }
-        if (WKCommand.getFoodChest() == null) {
-            missing.add("食物箱未绑定 — 准星对准箱子，输入 " + highlightCommand(".wk set 食物箱"));
-        }
-        if (WKCommand.getAFKPoint() == null) {
-            missing.add("挂机点未绑定 — 站到挂机位置，输入 " + highlightCommand(".wk set 挂机点"));
-        }
+        // 点位绑定检测
+        if (WKCommand.getMineralChest() == null) missing.add("§6矿物箱§f·未绑定");
+        if (WKCommand.getFoodChest() == null) missing.add("§2食物箱§f·未绑定");
+        if (WKCommand.getAFKPoint() == null) missing.add("§d挂机点§f·未绑定");
 
-        // 3. 五条指令
-        if (wildCommand.get().isEmpty()) missing.add("「去野外指令」未填写 — 填传送到矿区的服务器指令");
-        if (unloadCommand.get().isEmpty()) missing.add("「满载卸货指令」未填写 — 填传送到矿物箱的指令");
-        if (supplyCommand.get().isEmpty()) missing.add("「补给指令」未填写 — 填传送到食物箱的指令");
-        if (afkCommand.get().isEmpty()) missing.add("「挂机点指令」未填写 — 填传送到挂机点的指令");
-        if (respawnCommand.get().isEmpty()) missing.add("「死亡重返指令」未填写 — 填复活后回矿区的指令");
+        // 指令配置检测
+        if (wildCommand.get().isEmpty()) missing.add("§b前往挖矿指令§f·未填写");
+        if (unloadCommand.get().isEmpty()) missing.add("§b返回卸货指令§f·未填写");
+        if (supplyCommand.get().isEmpty()) missing.add("§b前往补给指令§f·未填写");
+        if (afkCommand.get().isEmpty()) missing.add("§b前往修复指令§f·未填写");
+        if (respawnCommand.get().isEmpty()) missing.add("§b死亡返回指令§f·未填写");
 
-        // 4. 装备检测（镐子、武器、半组食物）
+        // 装备检测
         if (mc.player != null) {
             boolean hasPickaxe = false;
             boolean hasWeapon = false;
             int foodCount = 0;
 
-            // 遍历背包+快捷栏（槽位0-35）
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getItem(i);
                 if (stack.isEmpty()) continue;
 
                 String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
                 
-                // 检测镐子（任意材质）
-                if (itemId.contains("pickaxe")) {
-                    hasPickaxe = true;
-                }
-                
-                // 检测武器（剑、斧头、铲子）
-                if (itemId.contains("sword") || itemId.contains("axe") || itemId.contains("shovel")) {
-                    hasWeapon = true;
-                }
-                
-                // 统计食物数量
-                if (stack.has(DataComponents.FOOD)) {
-                    foodCount += stack.getCount();
-                }
+                if (itemId.contains("pickaxe")) hasPickaxe = true;
+                if (itemId.contains("sword") || itemId.contains("axe") || itemId.contains("shovel")) hasWeapon = true;
+                if (stack.has(DataComponents.FOOD)) foodCount += stack.getCount();
             }
 
-            if (!hasPickaxe) {
-                missing.add("背包缺少镐子 — 请至少携带一把镐子（任意材质）");
-            }
-            if (!hasWeapon) {
-                missing.add("背包缺少武器 — 请携带剑/斧头/铲子（用于挂机修补时杀怪）");
-            }
-            if (foodCount < 32) {
-                missing.add("食物不足 — 当前仅有 " + foodCount + " 个，建议携带至少半组（32个）");
-            }
+            if (!hasPickaxe) missing.add("§7镐子§f·背包里没有");
+            if (!hasWeapon) missing.add("§7武器§f·背包里没有");
+            if (foodCount < 32) missing.add("§7食物§f·只有" + foodCount + "个（建议32+）");
         }
 
-        // 5. 种子挖矿（可选功能，仅在启用时检测）
+        // 种子挖矿检测
         if (seedMiningEnabled.get()) {
             String seedStr = worldSeed.get().trim();
             if (seedStr.isEmpty()) {
-                missing.add("「种子挖矿」已启用但未填写种子 — 填入世界种子或关闭该功能");
+                missing.add("§e种子挖矿§f·已启用但未填种子");
             } else {
                 try {
                     Long.parseLong(seedStr);
                 } catch (NumberFormatException e) {
-                    missing.add("「种子挖矿」种子格式错误 — 必须是Long类型数字（支持负数）");
+                    missing.add("§e种子挖矿§f·格式错误（需Long数字）");
                 }
             }
         }
@@ -1187,12 +1171,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
             },
             new String[]{
                 "§a§l状态机流程",
-                "§f  1. " + highlightText("去野外") + " — 发送野外指令，等区块加载完成",
+                "§f  1. " + highlightText("前往挖矿") + " — 发送挖矿指令，等区块加载完成",
                 "§f  2. " + highlightText("采掘") + " — Baritone 自动挖矿，满载/饥饿/耐久触发转换",
                 "§f  3. " + highlightText("卸货循环") + " — 传送到矿物箱，倒货，返回野外",
                 "§f  4. " + highlightText("补给循环") + " — 传送到箱，拿食物，吃饱，返回",
                 "§f  5. " + highlightText("修补循环") + " — 传送到挂机修复点，KillAura打怪修工具（需修补附魔）",
-                "§f  6. " + highlightText("死亡处理") + " — 自动复活，执行死亡重返指令，恢复挖矿"
+                "§f  6. " + highlightText("死亡处理") + " — 自动复活，执行死亡返回指令，恢复挖矿"
             },
             new String[]{
                 "§b§l参数建议",
@@ -1216,7 +1200,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§f  · " + highlightText("深层变种自动支持") + "：选钻石矿会自动挖深层钻石矿",
                 "§f  · " + highlightText("垃圾自动丢弃") + "：圆石、深层圆石等默认已勾选",
                 "§f  · " + highlightText("修补需要经验") + "：挂机修复点附近必须有怪物刷新",
-                "§f  · " + highlightText("死亡自愈") + "：复活后自动执行重返指令并恢复挖矿",
+                "§f  · " + highlightText("死亡自愈") + "：复活后自动执行死亡返回指令并恢复挖矿",
                 "§f  · " + highlightText("防卡死机制") + "：区块加载检测、掉落检测、指令延迟校验"
             }
         );
@@ -1247,48 +1231,49 @@ public final class AutoMinerModule extends YiyiaddonModule {
             default -> new SettingColor(255, 255, 255);
         };
         
-        // 转换为颜色代码
+        // 转换为颜色代码（用于标题和按钮）
         String titleColor = String.format("§x§%x§%x§%x§%x§%x§%x",
             (espColor.r >> 4) & 0xF, espColor.r & 0xF,
             (espColor.g >> 4) & 0xF, espColor.g & 0xF,
             (espColor.b >> 4) & 0xF, espColor.b & 0xF);
         
         // 标题（使用ESP颜色）
-        card.add(theme.label(titleColor + title)).expandX();
+        card.add(theme.label(titleColor + title)).expandX().center();
         card.row();
         
         // 状态显示
         if (isBound && data != null) {
             String coords = String.format("%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
-            card.add(theme.label("§f" + coords)).expandX();
+            card.add(theme.label("§f" + coords)).expandX().center();
             card.row();
             
             String dimName = data.dimensionName();
-            card.add(theme.label("§7" + dimName)).expandX();
+            card.add(theme.label("§7" + dimName)).expandX().center();
             card.row();
         } else {
-            card.add(theme.label("§8暂未绑定")).expandX();
+            card.add(theme.label("§8暂未绑定")).expandX().center();
             card.row();
         }
         
-        // 设置按钮
-        WButton setBtn = theme.button("设置");
+        // 设置按钮（已绑定=亮绿色，未绑定=暗灰色）
+        String setBtnColor = isBound ? "§a" : "§8";
+        WButton setBtn = theme.button(setBtnColor + "设置");
         setBtn.action = () -> {
             WKCommand.setBinding(key);
             mc.setScreen(null);
         };
-        card.add(setBtn).expandX();
+        card.add(setBtn).expandX().center();
         card.row();
         
-        // 删除按钮
-        WButton delBtn = theme.button("删除");
+        // 删除按钮（红色）
+        WButton delBtn = theme.button("§c删除");
         delBtn.action = () -> {
             if (isBound) {
                 WKCommand.removeBinding(key);
                 mc.setScreen(null);
             }
         };
-        card.add(delBtn).expandX();
+        card.add(delBtn).expandX().center();
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();
