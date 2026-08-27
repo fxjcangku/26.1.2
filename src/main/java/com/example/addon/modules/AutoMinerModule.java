@@ -285,10 +285,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 Items.GOLDEN_CARROT,
                 Items.BREAD
             )))
-            .filter(item -> {
-                ItemStack stack = new ItemStack(item);
-                return stack.has(DataComponents.FOOD);
-            })
+            .filter(item -> item != Items.AIR && item.components().has(DataComponents.FOOD))
             .build());
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
@@ -792,7 +789,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
                 
                 if (itemId.contains("pickaxe")) hasPickaxe = true;
-                if (itemId.contains("sword") || itemId.contains("axe") || itemId.contains("shovel")) hasWeapon = true;
+                if ((itemId.contains("sword") || (itemId.contains("axe") && !itemId.contains("pickaxe")) || itemId.contains("shovel"))) hasWeapon = true;
                 if (stack.has(DataComponents.FOOD)) foodCount += stack.getCount();
             }
 
