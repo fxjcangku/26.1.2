@@ -48,6 +48,14 @@
 //
 // 代码规范（强制执行）：
 //   所有注释必须使用中文，禁止英文注释（用户看不懂）
+//
+// UI/消息颜色规范（2026-08-27 更新）：
+//   - 启动/成功/绑定：绿色 §a§l✓
+//   - 关闭/失败/删除：红色 §c§l✗
+//   - 坐标格式：XYZ标签 §7灰色 + 数值 §f白色
+//   - 维度信息：根据点位类型使用对应颜色
+//   - 分隔符：§8▸ 深灰色箭头
+//
 //   技术术语可保留英文（Paper/Spigot/Baritone/Windows/API 等）
 //   所有代码、脚本、状态机必须写中文注释（类/方法/关键逻辑）
 //   UI 元素（HUD、聊天消息、设置面板）必须使用中文
@@ -1215,6 +1223,33 @@ public abstract class YiyiaddonModule extends Module {
         String cleanModuleName = stripColorCodes(stripPrefix(moduleName));
         String cleanMessage = stripPrefix(message);
         return "§c§l[yiyiaddon]§r§f§l[" + cleanModuleName + "]§r" + cleanMessage;
+    }
+
+    /**
+     * 格式化坐标显示（个人习惯）
+     * 格式：§7X§f38 §7Y§f-60 §7Z§f59
+     * XYZ标签灰色，坐标数值白色
+     */
+    public static String formatCoords(int x, int y, int z) {
+        return "§7X§f" + x + " §7Y§f" + y + " §7Z§f" + z;
+    }
+
+    /**
+     * 格式化坐标与维度显示（个人习惯）
+     * 格式：§7X§f38 §7Y§f-60 §7Z§f59 §8▸ §f主世界
+     * 使用深灰色箭头分隔坐标和维度，末尾自动重置颜色代码防止污染后续文本
+     */
+    public static String formatCoordsWithDimension(int x, int y, int z, String dimension) {
+        return formatCoords(x, y, z) + " §8▸ §f" + dimension + "§r";
+    }
+
+    /**
+     * 格式化坐标与维度显示（带自定义维度颜色）
+     * 格式：§7X§f38 §7Y§f-60 §7Z§f59 §8▸ §6主世界
+     * 维度颜色可自定义，末尾自动重置颜色代码防止污染后续文本
+     */
+    public static String formatCoordsWithDimension(int x, int y, int z, String dimension, String dimColor) {
+        return formatCoords(x, y, z) + " §8▸ " + dimColor + dimension + "§r";
     }
 
     /** 去除 [yiyiaddon] 前缀 */

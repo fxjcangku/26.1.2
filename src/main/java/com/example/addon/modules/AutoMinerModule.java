@@ -257,85 +257,29 @@ public final class AutoMinerModule extends YiyiaddonModule {
         
         trashList = sgItems.add(new BlockListSetting.Builder()
             .name("垃圾丢弃名单")
-            .description("挖矿时自动丢弃这些方块")
+            .description("挖矿时自动丢弃这些方块（点击选择添加，推荐：圆石、石头、泥土、闪长岩、花岗岩、安山岩等）")
             .defaultValue(List.of(
-                // 基础废料
                 Blocks.COBBLESTONE,
                 Blocks.COBBLED_DEEPSLATE,
+                Blocks.STONE,
+                Blocks.DEEPSLATE,
                 Blocks.DIRT,
                 Blocks.GRAVEL,
-                Blocks.SAND,
-                // 矿洞常见废料
                 Blocks.DIORITE,
                 Blocks.GRANITE,
                 Blocks.ANDESITE,
-                Blocks.TUFF,
-                Blocks.CALCITE,
-                Blocks.DRIPSTONE_BLOCK,
-                Blocks.POINTED_DRIPSTONE,
-                // 下界废料
-                Blocks.NETHERRACK,
-                Blocks.SOUL_SAND,
-                Blocks.SOUL_SOIL,
-                Blocks.BLACKSTONE,
-                Blocks.BASALT,
-                // 植物
-                Blocks.VINE,
-                Blocks.GLOW_LICHEN,
-                Blocks.MOSS_BLOCK,
-                Blocks.MOSS_CARPET
+                Blocks.TUFF
             ))
             .build());
 
         foodWhitelist = sgItems.add(new ItemListSetting.Builder()
             .name("食物白名单")
-            .description("从食物箱只拿这些食物")
+            .description("从食物箱只拿这些食物（推荐：熟牛肉、熟猪排、金胡萝卜、面包）")
             .defaultValue(List.of(
-                // 熟肉类（高饱和）
                 Items.COOKED_BEEF,
                 Items.COOKED_PORKCHOP,
-                Items.COOKED_MUTTON,
-                Items.COOKED_CHICKEN,
-                Items.COOKED_RABBIT,
-                Items.COOKED_COD,
-                Items.COOKED_SALMON,
-                // 金色食物（超高饱和）
                 Items.GOLDEN_CARROT,
-                Items.GOLDEN_APPLE,
-                Items.ENCHANTED_GOLDEN_APPLE,
-                // 面包和烘焙
-                Items.BREAD,
-                Items.BAKED_POTATO,
-                Items.COOKIE,
-                Items.PUMPKIN_PIE,
-                Items.CAKE,
-                // 蔬菜水果
-                Items.CARROT,
-                Items.POTATO,
-                Items.BEETROOT,
-                Items.APPLE,
-                Items.MELON_SLICE,
-                Items.SWEET_BERRIES,
-                Items.GLOW_BERRIES,
-                // 炖菜
-                Items.MUSHROOM_STEW,
-                Items.RABBIT_STEW,
-                Items.BEETROOT_SOUP,
-                Items.SUSPICIOUS_STEW,
-                // 生肉（备用）
-                Items.BEEF,
-                Items.PORKCHOP,
-                Items.MUTTON,
-                Items.CHICKEN,
-                Items.RABBIT,
-                Items.COD,
-                Items.SALMON,
-                Items.TROPICAL_FISH,
-                Items.PUFFERFISH,
-                // 其他
-                Items.DRIED_KELP,
-                Items.HONEY_BOTTLE,
-                Items.CHORUS_FRUIT
+                Items.BREAD
             ))
             .filter(item -> {
                 ItemStack stack = new ItemStack(item);
@@ -345,12 +289,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
             .name("搭路方块白名单")
-            .description("Baritone搭桥/填坑时使用这些方块")
+            .description("Baritone搭桥/填坑时使用这些方块（点击选择添加，推荐：圆石、深层圆石、泥土、石头等）")
             .defaultValue(List.of(
                 Blocks.COBBLESTONE,
+                Blocks.COBBLED_DEEPSLATE,
                 Blocks.DIRT,
-                Blocks.NETHERRACK,
-                Blocks.COBBLED_DEEPSLATE
+                Blocks.STONE,
+                Blocks.NETHERRACK
             ))
             .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
             .build());
@@ -417,7 +362,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         allowPlace = sgBaritone.add(new BoolSetting.Builder()
             .name("放置方块")
             .description("允许搭桥或填坑（需要背包里有方块）")
-            .defaultValue(false)
+            .defaultValue(true)
             .onChanged(value -> baritone.updateSetting("allowPlace", value))
             .build());
 
@@ -531,8 +476,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
             .name("矿点缓存数量")
-            .description("Baritone一次缓存的最大矿点数量（默认64，增大可提前规划路径）")
-            .defaultValue(64)
+            .description("Baritone一次缓存的最大矿点数量")
+            .defaultValue(128)
             .min(1)
             .sliderMax(256)
             .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
@@ -1223,35 +1168,33 @@ public final class AutoMinerModule extends YiyiaddonModule {
         boolean isBound = WKCommand.hasBinding(key);
         WKCommand.WKData data = WKCommand.getBinding(key);
         
-        // 获取对应的ESP颜色
-        SettingColor espColor = switch (key) {
-            case "mineral" -> mineralChestColor.get();
-            case "food" -> foodChestColor.get();
-            case "afk" -> afkPointColor.get();
-            default -> new SettingColor(255, 255, 255);
+        // 获取对应的ESP颜色并转换为Minecraft颜色代码
+        String titleColor = switch (key) {
+            case "mineral" -> "§6";  // 金色
+            case "food" -> "§2";     // 绿色
+            case "afk" -> "§d";      // 粉色
+            default -> "§f";         // 白色
         };
         
-        // 转换为颜色代码（用于标题和按钮）
-        String titleColor = String.format("§x§%x§%x§%x§%x§%x§%x",
-            (espColor.r >> 4) & 0xF, espColor.r & 0xF,
-            (espColor.g >> 4) & 0xF, espColor.g & 0xF,
-            (espColor.b >> 4) & 0xF, espColor.b & 0xF);
-        
-        // 标题（使用ESP颜色）
+        // 标题（使用简化的颜色代码）
         card.add(theme.label(titleColor + title)).expandX().center();
         card.row();
         
-        // 状态显示
+        // 状态显示（固定两行，保持高度一致）
         if (isBound && data != null) {
-            String coords = String.format("%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
-            card.add(theme.label("§f" + coords)).expandX().center();
+            String coords = String.format("§7X§f%d §7Y§f%d §7Z§f%d", 
+                data.pos.getX(), data.pos.getY(), data.pos.getZ());
+            card.add(theme.label(coords)).expandX().center();
             card.row();
             
             String dimName = data.dimensionName();
             card.add(theme.label("§7" + dimName)).expandX().center();
             card.row();
         } else {
+            // 未绑定时也占两行，保持高度一致
             card.add(theme.label("§8暂未绑定")).expandX().center();
+            card.row();
+            card.add(theme.label("§8-")).expandX().center();  // 占位符
             card.row();
         }
         

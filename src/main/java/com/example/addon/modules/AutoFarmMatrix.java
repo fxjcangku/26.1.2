@@ -1324,18 +1324,21 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         card.add(theme.label(titleColor + title)).expandX().center();
         card.row();
         
-        // 坐标和维度显示
+        // 坐标和维度显示（固定两行，保持高度一致）
         if (isBound && data != null) {
-            String coords = String.format("%d, %d, %d", 
+            String coords = String.format("§7X§f%d §7Y§f%d §7Z§f%d", 
                 data.pos().getX(), data.pos().getY(), data.pos().getZ());
-            card.add(theme.label("§f" + coords)).expandX().center();
+            card.add(theme.label(coords)).expandX().center();
             card.row();
             
             String dimName = getDimensionName(data.dimension());
             card.add(theme.label("§7" + dimName)).expandX().center();
             card.row();
         } else {
+            // 未绑定时也占两行，保持高度一致
             card.add(theme.label("§8暂未绑定")).expandX().center();
+            card.row();
+            card.add(theme.label("§8-")).expandX().center();  // 占位符
             card.row();
         }
         

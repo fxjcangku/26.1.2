@@ -114,7 +114,7 @@ public class NongChangCommand extends Command {
                 farmInfo("  " + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
             } else {
                 farmInfo("  " + icon + " §f§l" + type.cn());
-                farmInfo("    §8├─ §7坐标 ▸ §a" + site.pos().getX() + ", " + site.pos().getY() + ", " + site.pos().getZ());
+                farmInfo("    §8├─ §7坐标 ▸ §7X§f" + site.pos().getX() + " §7Y§f" + site.pos().getY() + " §7Z§f" + site.pos().getZ());
                 farmInfo("    §8└─ §7维度 ▸ §b" + site.describe().split("▸ ")[1]);
             }
         }
@@ -189,8 +189,15 @@ public class NongChangCommand extends Command {
             case SUPPLY -> "↑";
         };
         
+        String dimColor = switch(type) {
+            case START -> "§a";
+            case END -> "§e";
+            case DUMP -> "§6";
+            case SUPPLY -> "§2";
+        };
+        
         farmInfo("§a§l✓ 绑定成功");
-        farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe());
+        farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe(dimColor));
         
         return SINGLE_SUCCESS;
     }
@@ -205,7 +212,7 @@ public class NongChangCommand extends Command {
         }
 
         module.clearSite(type);
-        farmInfo("§e已解绑 " + type.cn());
+        farmInfo("§c§l✗ 已解绑 " + type.cn());
         return SINGLE_SUCCESS;
     }
 
@@ -347,7 +354,7 @@ public class NongChangCommand extends Command {
                 cmd.farmError(type.cn() + "本来就没有绑定");
             } else {
                 module.clearSite(type);
-                cmd.farmInfo("§e已删除 " + type.cn() + " 绑定");
+                cmd.farmInfo("§c§l✗ 已删除 " + type.cn() + " 绑定");
             }
         }
     }

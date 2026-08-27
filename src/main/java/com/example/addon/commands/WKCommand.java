@@ -160,7 +160,7 @@ public class WKCommand extends Command {
         saveData();
 
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §6矿物箱 §8▸ §a" + data.describe());
+        wkInfo("  §6矿物箱 §8▸ §a" + data.describe("§6"));
 
         return SINGLE_SUCCESS;
     }
@@ -206,7 +206,7 @@ public class WKCommand extends Command {
         saveData();
 
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §2食物箱 §8▸ §a" + data.describe());
+        wkInfo("  §2食物箱 §8▸ §a" + data.describe("§2"));
 
         return SINGLE_SUCCESS;
     }
@@ -251,7 +251,7 @@ public class WKCommand extends Command {
         saveData();
 
         wkInfo("§a§l✓ 绑定成功");
-        wkInfo("  §d■ 挂机修复点 §8▸ §a" + data.describe());
+        wkInfo("  §d■ 挂机修复点 §8▸ §a" + data.describe("§d"));
         wkInfo("  §7视角：偏航角=" + String.format("%.1f", yaw) + "° 俯仰角=" + String.format("%.1f", pitch) + "°");
 
         return SINGLE_SUCCESS;
@@ -281,7 +281,7 @@ public class WKCommand extends Command {
             default -> key;
         };
 
-        wkInfo("§e已解绑 " + name);
+        wkInfo("§c§l✗ 已解绑 " + name);
         return SINGLE_SUCCESS;
     }
 
@@ -358,7 +358,7 @@ public class WKCommand extends Command {
             }
             
             wkInfo("  " + color + "■ §f§l" + name);
-            wkInfo("    §8├─ §7坐标 ▸ §a" + data.pos.getX() + ", " + data.pos.getY() + ", " + data.pos.getZ());
+            wkInfo("    §8├─ §7坐标 ▸ §7X§f" + data.pos.getX() + " §7Y§f" + data.pos.getY() + " §7Z§f" + data.pos.getZ());
             wkInfo("    §8├─ §7维度 ▸ §b" + dimName);
             wkInfo("    §8└─ §7距离 ▸ §e" + String.format("%.0f", distance) + "m");
         }
@@ -573,7 +573,7 @@ public class WKCommand extends Command {
                 default -> key;
             };
             
-            cmd.wkInfo("§e已删除 " + name + " 绑定");
+            cmd.wkInfo("§c§l✗ 已删除 " + name + " 绑定");
         } else {
             cmd.wkError("该坐标本来就没有绑定");
         }
@@ -780,8 +780,12 @@ public class WKCommand extends Command {
         }
 
         public String describe() {
-            return String.format("(%d, %d, %d) ▸ %s",
-                pos.getX(), pos.getY(), pos.getZ(), dimensionName());
+            return describe("§f");
+        }
+
+        public String describe(String dimColor) {
+            return String.format("§7X§f%d §7Y§f%d §7Z§f%d §8▸ %s%s§r",
+                pos.getX(), pos.getY(), pos.getZ(), dimColor, dimensionName());
         }
     }
 }
