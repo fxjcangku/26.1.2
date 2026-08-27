@@ -334,6 +334,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
             })
             .build());
 
+        // ─── 搭路方块白名单 ───
+        placeBlocks = sgEssential.add(new BlockListSetting.Builder()
+            .name("搭路方块白名单")
+            .description("Baritone搭桥/填坑时优先使用这些方块（会自动排除在垃圾丢弃外）")
+            .defaultValue(List.of(
+                Blocks.COBBLESTONE,
+                Blocks.DIRT,
+                Blocks.NETHERRACK,
+                Blocks.COBBLED_DEEPSLATE
+            ))
+            .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
+            .build());
+
         // ═══════════════════════════════════════════════════════════
         //  2️⃣ Baritone调优 - 寻路与挖掘参数
         // ═══════════════════════════════════════════════════════════
@@ -384,25 +397,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .build());
 
         // ─── Baritone参数 ───
-        
-        // ────────────── 矿点刷新（优先挖近矿） ──────────────
-        mineGoalUpdateInterval = sgBaritone.add(new IntSetting.Builder()
-            .name("矿点刷新间隔")
-            .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿，默认10tick约0.5秒）")
-            .defaultValue(10)
-            .min(1)
-            .sliderMax(100)
-            .onChanged(value -> baritone.updateSetting("mineGoalUpdateInterval", value))
-            .build());
-
-        mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
-            .name("矿点缓存数量")
-            .description("Baritone一次缓存的最大矿点数量（默认64，增大可提前规划路径）")
-            .defaultValue(64)
-            .min(1)
-            .sliderMax(256)
-            .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
-            .build());
         
         // ────────────── 开关类设置 ──────────────
         allowBreak = sgBaritone.add(new BoolSetting.Builder()
@@ -505,7 +499,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         legitMine = sgBaritone.add(new BoolSetting.Builder()
             .name("合法挖掘模式")
-            .description("启用合法挖掘限制（关闭可提升效率但可能被检测）")
+            .description("启用合法挖掘限制（关闭可提启效率但可能被检测）")
             .defaultValue(false)
             .onChanged(value -> baritone.updateSetting("legitMine", value))
             .build());
@@ -518,6 +512,24 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .build());
 
         // ────────────── 滑块类设置 ──────────────
+        mineGoalUpdateInterval = sgBaritone.add(new IntSetting.Builder()
+            .name("矿点刷新间隔")
+            .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿，默认10tick约0.5秒）")
+            .defaultValue(10)
+            .min(1)
+            .sliderMax(100)
+            .onChanged(value -> baritone.updateSetting("mineGoalUpdateInterval", value))
+            .build());
+
+        mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
+            .name("矿点缓存数量")
+            .description("Baritone一次缓存的最大矿点数量（默认64，增大可提前规划路径）")
+            .defaultValue(64)
+            .min(1)
+            .sliderMax(256)
+            .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
+            .build());
+
         mobAvoidanceRadius = sgBaritone.add(new IntSetting.Builder()
             .name("怪物规避半径")
             .description("计算怪物危险区域的半径")
@@ -575,42 +587,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .visible(legitMine::get)
             .build());
 
-        // ────────────── 方块列表设置 ──────────────
-        placeBlocks = sgBaritone.add(new BlockListSetting.Builder()
-            .name("搭路方块白名单")
-            .description("Baritone搭桥/填坑时优先使用这些方块（会自动排除在垃圾丢弃外）")
-            .defaultValue(List.of(
-                Blocks.COBBLESTONE,
-                Blocks.DIRT,
-                Blocks.NETHERRACK,
-                Blocks.COBBLED_DEEPSLATE
-            ))
-            .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
-            .visible(allowPlace::get)
-            .build());
-
         // ═══════════════════════════════════════════════════════════
-        //  3️⃣ 高级功能 - 语音播报
+        //  3️⃣ 高级功能 - 语音播报（默认启用，不显示在界面）
         // ═══════════════════════════════════════════════════════════
         
-        // ─── 语音播报 ───
-        Setting<Boolean> soundEnabled = sgAdvanced.add(new BoolSetting.Builder()
-            .name("语音播报")
-            .description("关键状态转换时播放音效提示（卸货完成、食物不足、工具损坏等）")
-            .defaultValue(true)
-            .onChanged(value -> soundNotifier.setEnabled(value))
-            .build());
-        
-        Setting<Double> soundVolume = sgAdvanced.add(new DoubleSetting.Builder()
-            .name("音效音量")
-            .description("语音播报的音量大小（0.0-1.0）")
-            .defaultValue(1.0)
-            .min(0.0)
-            .max(1.0)
-            .sliderMax(1.0)
-            .onChanged(value -> soundNotifier.setVolume(value.floatValue()))
-            .visible(soundEnabled::get)
-            .build());
+        // 语音播报默认启用，音量1.0
+        soundNotifier.setEnabled(true);
+        soundNotifier.setVolume(1.0f);
 
         // ═══════════════════════════════════════════════════════════
         //  4️⃣ 可视化设置 - ESP显示
@@ -1175,7 +1158,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§l自动挖矿 · 使用说明"
             },
             new String[]{
-                "§e§l▌ 准备工作",
+                "§e§l准备工作",
                 "§f  1. 准备好挖掘工具（推荐附魔耐久、效率）",
                 "§f  2. 准备好武器（修补耐久时用）",
                 "§f  3. 放置矿物箱、食物箱（装满食物）",
@@ -1183,7 +1166,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§f  5. 配置页面顶部点击卡片按钮设置三个点位"
             },
             new String[]{
-                "§6§l▌ 点位设置（两种方式）",
+                "§6§l点位设置（两种方式）",
                 "§f  · " + highlightText("方式1：配置页面按钮") + " — 打开配置页面 → 点击卡片中的设置按钮",
                 "§f    · 箱子类点位：准星对准箱子后自动绑定",
                 "§f    · 挂机修复点：站在目标位置后自动绑定（含视角）",
@@ -1196,14 +1179,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§f    · 不是容器 → 自动关闭GUI并提示重新设置"
             },
             new String[]{
-                "§6§l▌ 指令系统",
+                "§6§l指令系统",
                 "§f  · " + highlightCommand(".wk status") + " — 查看绑定状态",
                 "§f  · " + highlightCommand(".wk checkfake") + " — 检测周围是否存在假矿",
                 "§f  · " + highlightCommand(".wk remove <目标>") + " — 解绑单个坐标",
                 "§f  · " + highlightCommand(".wk clear") + " — 清空所有绑定"
             },
             new String[]{
-                "§a§l▌ 状态机流程",
+                "§a§l状态机流程",
                 "§f  1. " + highlightText("去野外") + " — 发送野外指令，等区块加载完成",
                 "§f  2. " + highlightText("采掘") + " — Baritone 自动挖矿，满载/饥饿/耐久触发转换",
                 "§f  3. " + highlightText("卸货循环") + " — 传送到矿物箱，倒货，返回野外",
@@ -1212,13 +1195,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§f  6. " + highlightText("死亡处理") + " — 自动复活，执行死亡重返指令，恢复挖矿"
             },
             new String[]{
-                "§b§l▌ 参数建议",
+                "§b§l参数建议",
                 "§f  · " + highlightText("满载组数") + "：默认20组，矿物达到此数量触发卸货",
                 "§f  · " + highlightText("饥饿阈值") + "：默认12，饥饿值低于此值触发补给",
                 "§f  · " + highlightText("耐久阈值") + "：默认50，工具剩余耐久低于此值触发修补"
             },
             new String[]{
-                "§d§l▌ 种子挖矿",
+                "§d§l种子挖矿",
                 "§f  · " + highlightText("应对假矿") + "：服务器手动放置的假矿无法骗过种子预测",
                 "§f  · " + highlightText("填入种子") + "：从服主获取或使用工具反推世界种子",
                 "§f  · " + highlightText("自动渲染") + "：周围128格内的真实矿石位置会显示方块框",
@@ -1227,7 +1210,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "§f  · " + highlightText("假矿检测") + "：使用 " + highlightCommand(".wk checkfake") + " 扫描周围假矿"
             },
             new String[]{
-                "§c§l▌ 注意事项",
+                "§c§l注意事项",
                 "§f  · " + highlightText("必须单选目标") + "：矿石和方块只能选一个",
                 "§f  · " + highlightText("维度匹配检查") + "：启动时自动检测，选主世界矿别跑下界",
                 "§f  · " + highlightText("深层变种自动支持") + "：选钻石矿会自动挖深层钻石矿",
@@ -1256,38 +1239,35 @@ public final class AutoMinerModule extends YiyiaddonModule {
         boolean isBound = WKCommand.hasBinding(key);
         WKCommand.WKData data = WKCommand.getBinding(key);
         
-        // MC官方物品图标
-        Item icon = switch (key) {
-            case "mineral" -> Items.CHEST;        // 矿物箱用箱子图标
-            case "food" -> Items.BREAD;           // 食物箱用面包图标
-            case "afk" -> Items.TARGET;           // 挂机点用标靶图标
-            default -> Items.BARRIER;
+        // 获取对应的ESP颜色
+        SettingColor espColor = switch (key) {
+            case "mineral" -> mineralChestColor.get();
+            case "food" -> foodChestColor.get();
+            case "afk" -> afkPointColor.get();
+            default -> new SettingColor(255, 255, 255);
         };
         
-        String titleColor = switch (key) {
-            case "mineral" -> "§6";
-            case "food" -> "§2";
-            case "afk" -> "§d";
-            default -> "§f";
-        };
+        // 转换为颜色代码
+        String titleColor = String.format("§x§%x§%x§%x§%x§%x§%x",
+            (espColor.r >> 4) & 0xF, espColor.r & 0xF,
+            (espColor.g >> 4) & 0xF, espColor.g & 0xF,
+            (espColor.b >> 4) & 0xF, espColor.b & 0xF);
         
-        // 标题
-        card.add(theme.label(title)).expandX().center();
+        // 标题（使用ESP颜色）
+        card.add(theme.label(titleColor + title)).expandX();
         card.row();
         
         // 状态显示
         if (isBound && data != null) {
             String coords = String.format("%d, %d, %d", data.pos.getX(), data.pos.getY(), data.pos.getZ());
-            card.add(theme.label(coords)).expandX().center();
+            card.add(theme.label("§f" + coords)).expandX();
             card.row();
             
             String dimName = data.dimensionName();
-            card.add(theme.label(dimName)).expandX().center();
+            card.add(theme.label("§7" + dimName)).expandX();
             card.row();
         } else {
-            card.add(theme.label("────────")).expandX().center();
-            card.row();
-            card.add(theme.label("暂未绑定")).expandX().center();
+            card.add(theme.label("§8暂未绑定")).expandX();
             card.row();
         }
         

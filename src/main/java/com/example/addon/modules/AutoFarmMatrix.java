@@ -1329,23 +1329,21 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         };
         
         // 标题
-        card.add(theme.label(title)).expandX().center();
+        card.add(theme.label(titleColor + title)).expandX();
         card.row();
         
         // 坐标和维度显示
         if (isBound && data != null) {
             String coords = String.format("%d, %d, %d", 
                 data.pos().getX(), data.pos().getY(), data.pos().getZ());
-            card.add(theme.label(coords)).expandX().center();
+            card.add(theme.label("§f" + coords)).expandX();
             card.row();
             
             String dimName = getDimensionName(data.dimension());
-            card.add(theme.label(dimName)).expandX().center();
+            card.add(theme.label("§7" + dimName)).expandX();
             card.row();
         } else {
-            card.add(theme.label("────────")).expandX().center();
-            card.row();
-            card.add(theme.label("暂未绑定")).expandX().center();
+            card.add(theme.label("§8暂未绑定")).expandX();
             card.row();
         }
         
@@ -1355,7 +1353,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             com.example.addon.commands.NongChangCommand.setBinding(key);
             mc.setScreen(null);
         };
-        card.add(setBtn).expandX().center();
+        card.add(setBtn).expandX();
         card.row();
         
         // 删除按钮
@@ -1366,7 +1364,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 mc.setScreen(null);
             }
         };
-        card.add(delBtn).expandX().center();
+        card.add(delBtn).expandX();
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();
