@@ -1094,73 +1094,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // 将三列容器加入主表格
             table.add(cardRow).expandX();
             table.row();
-        },
-            new String[]{
-                "§l自动挖矿 · 使用说明"
-            },
-            new String[]{
-                "§e§l准备工作",
-                "§f  1. 准备好挖掘工具（推荐附魔耐久、效率）",
-                "§f  2. 准备好武器（修补耐久时用）",
-                "§f  3. 放置矿物箱、食物箱（装满食物）",
-                "§f  4. 选好挂机修复点（安全区域，怪物可到达）",
-                "§f  5. 配置页面顶部点击卡片按钮设置三个点位"
-            },
-            new String[]{
-                "§6§l点位设置（两种方式）",
-                "§f  · " + highlightText("方式1：配置页面按钮") + " — 打开配置页面 → 点击卡片中的设置按钮",
-                "§f    · 箱子类点位：准星对准箱子后自动绑定",
-                "§f    · 挂机修复点：站在目标位置后自动绑定（含视角）",
-                "§f    · " + highlightText("颜色联动") + "：已设置=绿色按钮，未设置=红色按钮",
-                "§f  · " + highlightText("方式2：指令设置") + " — 使用 .wk 指令系统",
-                "§f    · " + highlightCommand(".wk set 矿物箱") + " — 准星对准箱子，绑定矿物卸货箱",
-                "§f    · " + highlightCommand(".wk set 食物箱") + " — 准星对准箱子，绑定食物补给箱",
-                "§f    · " + highlightCommand(".wk set 挂机修复点") + " — 当前位置绑定为挂机修复点（含视角）",
-                "§f  · " + highlightText("容器检测") + "：箱子类点位会自动检测目标是否为容器",
-                "§f    · 不是容器 → 自动关闭GUI并提示重新设置"
-            },
-            new String[]{
-                "§6§l指令系统",
-                "§f  · " + highlightCommand(".wk status") + " — 查看绑定状态",
-                "§f  · " + highlightCommand(".wk checkfake") + " — 检测周围是否存在假矿",
-                "§f  · " + highlightCommand(".wk remove <目标>") + " — 解绑单个坐标",
-                "§f  · " + highlightCommand(".wk clear") + " — 清空所有绑定"
-            },
-            new String[]{
-                "§a§l状态机流程",
-                "§f  1. " + highlightText("前往挖矿") + " — 发送挖矿指令，等区块加载完成",
-                "§f  2. " + highlightText("采掘") + " — Baritone 自动挖矿，满载/饥饿/耐久触发转换",
-                "§f  3. " + highlightText("卸货循环") + " — 传送到矿物箱，倒货，返回野外",
-                "§f  4. " + highlightText("补给循环") + " — 传送到箱，拿食物，吃饱，返回",
-                "§f  5. " + highlightText("修补循环") + " — 传送到挂机修复点，KillAura打怪修工具（需修补附魔）",
-                "§f  6. " + highlightText("死亡处理") + " — 自动复活，执行死亡返回指令，恢复挖矿"
-            },
-            new String[]{
-                "§b§l参数建议",
-                "§f  · " + highlightText("满载组数") + "：默认20组，矿物达到此数量触发卸货",
-                "§f  · " + highlightText("饥饿阈值") + "：默认12，饥饿值低于此值触发补给",
-                "§f  · " + highlightText("耐久阈值") + "：默认50，工具剩余耐久低于此值触发修补"
-            },
-            new String[]{
-                "§d§l种子挖矿",
-                "§f  · " + highlightText("应对假矿") + "：服务器手动放置的假矿无法骗过种子预测",
-                "§f  · " + highlightText("填入种子") + "：从服主获取或使用工具反推世界种子",
-                "§f  · " + highlightText("自动渲染") + "：周围128格内的真实矿石位置会显示方块框",
-                "§f  · " + highlightText("智能过滤") + "：Baritone只挖预测位置的矿，假矿直接无视",
-                "§f  · " + highlightText("支持深层变种") + "：选钻石矿会预测钻石矿+深层钻石矿",
-                "§f  · " + highlightText("假矿检测") + "：使用 " + highlightCommand(".wk checkfake") + " 扫描周围假矿"
-            },
-            new String[]{
-                "§c§l注意事项",
-                "§f  · " + highlightText("必须单选目标") + "：矿石和方块只能选一个",
-                "§f  · " + highlightText("维度匹配检查") + "：启动时自动检测，选主世界矿别跑下界",
-                "§f  · " + highlightText("深层变种自动支持") + "：选钻石矿会自动挖深层钻石矿",
-                "§f  · " + highlightText("垃圾自动丢弃") + "：圆石、深层圆石等默认已勾选",
-                "§f  · " + highlightText("修补需要经验") + "：挂机修复点附近必须有怪物刷新",
-                "§f  · " + highlightText("死亡自愈") + "：复活后自动执行死亡返回指令并恢复挖矿",
-                "§f  · " + highlightText("防卡死机制") + "：区块加载检测、掉落检测、指令延迟校验"
-            }
-        );
+        });
     }
 
     /**
