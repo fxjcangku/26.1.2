@@ -1304,7 +1304,7 @@ public abstract class YiyiaddonModule extends Module {
 // ║                                                                    ║
 // ║ 重要页面：                                                         ║
 // ║ • 发布页面（公开）：https://github.com/fxjcangku/26.1.2/releases   ║
-// ║ • 源码分支（私密）：https://github.com/fxjcangku/26.1.2/tree/source ║
+// ║ • 源码分支（私密）：https://github.com/fxjcangku/26.1.2-source    ║
 // ║                                                                    ║
 // ║ 工作流程：                                                         ║
 // ║ 1. 本地切换到 source 分支：git checkout source                     ║
