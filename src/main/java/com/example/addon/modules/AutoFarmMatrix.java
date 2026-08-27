@@ -1,5 +1,6 @@
 package com.example.addon.modules;
 
+import com.example.addon.ui.HelpScreen;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.farm.*;
@@ -1186,7 +1187,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
             // ═══════════════════════════════════════════════════════════════════
-            //  点位设置卡片区（三列布局）
+            //  使用说明按钮（置顶显眼位置）
+            // ═══════════════════════════════════════════════════════════════════
+            WButton helpBtn = theme.button("查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+            
             // ═══════════════════════════════════════════════════════════════════
             //  点位设置卡片区（两列布局）
             // ═══════════════════════════════════════════════════════════════
@@ -1374,5 +1381,68 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         if (dim == net.minecraft.world.level.Level.NETHER) return "下界";
         if (dim == net.minecraft.world.level.Level.END) return "末地";
         return "自定义维度";
+    }
+
+    /**
+     * 构建使用说明内容
+     * 采用黑客终端风格，颜色方案遵循个人习惯
+     */
+    private String[] buildHelpContent() {
+        return HelpScreen.buildHelpContent(
+            new HelpScreen.HelpSection("准备工作",
+                "  §8├─ §f建好农田 §7(耕地或对应底盘)",
+                "  §8├─ §f规划好起点和终点坐标 §7(矩形区域)",
+                "  §8├─ §f放置卸货箱 §7(接漏斗走物流)",
+                "  §8├─ §f放置补货箱 §7(装种子)",
+                "  §8├─ §f配置页面勾选要种的作物",
+                "  §8└─ §f配置页面顶部点击卡片按钮设置两个点位"
+            ),
+            new HelpScreen.HelpSection("点位设置 §7(两种方式)",
+                "  §b▸ §e方式1 §8- §f配置页面按钮",
+                "    §7准星对准箱子 §8→ §f点击卡片中的设置按钮",
+                "    §7箱子类型：卸货箱、补货箱自动检测容器",
+                "",
+                "  §b▸ §e方式2 §8- §f指令系统",
+                "    §8> §3.farm set 起点 §8— §7准星对准农田起点方块",
+                "    §8> §3.farm set 终点 §8— §7准星对准农田终点方块",
+                "    §8> §3.farm set 卸货箱 §8— §7准星对准箱子，绑定卸货总仓",
+                "    §8> §3.farm set 补货箱 §8— §7准星对准箱子，绑定种子库",
+                "",
+                "  §7§o容器检测：箱子类点位会自动检测目标方块是否为容器",
+                "  §7§o不是容器 §8→ §7自动拒绝并提示重新设置，避免卡死"
+            ),
+            new HelpScreen.HelpSection("指令系统",
+                "  §8> §3.farm status §8— §7查看绑定状态 §7(含坐标、维度)",
+                "  §8> §3.farm remove §c<目标> §8— §7解绑单个坐标",
+                "  §8> §3.farm clear §8— §7清空所有绑定"
+            ),
+            new HelpScreen.HelpSection("作物类型",
+                "  §a▸ §f双作物 §8- §7小麦、胡萝卜、马铃薯、甜菜根",
+                "  §a▸ §f单作物 §8- §7下界疣",
+                "  §a▸ §f柱状物 §8- §7甘蔗、竹子、仙人掌",
+                "  §a▸ §f蔓生物 §8- §7南瓜、西瓜",
+                "",
+                "  §7§o多选支持：可同时勾选多种作物类型",
+                "  §7§o自动识别：根据方块类型自动判断是否收割"
+            ),
+            new HelpScreen.HelpSection("状态机流程",
+                "  §a[1] §f前往起点 §8→ §7传送到农田起点坐标",
+                "  §a[2] §f收割种植 §8→ §7Z字形路径遍历整片农田",
+                "  §a[3] §f卸货循环 §8→ §7传送到卸货箱，卸货，返回农田",
+                "  §a[4] §f补货循环 §8→ §7传送到补货箱，拿种子，返回农田"
+            ),
+            new HelpScreen.HelpSection("范围计算",
+                "  §6▸ §f矩形农田 §8= §7起点和终点定义的长方形区域",
+                "  §6▸ §f自动扩展 §8= §7自动向上下左右延伸寻找同类作物",
+                "  §6▸ §f Z字路径 §8= §7从起点开始，按Z字形遍历",
+                "  §6▸ §f边界检测 §8= §7超出范围自动停止"
+            ),
+            new HelpScreen.HelpSection("注意事项",
+                "  §c⚠ §f模块运行中无法修改点位，必须先关闭模块",
+                "  §c⚠ §f已绑定点位不允许覆盖，必须先删除再重新设置",
+                "  §c⚠ §f传送指令需服务器支持，否则无法自动返回",
+                "  §c⚠ §f起点和终点必须在同一维度，否则范围计算错误"
+            )
+        );
     }
 }

@@ -1,5 +1,7 @@
 package com.example.addon.modules;
 
+import com.example.addon.ui.HelpScreen;
+
 import com.example.addon.commands.WKCommand;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
@@ -1056,7 +1058,15 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
             // ═══════════════════════════════════════════════════════════════════
-            //  假矿检测按钮（置顶显眼位置）
+            //  使用说明按钮（置顶显眼位置）
+            // ═══════════════════════════════════════════════════════════════════
+            WButton helpBtn = theme.button("查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+            
+            // ═══════════════════════════════════════════════════════════════════
+            //  假矿检测按钮
             // ═══════════════════════════════════════════════════════════════════
             WButton checkFakeBtn = theme.button("检测假矿");
             checkFakeBtn.action = this::checkFakeOres;
@@ -1220,5 +1230,65 @@ public final class AutoMinerModule extends YiyiaddonModule {
         
         // 将卡片加入父表格（横向排列，均匀分配）
         parentTable.add(card).expandX();
+    }
+
+    /**
+     * 构建使用说明内容
+     * 采用黑客终端风格，颜色方案遵循个人习惯
+     */
+    private String[] buildHelpContent() {
+        return HelpScreen.buildHelpContent(
+            new HelpScreen.HelpSection("准备工作",
+                "  §8├─ §f准备好挖矿工具 §7(推荐附魔耐久、效率)",
+                "  §8├─ §f准备好武器 §7(修补耐久时用)",
+                "  §8├─ §f放置矿物箱、食物箱 §7(装满食物)",
+                "  §8├─ §f选好挂机修复点 §7(安全区域，怪物可到达)",
+                "  §8└─ §f配置页面顶部点击卡片按钮设置三个点位"
+            ),
+            new HelpScreen.HelpSection("点位设置 §7(两种方式)",
+                "  §b▸ §e方式1 §8- §f配置页面按钮",
+                "    §7准星对准箱子 §8→ §f点击卡片中的设置按钮",
+                "    §7箱子类型：矿物箱、食物箱自动检测容器",
+                "    §7挂机修复点：直接站在目标位置即可绑定",
+                "",
+                "  §b▸ §e方式2 §8- §f指令系统",
+                "    §8> §3.wk set 矿物箱 §8— §7准星对准箱子，绑定矿物贮箱",
+                "    §8> §3.wk set 食物箱 §8— §7准星对准箱子，绑定食物补给箱",
+                "    §8> §3.wk set 挂机修复点 §8— §7站在目标位置后自动绑定 §7(含视角)",
+                "",
+                "  §7§o容器检测：箱子类点位会自动检测目标方块是否为容器",
+                "  §7§o不是容器 §8→ §7自动拒绝并提示重新设置，避免卡死"
+            ),
+            new HelpScreen.HelpSection("指令系统",
+                "  §8> §3.wk status §8— §7查看绑定状态 §7(含坐标、维度、视角)",
+                "  §8> §3.wk checkfake §8— §7检测周围假矿 §7(需启用种子挖矿)",
+                "  §8> §3.wk remove §c<目标> §8— §7解绑单个坐标",
+                "  §8> §3.wk clear §8— §7清空所有绑定"
+            ),
+            new HelpScreen.HelpSection("状态机流程",
+                "  §a[1] §f前往挖矿 §8→ §7发送挖矿指令，等区块加载完成",
+                "  §a[2] §f采掘 §8→ §7Baritone自动挖矿，满载/饿/耐久触发转换",
+                "  §a[3] §f卸货循环 §8→ §7传送到矿物箱，卸货，返回野外",
+                "  §a[4] §f补给循环 §8→ §7传送到箱，拿食物，吃饱，返回"
+            ),
+            new HelpScreen.HelpSection("参数建议",
+                "  §6▸ §f满载组数 §8= §e36 §7(标准背包容量)",
+                "  §6▸ §f食物阈值 §8= §e14 §7(7格肉约14饱食度)",
+                "  §6▸ §f耐久阈值 §8= §e50 §7(低于50时自动修复)",
+                "  §6▸ §f传送等待 §8= §e10秒 §7(RTP加载缓冲)"
+            ),
+            new HelpScreen.HelpSection("种子挖矿 §7(可选)",
+                "  §d▸ §f启用后可预测矿石位置 §7(需填入世界种子)",
+                "  §d▸ §f检测假矿：对准可疑方块 §8→ §f点击「检测假矿」按钮",
+                "  §d▸ §f假矿判定：预测无矿但显示有矿 §8= §c假矿",
+                "  §d▸ §f适用场景：防止挖到管理员放置的诱饵矿"
+            ),
+            new HelpScreen.HelpSection("注意事项",
+                "  §c⚠ §f模块运行中无法修改点位，必须先关闭模块",
+                "  §c⚠ §f已绑定点位不允许覆盖，必须先删除再重新设置",
+                "  §c⚠ §f传送指令需服务器支持，否则无法自动返回",
+                "  §c⚠ §f挂机修复点会记录视角，用于精准对准修补工作台"
+            )
+        );
     }
 }
