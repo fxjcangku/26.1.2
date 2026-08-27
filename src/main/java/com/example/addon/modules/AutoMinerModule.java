@@ -278,14 +278,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         foodWhitelist = sgItems.add(new ItemListSetting.Builder()
             .name("食物白名单")
-            .description("从食物箱只拿这些食物（推荐：熟牛肉、熟猪排、金胡萝卜、面包）")
+            .description("从食物箱只拿选中的物品，默认提供常用食物，可自由增删")
             .defaultValue(new ArrayList<>(List.of(
                 Items.COOKED_BEEF,
                 Items.COOKED_PORKCHOP,
                 Items.GOLDEN_CARROT,
                 Items.BREAD
             )))
-            .filter(item -> item != Items.AIR && item.components().has(DataComponents.FOOD))
             .build());
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
@@ -1059,7 +1058,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  使用说明按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            WButton helpBtn = theme.button("查看使用说明");
+            WButton helpBtn = theme.button("§e查看使用说明");
             helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
             table.add(helpBtn).expandX().minWidth(200);
             table.row();

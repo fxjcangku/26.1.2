@@ -106,7 +106,7 @@ public class FlightBypass extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("查看使用说明");
+            WButton helpBtn = theme.button("§e查看使用说明");
             helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
             table.add(helpBtn).expandX().minWidth(200);
             table.row();

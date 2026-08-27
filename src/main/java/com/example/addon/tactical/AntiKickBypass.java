@@ -30,14 +30,13 @@ import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 /**
  * 发包防踢模块（全功能整合版）
  * 
- * 包含 7 大功能：
+ * 包含 6 大功能：
  * 1. 伪装客户端 - 改 Brand、拦截 Mod 频道
  * 2. 聊天排队 - 自动排队防刷屏
  * 3. 防挂机 - 假装在操作
  * 4. 限制发包 - 防止挖太快/放太快被踢
- * 5. 拉回处理 - 被拉回时自动断流
- * 6. 拉回分析 - 记录什么操作容易被拉回
- * 7. 模拟真人 - 视角抖动、网络延迟
+ * 5. 拉回分析 - 记录什么操作容易被拉回
+ * 6. 模拟真人 - 视角抖动、网络延迟
  * 
  * @author yiyijia
  */
@@ -47,16 +46,15 @@ public class AntiKickBypass extends YiyiaddonModule {
     //  设置分组
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private final SettingGroup sg1 = settings.createGroup("① 伪装客户端");
-    private final SettingGroup sg2 = settings.createGroup("② 聊天排队");
-    private final SettingGroup sg3 = settings.createGroup("③ 防挂机");
-    private final SettingGroup sg4 = settings.createGroup("④ 限制发包");
-    private final SettingGroup sg5 = settings.createGroup("⑤ 拉回处理");
-    private final SettingGroup sg6 = settings.createGroup("⑥ 拉回分析");
-    private final SettingGroup sg7 = settings.createGroup("⑦ 模拟真人");
+    private final SettingGroup sg1 = settings.createGroup("伪装客户端");
+    private final SettingGroup sg2 = settings.createGroup("聊天排队");
+    private final SettingGroup sg3 = settings.createGroup("防挂机");
+    private final SettingGroup sg4 = settings.createGroup("限制发包");
+    private final SettingGroup sg6 = settings.createGroup("拉回分析");
+    private final SettingGroup sg7 = settings.createGroup("模拟真人");
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ① 伪装客户端 - 让服务器认为你是原版玩家
+    //  伪装客户端 - 让服务器认为你是原版玩家
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> fakeBrand = sg1.add(new BoolSetting.Builder()
@@ -81,7 +79,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ② 聊天排队 - 防止发消息太快被踢
+    //  聊天排队 - 防止发消息太快被踢
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> enableChatQueue = sg2.add(new BoolSetting.Builder()
@@ -103,7 +101,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ③ 防挂机 - 假装你在玩游戏
+    //  防挂机 - 假装你在玩游戏
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> antiAfk = sg3.add(new BoolSetting.Builder()
@@ -114,7 +112,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ④ 限制发包 - 防止挖太快/放太快被踢
+    //  限制发包 - 防止挖太快/放太快被踢
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> limitDigging = sg4.add(new BoolSetting.Builder()
@@ -154,13 +152,13 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ⑤ 拉回处理 - 被拉回时自动处理
+    //  拉回处理 - 被拉回时自动处理
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     // 无设置项，自动运行
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ⑥ 拉回分析 - 记录什么操作容易被拉回
+    //  拉回分析 - 记录什么操作容易被拉回
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> enableAnalysis = sg6.add(new BoolSetting.Builder()
@@ -182,7 +180,7 @@ public class AntiKickBypass extends YiyiaddonModule {
     );
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ⑦ 模拟真人 - 让你的操作看起来像真人
+    //  模拟真人 - 让你的操作看起来像真人
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private final Setting<Boolean> enableViewShake = sg7.add(new BoolSetting.Builder()
@@ -298,13 +296,13 @@ public class AntiKickBypass extends YiyiaddonModule {
     private final Random random = new Random();
 
     public AntiKickBypass() {
-        super(CATEGORY_TACTICAL, "发包防踢", "7 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。点击按钮查看说明。");
+        super(CATEGORY_TACTICAL, "发包防踢", "6 合 1 防踢系统：伪装+排队+防挂机+限速+拉回处理+分析+真人模拟。点击按钮查看说明。");
     }
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("查看使用说明");
+            WButton helpBtn = theme.button("§e查看使用说明");
             helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
             table.add(helpBtn).expandX().minWidth(200);
             table.row();
@@ -318,7 +316,6 @@ public class AntiKickBypass extends YiyiaddonModule {
                 "§8├─ §f聊天排队 §8- §7自动排队防刷屏",
                 "§8├─ §f防挂机 §8- §7假装在操作",
                 "§8├─ §f限制发包 §8- §7防止挖太快/放太快被踢",
-                "§8├─ §f拉回处理 §8- §7被拉回时自动断流",
                 "§8├─ §f拉回分析 §8- §7记录什么操作容易被拉回",
                 "§8└─ §f模拟真人 §8- §7视角抖动、网络延迟"
             ),
