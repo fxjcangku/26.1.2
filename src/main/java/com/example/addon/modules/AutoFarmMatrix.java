@@ -153,7 +153,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     public AutoFarmMatrix() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动农场",
-            "爆破收割补种，Baritone 导航，箱子物流自动化，分帧扫描不掉帧。详细参考使用说明。");
+            "爆破收割补种，Baritone 导航，箱子物流自动化，分帧扫描不掉帧。点击按钮查看说明。");
 
         // ─── 作物分类选择器 ───
         cropsDouble = sgCrops.add(new BlockListSetting.Builder()

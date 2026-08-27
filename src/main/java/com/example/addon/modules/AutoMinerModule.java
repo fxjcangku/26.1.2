@@ -139,7 +139,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     public AutoMinerModule() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动挖矿",
-            "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。详细参考使用说明。");
+            "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。点击按钮查看说明。");
 
         // ═══════════════════════════════════════════════════════════
         //  目标选择 - 挖什么
