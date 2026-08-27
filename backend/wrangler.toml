@@ -12,3 +12,7 @@ database_id = "1a932013-be80-43f4-ae86-12b62ead7a0a"
 # 环境变量（管理员密钥，用于查看用户列表）
 [vars]
 ADMIN_KEY = "your-secret-admin-key-here"
+ADMIN_USERNAME = "admin"
+# 注意：真实密码通过 wrangler secret 设置，不要写在这里！
+# 运行: npx wrangler secret put ADMIN_PASSWORD_HASH
+# 密码哈希: yiyi2026 -> (SHA256 后的值)

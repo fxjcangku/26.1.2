@@ -4,6 +4,7 @@ import com.example.addon.commands.CommandExample;
 import com.example.addon.commands.NongChangCommand;
 import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
+import com.example.addon.commands.ReplyAdminCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
@@ -92,6 +93,7 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new NongChangCommand());      // 农场管理指令
         Commands.add(new WKCommand());             // 挖矿管理指令
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令
+        Commands.add(new ReplyAdminCommand());     // 回复管理员指令
 
         // ── HUD 元素 ──
         Hud.get().register(HudExample.INFO);

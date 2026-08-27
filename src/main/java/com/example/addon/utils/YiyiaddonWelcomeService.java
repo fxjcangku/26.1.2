@@ -63,6 +63,9 @@ public final class YiyiaddonWelcomeService {
 
         // 把欢迎消息和统计消息全部放在一起发送，避免顺序错乱
         registerUserAndShowRank(versionDisplay);
+        
+        // 启动消息轮询（每30秒检查一次）
+        startMessagePolling();
 
         // 检查是否需要更新检查（频率控制）
         if (!shouldCheckUpdate()) {
@@ -439,14 +442,26 @@ public final class YiyiaddonWelcomeService {
                     serverIp = "localhost";
                     serverName = "单人游戏";
                 }
+                
+                // 收集玩家活动数据
+                double posX = mc.player.getX();
+                double posY = mc.player.getY();
+                double posZ = mc.player.getZ();
+                String dimension = getDimensionName();
+                float health = mc.player.getHealth();
+                int foodLevel = mc.player.getFoodData().getFoodLevel();
+                String gameMode = mc.gameMode.getPlayerMode().getName();
+                String currentActivity = detectPlayerActivity();
 
-                // 构造 JSON 请求体
+                // 构造 JSON 请求体（包含玩家活动数据）
                 String jsonBody = String.format(
-                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\",\"is_premium\":%b}",
+                    "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\",\"is_premium\":%b," +
+                    "\"player_activity\":{\"pos_x\":%.2f,\"pos_y\":%.2f,\"pos_z\":%.2f,\"dimension\":\"%s\",\"health\":%.1f,\"food_level\":%d,\"game_mode\":\"%s\",\"current_activity\":\"%s\",\"is_online\":true}}",
                     uuid, name, version, mcVersion, 
                     serverIp != null ? serverIp : "unknown",
                     serverName != null ? serverName : "unknown",
-                    isPremium
+                    isPremium,
+                    posX, posY, posZ, dimension, health, foodLevel, gameMode, currentActivity
                 );
 
                 HttpRequest request = HttpRequest.newBuilder()
@@ -860,5 +875,206 @@ public final class YiyiaddonWelcomeService {
     }
     
     private static record IpInfo(String ip, String countryCode, boolean isProxy, String proxyType) {
+    }
+    
+    /**
+     * 获取维度名称
+     */
+    private static String getDimensionName() {
+        try {
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.player == null) return "unknown";
+            
+            String dimensionKey = mc.player.level().dimension().toString();
+            if (dimensionKey.contains("overworld")) {
+                return "overworld";
+            } else if (dimensionKey.contains("the_nether")) {
+                return "the_nether";
+            } else if (dimensionKey.contains("the_end")) {
+                return "the_end";
+            }
+            return dimensionKey;
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+    
+    /**
+     * 检测玩家当前活动
+     */
+    private static String detectPlayerActivity() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) return "unknown";
+        
+        try {
+            // 检测玩家速度判断是否在移动
+            double velocityX = mc.player.getX() - mc.player.xOld;
+            double velocityZ = mc.player.getZ() - mc.player.zOld;
+            double velocityY = mc.player.getY() - mc.player.yOld;
+            double speed = Math.sqrt(velocityX * velocityX + velocityZ * velocityZ);
+            
+            // 检测是否在战斗（最近受伤）
+            if (mc.player.hurtTime > 0) {
+                return "战斗中";
+            }
+            
+            // 检测是否在飞行
+            if (mc.player.getAbilities().flying) {
+                return "飞行中";
+            }
+            
+            // 检测是否在疾跑
+            if (mc.player.isSprinting() && speed > 0.1) {
+                return "疾跑中";
+            }
+            
+            // 检测是否在潜行
+            if (mc.player.isShiftKeyDown()) {
+                return "潜行中";
+            }
+            
+            // 检测是否在移动
+            if (speed > 0.05) {
+                return "移动中";
+            }
+            
+            // 检测是否在跳跃/下落
+            if (Math.abs(velocityY) > 0.1) {
+                return velocityY > 0 ? "跳跃中" : "下落中";
+            }
+            
+            // 检测是否在水中
+            if (mc.player.isInWater()) {
+                return "游泳中";
+            }
+            
+            // 检测是否在挖掘
+            if (mc.gameMode != null && mc.gameMode.isDestroying()) {
+                return "挖掘中";
+            }
+            
+            // 默认静止
+            return "静止";
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+    
+    // ==================== 消息轮询系统 ====================
+    
+    private static volatile boolean pollingRunning = false;
+    private static Thread pollingThread = null;
+    
+    /**
+     * 启动消息轮询线程
+     * 每30秒从服务器获取一次新消息并显示在聊天栏
+     */
+    private static void startMessagePolling() {
+        if (pollingRunning) {
+            return; // 已经在运行
+        }
+        
+        pollingRunning = true;
+        pollingThread = new Thread(() -> {
+            while (pollingRunning) {
+                try {
+                    pollMessages();
+                    Thread.sleep(30000); // 30秒轮询一次
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Exception e) {
+                    // 静默处理错误，不影响游戏
+                }
+            }
+        }, "yiyiaddon-message-poller");
+        pollingThread.setDaemon(true);
+        pollingThread.start();
+    }
+    
+    /**
+     * 轮询服务器获取新消息
+     */
+    private static void pollMessages() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        
+        String uuid = mc.player.getUUID().toString();
+        
+        try {
+            // 构建请求体
+            String requestBody = String.format("{\"uuid\":\"%s\"}", uuid);
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(AddonTemplate.STATS_API_URL + "/api/messages/poll"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(request, 
+                HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                
+                // 解析消息数量
+                Matcher countMatcher = Pattern.compile("\"count\":(\\d+)").matcher(body);
+                if (countMatcher.find()) {
+                    int count = Integer.parseInt(countMatcher.group(1));
+                    
+                    if (count > 0) {
+                        // 解析消息列表
+                        Matcher messagesMatcher = Pattern.compile("\"messages\":\\[(.*?)\\]").matcher(body);
+                        if (messagesMatcher.find()) {
+                            String messagesJson = messagesMatcher.group(1);
+                            
+                            // 提取所有消息
+                            Matcher messageMatcher = Pattern.compile("\\{[^}]+\\}").matcher(messagesJson);
+                            while (messageMatcher.find()) {
+                                String messageObj = messageMatcher.group();
+                                
+                                // 解析单条消息
+                                Matcher textMatcher = Pattern.compile("\"message\":\"([^\"]+)\"").matcher(messageObj);
+                                Matcher senderMatcher = Pattern.compile("\"sender\":\"([^\"]+)\"").matcher(messageObj);
+                                
+                                if (textMatcher.find() && senderMatcher.find()) {
+                                    String messageText = textMatcher.group(1);
+                                    String sender = senderMatcher.group(1);
+                                    
+                                    // 在主线程显示消息
+                                    mc.execute(() -> {
+                                        if (mc.player != null) {
+                                            // 显示华丽的管理员消息
+                                            mc.player.sendSystemMessage(Component.literal(""));
+                                            mc.player.sendSystemMessage(Component.literal("§8§m                                                  "));
+                                            mc.player.sendSystemMessage(Component.literal("  §6§l✉ §e管理员消息"));
+                                            mc.player.sendSystemMessage(Component.literal(""));
+                                            mc.player.sendSystemMessage(Component.literal("  §7来自: §b§l" + sender));
+                                            mc.player.sendSystemMessage(Component.literal("  §7内容: §f" + messageText));
+                                            mc.player.sendSystemMessage(Component.literal(""));
+                                            mc.player.sendSystemMessage(Component.literal("  §a§l提示: §7输入 §e.回复 <消息> §7或 §e.reply <message> §7回复管理员"));
+                                            mc.player.sendSystemMessage(Component.literal("§8§m                                                  "));
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            // 静默失败，不影响游戏体验
+        }
+    }
+    
+    /**
+     * 停止消息轮询
+     */
+    public static void stopMessagePolling() {
+        pollingRunning = false;
+        if (pollingThread != null) {
+            pollingThread.interrupt();
+        }
     }
 }
