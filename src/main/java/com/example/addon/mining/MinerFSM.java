@@ -1,5 +1,7 @@
 package com.example.addon.mining;
 
+import baritone.api.pathing.goals.GoalGetToBlock;
+import baritone.api.pathing.goals.GoalTwoBlocks;
 import com.example.addon.commands.WKCommand;
 import com.example.addon.modules.AutoMinerModule;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -8,6 +10,7 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -43,6 +46,11 @@ public final class MinerFSM {
     private ItemStack savedTool = ItemStack.EMPTY;
     private ItemStack savedWeapon = ItemStack.EMPTY;
     private boolean repairMode = false;
+    private boolean repairPathIssued = false;
+    private int repairSwapAttempts = 0;
+    private int repairSwapRequestedTick = -1;
+    private boolean unloadingPathIssued = false;
+    private boolean supplyPathIssued = false;
 
     // 死亡标志
     private boolean playerWasDead = false;
@@ -50,7 +58,8 @@ public final class MinerFSM {
     // 卡死监测：改用速度监测而非位置监测
     private int lowSpeedTicks = 0;
     private static final double MIN_SPEED_THRESHOLD = 0.05; // 速度低于0.05判定为卡住
-    private static final int STUCK_TIME_THRESHOLD = 3600; // 3分钟
+    private static final int STUCK_TIME_THRESHOLD = 3600;
+    private static final int PATH_TIMEOUT_TICKS = 2400;
 
     public MinerFSM(AutoMinerModule module) {
         this.module = module;
@@ -65,6 +74,10 @@ public final class MinerFSM {
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
         repairMode = false;
+        repairPathIssued = false;
+        repairSwapAttempts = 0;
+        unloadingPathIssued = false;
+        supplyPathIssued = false;
         playerWasDead = false;
         lowSpeedTicks = 0;
     }
@@ -119,8 +132,23 @@ public final class MinerFSM {
 
 
     private void onStateEnter(MinerState newState) {
+        if (newState == MinerState.GO_WILD) {
+            stateTick = 0;
+        }
+        if (newState == MinerState.UNLOADING || newState == MinerState.SUPPLY || newState == MinerState.REPAIR) {
+            module.getContainer().closeContainer();
+            module.getBaritone().stop();
+            module.getCmdManager().debugReport("F", "MinerFSM.onStateEnter:134", "stopped mining before state=" + newState);
+        }
         if (newState == MinerState.MINING) {
             module.getBaritone().startMining(module.getTargetBlock());
+        }
+        if (newState == MinerState.REPAIR) {
+            repairPathIssued = false;
+            repairSwapAttempts = 0;
+            repairSwapRequestedTick = -1;
+            repairMode = false;
+            module.getCmdManager().debugReport("D", "MinerFSM.onStateEnter:131", "repair entered");
         }
     }
 
@@ -164,20 +192,15 @@ public final class MinerFSM {
         double distance = Math.sqrt(currentPos.distSqr(teleportStartPos));
         
         if (distance > 50) {
-            // 传送成功，音效提示
             module.getSoundNotifier().notifyTeleportSuccess();
-            
-            // 等待世界加载
-            if (stateTick > 40) {
-                transitionTo(MinerState.MINING);
-            }
+            transitionTo(MinerState.MINING);
             return;
         }
 
-        // 阶段 4：超时检测 - 如果超过设定时间还在原地，重新RTP
+        // 阶段 4：超时检测 - 如果超过设定时间还在原地
         if (stateTick > teleportTimeout) {
-            module.error("§c传送超时，重新尝试RTP");
-            stateTick = 0;
+            module.error("§c传送失败，本轮不再重复RTP");
+            if (module.isActive()) module.toggle();
         }
     }
 
@@ -201,8 +224,14 @@ public final class MinerFSM {
         // 优先级 1：死亡检测（已在 tick() 最开始处理）
 
         // 优先级 2：耐久检测
-        ItemStack tool = mc.player.getMainHandItem();
-        if (!tool.isEmpty() && needsRepair(tool)) {
+        ItemStack tool = findMiningPickaxe();
+        if (tool.isEmpty()) {
+            module.getBaritone().stop();
+            module.error("§c缺少镐子，自动挖矿已停止");
+            if (module.isActive()) module.toggle();
+            return;
+        }
+        if (needsRepair(tool)) {
             module.getSoundNotifier().notifyLowDurability();
             transitionTo(MinerState.REPAIR);
             return;
@@ -224,7 +253,9 @@ public final class MinerFSM {
         }
 
         // 优先级 4：满载检测
-        if (countOreStacks() >= module.getUnloadThreshold()) {
+        int oreStacks = countOreStacks();
+        module.getCmdManager().debugReport("A", "MinerFSM.tickMining:227", "oreStacks=" + oreStacks + ", unloadThreshold=" + module.getUnloadThreshold() + ", target=" + module.getTargetBlock());
+        if (oreStacks >= module.getUnloadThreshold()) {
             transitionTo(MinerState.UNLOADING);
             return;
         }
@@ -286,12 +317,25 @@ public final class MinerFSM {
         }
     }
 
+    private boolean isAdjacentTo(BlockPos target) {
+        BlockPos player = mc.player.blockPosition();
+        int dx = Math.abs(player.getX() - target.getX());
+        int dy = Math.abs(player.getY() - target.getY());
+        int dz = Math.abs(player.getZ() - target.getZ());
+        return dx + dy + dz == 1;
+    }
+
     private void tickUnloading() {
         CommandManager cmdMgr = module.getCmdManager();
         WKCommand.WKData mineralChest = WKCommand.getMineralChest();
 
+        if (stateTick == 1) {
+            unloadingPathIssued = false;
+        }
+
         if (mineralChest == null) {
-            transitionTo(MinerState.GO_WILD);
+            cmdMgr.debugReport("B", "MinerFSM.tickUnloading:314", "mineral chest binding missing, disabling automine");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -306,35 +350,41 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子边（使用 Baritone）
-        if (!mc.player.blockPosition().closerThan(mineralChest.pos, 5.0)) {
-            if (stateTick == 40) {
+        // 阶段 3：走到箱子相邻的一格（使用 Baritone）
+        module.getCmdManager().debugReport("B", "MinerFSM.unloadingTrace:1", "tick=" + stateTick + ", player=" + mc.player.blockPosition() + ", chest=" + mineralChest.pos + ", distSqr=" + mc.player.blockPosition().distSqr(mineralChest.pos) + ", screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()));
+        if (!isAdjacentTo(mineralChest.pos)) {
+            module.getCmdManager().debugReport("B", "MinerFSM.tickUnloading:310", "pathing=true, stateTick=" + stateTick + ", player=" + mc.player.blockPosition() + ", chest=" + mineralChest.pos);
+            if (!unloadingPathIssued) {
+                unloadingPathIssued = true;
                 // 启动 Baritone 走到箱子
                 var baritone = module.getBaritone().getBaritoneInstance();
                 if (baritone != null) {
-                    baritone.getCommandManager().execute("goto " + 
-                        mineralChest.pos.getX() + " " + 
-                        mineralChest.pos.getY() + " " + 
-                        mineralChest.pos.getZ());
+                    module.getCmdManager().debugReport("B", "MinerFSM.tickUnloading:315", "goto issued=" + mineralChest.pos);
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalGetToBlock(mineralChest.pos));
                 }
             }
             
-            if (stateTick > 300) {
+            if (stateTick > PATH_TIMEOUT_TICKS) {
+                cmdMgr.debugReport("B", "MinerFSM.tickUnloading:342", "unload path timeout, disabling automine, player=" + mc.player.blockPosition() + ", chest=" + mineralChest.pos);
                 module.getBaritone().stop();
-                transitionTo(MinerState.GO_WILD);
+                if (module.isActive()) module.toggle();
+                return;
             }
             return;
         }
 
         // 阶段 4：停止寻路，开箱倒货
         module.getBaritone().stop();
-        
+
+        if (mc.screen != null && !(mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>)) {
+            return;
+        }
         if (!module.getContainer().isContainerOpen()) {
             module.getContainer().openContainer(mineralChest.pos);
             return;
         }
 
-        // 阶段 5：持续倒货
+        // 阶段 5：持续倒货，直到目标矿石全部转移
         boolean hasMore = module.getContainer().depositOres();
         if (!hasMore || stateTick > 400) {
             module.getContainer().closeContainer();
@@ -345,9 +395,13 @@ public final class MinerFSM {
     private void tickSupply() {
         CommandManager cmdMgr = module.getCmdManager();
         WKCommand.WKData foodChest = WKCommand.getFoodChest();
+        if (stateTick == 1) {
+            supplyPathIssued = false;
+        }
 
         if (foodChest == null) {
-            transitionTo(MinerState.GO_WILD);
+            cmdMgr.debugReport("C", "MinerFSM.tickSupply:369", "food chest binding missing, disabling automine");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -362,22 +416,21 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子边（使用 Baritone）
-        if (!mc.player.blockPosition().closerThan(foodChest.pos, 5.0)) {
-            if (stateTick == 40) {
-                // 启动 Baritone 走到箱子
+        // 阶段 3：走到箱子相邻的一格（使用 Baritone）
+        if (!isAdjacentTo(foodChest.pos)) {
+            if (!supplyPathIssued) {
+                supplyPathIssued = true;
                 var baritone = module.getBaritone().getBaritoneInstance();
+                cmdMgr.debugReport("C", "MinerFSM.tickSupply:390", "supply goto requested=" + foodChest.pos + ", player=" + mc.player.blockPosition() + ", baritone=" + (baritone != null));
                 if (baritone != null) {
-                    baritone.getCommandManager().execute("goto " + 
-                        foodChest.pos.getX() + " " + 
-                        foodChest.pos.getY() + " " + 
-                        foodChest.pos.getZ());
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalGetToBlock(foodChest.pos));
                 }
             }
-            
+
             if (stateTick > 300) {
+                cmdMgr.debugReport("C", "MinerFSM.tickSupply:400", "supply path timeout, disabling automine");
                 module.getBaritone().stop();
-                transitionTo(MinerState.GO_WILD);
+                if (module.isActive()) module.toggle();
             }
             return;
         }
@@ -386,6 +439,7 @@ public final class MinerFSM {
         module.getBaritone().stop();
         
         if (!module.getContainer().isContainerOpen()) {
+            if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) return;
             module.getContainer().openContainer(foodChest.pos);
             return;
         }
@@ -436,7 +490,8 @@ public final class MinerFSM {
         WKCommand.WKData afkPoint = WKCommand.getAFKPoint();
 
         if (afkPoint == null) {
-            transitionTo(MinerState.GO_WILD);
+            module.getCmdManager().debugReport("D", "MinerFSM.tickRepair:465", "repair point binding missing, disabling automine");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -455,26 +510,26 @@ public final class MinerFSM {
 
         // 阶段 3：走到挂机点（使用 Baritone）
         if (!mc.player.blockPosition().closerThan(afkPoint.pos, 3.0)) {
-            if (stateTick == 40) {
-                // 启动 Baritone 走到挂机点
+            if (!repairPathIssued) {
+                repairPathIssued = true;
                 var baritone = module.getBaritone().getBaritoneInstance();
+                cmdMgr.debugReport("D", "MinerFSM.tickRepair:470", "repair goto requested=" + afkPoint.pos + ", player=" + mc.player.blockPosition() + ", baritone=" + (baritone != null));
                 if (baritone != null) {
-                    baritone.getCommandManager().execute("goto " + 
-                        afkPoint.pos.getX() + " " + 
-                        afkPoint.pos.getY() + " " + 
-                        afkPoint.pos.getZ());
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalTwoBlocks(afkPoint.pos));
                 }
             }
-            
+
             if (stateTick > 300) {
+                cmdMgr.debugReport("D", "MinerFSM.tickRepair:480", "repair path timeout, disabling automine");
                 module.getBaritone().stop();
-                transitionTo(MinerState.GO_WILD);
+                if (module.isActive()) module.toggle();
             }
             return;
         }
 
         // 阶段 4：停止寻路，调整视角到记录的 Yaw/Pitch
         module.getBaritone().stop();
+        cmdMgr.debugReport("D", "MinerFSM.tickRepair:487", "at repair point, stateTick=" + stateTick + ", repairMode=" + repairMode);
         
         if (stateTick < 100 && !isViewAligned(afkPoint.yaw, afkPoint.pitch)) {
             smoothRotateTo(afkPoint.yaw, afkPoint.pitch);
@@ -483,18 +538,38 @@ public final class MinerFSM {
 
         // 阶段 5：执行 Auto-Swap（只做一次）
         if (!repairMode) {
-            savedTool = mc.player.getMainHandItem().copy();
-            savedWeapon = findWeaponInHotbar();
+            if (repairSwapRequestedTick == -1) {
+                int miningSlot = findMiningPickaxeSlot();
+                savedTool = miningSlot == -2 ? mc.player.getOffhandItem().copy() : miningSlot == -1 ? ItemStack.EMPTY : mc.player.getInventory().getItem(miningSlot).copy();
+                savedWeapon = findWeaponInHotbar();
+                repairSwapAttempts++;
+                repairSwapRequestedTick = stateTick;
+                cmdMgr.debugReport("D", "MinerFSM.tickRepair:517", "swap requested attempt=" + repairSwapAttempts + ", miningSlot=" + miningSlot + ", main=" + savedTool.getHoverName().getString() + ", offhand=" + mc.player.getOffhandItem().getHoverName().getString());
+                if (miningSlot >= 0) InvUtils.move().from(miningSlot).toOffhand();
+                if (miningSlot == -2) {
+                    repairMode = true;
+                    startKillAura();
+                }
+                return;
+            }
 
-            // 工具切副手
-            InvUtils.move().from(0).toOffhand();
+            if (stateTick - repairSwapRequestedTick < 2) return;
 
-            // 武器切主手
+            ItemStack offhandTool = mc.player.getOffhandItem();
+            boolean toolMoved = ItemStack.isSameItemSameComponents(savedTool, offhandTool);
+            cmdMgr.debugReport("D", "MinerFSM.tickRepair:528", "swap result toolMoved=" + toolMoved + ", offhand=" + offhandTool.getHoverName().getString() + ", main=" + mc.player.getMainHandItem().getHoverName().getString());
+            if (!toolMoved) {
+                repairSwapRequestedTick = -1;
+                if (repairSwapAttempts >= 3) {
+                    cmdMgr.debugReport("D", "MinerFSM.tickRepair:533", "swap failed three times, disabling automine");
+                    if (module.isActive()) module.toggle();
+                }
+                return;
+            }
+
             if (!savedWeapon.isEmpty()) {
                 int weaponSlot = findSlotInHotbar(savedWeapon);
-                if (weaponSlot != -1) {
-                    InvUtils.swap(weaponSlot, false);
-                }
+                if (weaponSlot != -1) InvUtils.swap(weaponSlot, false);
             }
 
             repairMode = true;
@@ -585,6 +660,7 @@ public final class MinerFSM {
         Integer damage = tool.get(DataComponents.DAMAGE);
         if (maxDamage == null || damage == null) return false;
         int remaining = maxDamage - damage;
+        module.getCmdManager().debugReport("D", "MinerFSM.needsRepair:597", "tool=" + tool.getHoverName().getString() + ", remaining=" + remaining + ", threshold=" + module.getDurabilityThreshold());
         return remaining < module.getDurabilityThreshold();
     }
 
@@ -592,6 +668,28 @@ public final class MinerFSM {
         if (tool.isEmpty()) return true;
         Integer damage = tool.get(DataComponents.DAMAGE);
         return damage == null || damage <= 5; // 接近满耐久
+    }
+
+    private ItemStack findMiningPickaxe() {
+        ItemStack mainHand = mc.player.getMainHandItem();
+        if (isPickaxe(mainHand)) return mainHand;
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (isPickaxe(offhand)) return offhand;
+        int slot = findMiningPickaxeSlot();
+        return slot < 0 ? ItemStack.EMPTY : mc.player.getInventory().getItem(slot);
+    }
+
+    private int findMiningPickaxeSlot() {
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (isPickaxe(offhand)) return -2;
+        for (int i = 0; i < 36; i++) {
+            if (isPickaxe(mc.player.getInventory().getItem(i))) return i;
+        }
+        return -1;
+    }
+
+    private boolean isPickaxe(ItemStack stack) {
+        return !stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_pickaxe");
     }
 
     /**
@@ -615,30 +713,53 @@ public final class MinerFSM {
         return count;
     }
 
+    private String getTargetItemId() {
+        String blockId = BuiltInRegistries.BLOCK.getKey(module.getTargetBlock()).getPath();
+        return switch (blockId) {
+            case "lapis_ore", "deepslate_lapis_ore" -> "minecraft:lapis_lazuli";
+            case "redstone_ore", "deepslate_redstone_ore" -> "minecraft:redstone";
+            case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
+            case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
+            case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
+            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
+            case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
+            case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
+            case "nether_quartz_ore" -> "minecraft:quartz";
+            case "ancient_debris" -> "minecraft:ancient_debris";
+            default -> BuiltInRegistries.ITEM.getKey(module.getTargetBlock().asItem()).toString();
+        };
+    }
+
     private int countOreStacks() {
         if (mc.player == null) return 0;
 
         int totalCount = 0;
+        StringBuilder matched = new StringBuilder();
+        String targetItemId = getTargetItemId();
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
 
-            String itemId = stack.getItem().toString();
-            if (itemId.contains("ore") || itemId.contains("raw_") ||
-                itemId.contains("diamond") || itemId.contains("emerald")) {
-                totalCount += stack.getCount(); // 统计总数量
+            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (targetItemId != null && itemId.equals(targetItemId)) {
+                totalCount += stack.getCount(); // 统计目标矿物数量
+                matched.append(itemId).append("=").append(stack.getCount()).append(",");
             }
         }
-        // 转换为组数（向上取整）
-        return (int) Math.ceil(totalCount / 64.0);
+        // 转换为完整组数
+        int stacks = totalCount / 64;
+        if (stateTick % 20 == 0) {
+            module.getCmdManager().debugReport("A", "MinerFSM.countOreStacks:633", "matched=" + matched + ", total=" + totalCount + ", stacks=" + stacks);
+        }
+        return stacks;
     }
 
     private ItemStack findWeaponInHotbar() {
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
-            String id = stack.getItem().toString();
-            if (id.contains("sword") || id.contains("axe")) {
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (id.endsWith("_sword")) {
                 return stack.copy();
             }
         }
@@ -700,16 +821,20 @@ public final class MinerFSM {
 
     private void startKillAura() {
         KillAura killAura = Modules.get().get(KillAura.class);
-        if (killAura != null && !killAura.isActive()) {
+        boolean wasActive = killAura != null && killAura.isActive();
+        if (killAura != null && !wasActive) {
             killAura.toggle();
         }
+        module.getCmdManager().debugReport("D", "MinerFSM.startKillAura:742", "moduleFound=" + (killAura != null) + ", wasActive=" + wasActive + ", isActive=" + (killAura != null && killAura.isActive()));
     }
 
     private void stopKillAura() {
         KillAura killAura = Modules.get().get(KillAura.class);
-        if (killAura != null && killAura.isActive()) {
+        boolean wasActive = killAura != null && killAura.isActive();
+        if (wasActive) {
             killAura.toggle();
         }
+        module.getCmdManager().debugReport("D", "MinerFSM.stopKillAura:752", "moduleFound=" + (killAura != null) + ", wasActive=" + wasActive + ", isActive=" + (killAura != null && killAura.isActive()));
     }
 
     private void tryMeteorAutoRespawn() {

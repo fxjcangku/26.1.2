@@ -25,6 +25,16 @@ public abstract class ModuleScreenContextTranslationMixin {
     }
 
     /**
+     * 翻译"绑定"按钮
+     *
+     * 注入点：initWidgets 方法中的 "Bind" 字符串常量
+     */
+    @ModifyConstant(method = "initWidgets()V", constant = @org.spongepowered.asm.mixin.injection.Constant(stringValue = "Bind"))
+    private String yiyiaddon$translateBind(String value) {
+        return YiyiaddonTranslator.translateVisible(value);
+    }
+
+    /**
      * 翻译"松开按键时切换"标签
      * 
      * 注入点：initWidgets 方法中的 "Toggle on bind release:" 字符串常量

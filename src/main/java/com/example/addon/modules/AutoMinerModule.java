@@ -788,13 +788,21 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
                 
                 if (itemId.contains("pickaxe")) hasPickaxe = true;
-                if ((itemId.contains("sword") || (itemId.contains("axe") && !itemId.contains("pickaxe")) || itemId.contains("shovel"))) hasWeapon = true;
-                if (stack.has(DataComponents.FOOD)) foodCount += stack.getCount();
+                if (itemId.endsWith("_sword")) hasWeapon = true;
+                if (foodWhitelist.get().contains(stack.getItem()) && stack.has(DataComponents.FOOD)) foodCount += stack.getCount();
+            }
+
+            ItemStack offhand = mc.player.getOffhandItem();
+            if (!offhand.isEmpty()) {
+                String offhandId = BuiltInRegistries.ITEM.getKey(offhand.getItem()).toString();
+                if (offhandId.contains("pickaxe")) hasPickaxe = true;
+                if (offhandId.endsWith("_sword")) hasWeapon = true;
+                if (foodWhitelist.get().contains(offhand.getItem()) && offhand.has(DataComponents.FOOD)) foodCount += offhand.getCount();
             }
 
             if (!hasPickaxe) missing.add("§7镐子§f·背包里没有");
             if (!hasWeapon) missing.add("§7武器§f·背包里没有");
-            if (foodCount < 32) missing.add("§7食物§f·只有" + foodCount + "个（建议32+）");
+            if (foodCount < hungerThreshold.get()) missing.add("§7食物§f·白名单只有" + foodCount + "个（低于阈值" + hungerThreshold.get() + "）");
         }
 
         // 种子挖矿检测

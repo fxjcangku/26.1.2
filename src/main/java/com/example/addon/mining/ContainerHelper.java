@@ -45,6 +45,10 @@ public final class ContainerHelper {
     private static final int STABLE_REQUIRED = 3;
 
     private int openAttempts = 0;
+    private BlockPos openingPos = null;
+    private int openingCooldown = 0;
+    private int actionCooldown = 0;
+    private int foodCountBeforeWithdraw = -1;
     private static final int MAX_OPEN_ATTEMPTS = 5;
 
     public ContainerHelper(AutoMinerModule module) {
@@ -56,8 +60,14 @@ public final class ContainerHelper {
         currentMenu = null;
         menuStateId = -1;
         stableStateTicks = 0;
+        foodCountBeforeWithdraw = -1;
+        actionCooldown = 0;
         trashDisposalCooldown = 0;
         openAttempts = 0;
+        openingPos = null;
+        openingCooldown = 0;
+        foodCountBeforeWithdraw = -1;
+        actionCooldown = 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -123,18 +133,36 @@ public final class ContainerHelper {
      */
     public void openContainer(BlockPos pos) {
         if (mc.player == null || mc.level == null) return;
+        module.getCmdManager().debugReport("B", "ContainerHelper.unloadingTrace:2", "open request player=" + mc.player.blockPosition() + ", pos=" + pos + ", screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()) + ", menu=" + (currentMenu == null ? "null" : currentMenu.getClass().getSimpleName()) + ", stableTicks=" + stableStateTicks + ", attempts=" + openAttempts);
+        int dx = Math.abs(mc.player.blockPosition().getX() - pos.getX());
+        int dy = Math.abs(mc.player.blockPosition().getY() - pos.getY());
+        int dz = Math.abs(mc.player.blockPosition().getZ() - pos.getZ());
+        if (dx + dy + dz != 1) {
+            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:130", "not adjacent to container pos=" + pos + ", player=" + mc.player.blockPosition());
+            return;
+        }
+        if (openingCooldown > 0) {
+            openingCooldown--;
+            return;
+        }
+        if (mc.screen instanceof AbstractContainerScreen<?> screen && screen.getMenu().containerId != 0) {
+            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:124", "skip duplicate open, screen=" + screen.getClass().getSimpleName());
+            return;
+        }
 
         openAttempts++;
         if (openAttempts > MAX_OPEN_ATTEMPTS) {
-            openAttempts = 0;
+            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:130", "open attempts exhausted pos=" + pos);
+            return;
+        }
+        BlockEntity blockEntity = mc.level.getBlockEntity(pos);
+        if (!(blockEntity instanceof Container)) {
+            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:140", "target is not container pos=" + pos);
             return;
         }
 
-        // 校验是否为容器
-        BlockEntity blockEntity = mc.level.getBlockEntity(pos);
-        if (!(blockEntity instanceof Container)) {
-            return;
-        }
+        openingPos = pos;
+        openingCooldown = 10;
 
         // 构造命中结果
         Vec3 hitVec = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
@@ -142,6 +170,7 @@ public final class ContainerHelper {
 
         // 发送交互包
         if (mc.gameMode != null) {
+            module.getCmdManager().debugReport("B", "ContainerHelper.openContainer:144", "useItemOn pos=" + pos);
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
         }
     }
@@ -158,6 +187,7 @@ public final class ContainerHelper {
             mc.player.closeContainer();
         }
         openAttempts = 0;
+        openingPos = null;
         currentMenu = null;
         menuStateId = -1;
         stableStateTicks = 0;
@@ -206,8 +236,14 @@ public final class ContainerHelper {
      * @return 是否还有矿物需要继续转移
      */
     public boolean depositOres() {
-        if (!isContainerOpen() || mc.player == null || mc.gameMode == null) {
-            return false;
+        if (mc.player == null || mc.gameMode == null) return false;
+        if (!isContainerOpen()) {
+            module.getCmdManager().debugReport("B", "ContainerHelper.depositOres:229", "container not stable screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()));
+            return mc.screen instanceof AbstractContainerScreen<?>;
+        }
+        if (actionCooldown > 0) {
+            actionCooldown--;
+            return true;
         }
 
         AbstractContainerMenu menu = currentMenu;
@@ -223,22 +259,35 @@ public final class ContainerHelper {
             ItemStack stack = slot.getItem();
             if (stack.isEmpty()) continue;
 
-            String itemId = stack.getItem().toString();
-            if (itemId.contains("ore") || itemId.contains("raw_") || 
-                itemId.contains("diamond") || itemId.contains("emerald") ||
-                itemId.contains("coal") || itemId.contains("redstone") ||
-                itemId.contains("lapis") || itemId.contains("quartz")) {
-                
-                // 使用 Shift+左键快速移动物品
+            String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (isAllowedOre(stack)) {
                 InvUtils.shiftClick().slot(slot.index);
-                foundAny = true;
-                
-                // 每次只传输一个槽位，避免服务器延迟导致丢失
+                actionCooldown = 5;
+                module.getCmdManager().debugReport("B", "ContainerHelper.depositOres:248", "shiftClick slot=" + slot.index + ", item=" + itemId + ", count=" + stack.getCount());
                 return true;
             }
         }
 
         return foundAny;
+    }
+
+    private boolean isAllowedOre(ItemStack stack) {
+        String target = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(module.getTargetBlock()).getPath();
+        String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String expected = switch (target) {
+            case "lapis_ore", "deepslate_lapis_ore" -> "minecraft:lapis_lazuli";
+            case "redstone_ore", "deepslate_redstone_ore" -> "minecraft:redstone";
+            case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
+            case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
+            case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
+            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
+            case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
+            case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
+            case "nether_quartz_ore" -> "minecraft:quartz";
+            case "ancient_debris" -> "minecraft:ancient_debris";
+            default -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(module.getTargetBlock().asItem()).toString();
+        };
+        return expected.equals(itemId) || (target.endsWith("_ore") && itemId.equals("minecraft:" + target));
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -254,6 +303,20 @@ public final class ContainerHelper {
      */
     public boolean withdrawFood() {
         if (!isContainerOpen() || mc.player == null || mc.gameMode == null) {
+            return false;
+        }
+
+        if (actionCooldown > 0) {
+            actionCooldown--;
+            return false;
+        }
+
+        int currentFoodCount = countWhitelistedFood();
+        if (foodCountBeforeWithdraw >= 0) {
+            if (currentFoodCount > foodCountBeforeWithdraw) {
+                foodCountBeforeWithdraw = -1;
+                return true;
+            }
             return false;
         }
 
@@ -273,13 +336,23 @@ public final class ContainerHelper {
             // 判断是否为食物且在白名单内
             var foodComp = stack.get(DataComponents.FOOD);
             if (foodComp != null && whitelist.contains(stack.getItem())) {
-                // 使用 Shift+左键快速移动食物
+                foodCountBeforeWithdraw = currentFoodCount;
                 InvUtils.shiftClick().slot(slot.index);
-                return true;
+                actionCooldown = 5;
+                return false;
             }
         }
 
         return false;
+    }
+
+    private int countWhitelistedFood() {
+        int count = 0;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.isEmpty() && module.getFoodWhitelist().contains(stack.getItem()) && stack.has(DataComponents.FOOD)) count += stack.getCount();
+        }
+        return count;
     }
 
     /**

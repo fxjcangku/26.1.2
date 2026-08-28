@@ -3,14 +3,21 @@ package com.example.addon.mining;
 import com.example.addon.modules.AutoMinerModule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunk;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * 指令管理与防卡死网络中心
@@ -54,6 +61,25 @@ public final class CommandManager {
         this.mc = Minecraft.getInstance();
     }
 
+    // #region debug-point A:E:init
+    void debugReport(String hypothesisId, String location, String data) {
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://127.0.0.1:7777/event");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+                String body = "{\"sessionId\":\"automine-igui-click\",\"runId\":\"verify-fix\",\"hypothesisId\":\"" + hypothesisId + "\",\"location\":\"" + location + "\",\"msg\":\"[DEBUG] automine IGUI trace\",\"data\":\"" + data.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\"ts\":" + System.currentTimeMillis() + "}";
+                connection.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
+                connection.getResponseCode();
+                connection.disconnect();
+            } catch (Exception ignored) {
+            }
+        }, "automine-debug").start();
+    }
+    // #endregion
+
     public void reset() {
         executing = false;
         executeTick = 0;
@@ -93,6 +119,7 @@ public final class CommandManager {
         
         // 去掉前缀/后发送
         mc.player.connection.sendCommand(cmd.substring(1));
+        debugReport("A", "CommandManager.executeCommand:115", "command=" + cmd + ", guiEnabled=" + module.isRtpGuiEnabled() + ", keyword=" + module.getRtpGuiKeyword());
 
         // 从模块获取传送等待时长（秒转tick）
         maxWaitTicks = module.getTeleportDelay() * 20;
@@ -282,35 +309,31 @@ public final class CommandManager {
 
         // 标准化关键词（移除颜色和空格）
         String normalizedKeyword = stripFormatting(keyword);
+        debugReport("A", "CommandManager.handleGuiAutoClick:284", "keywordRaw=" + keyword + ", keywordNormalized=" + normalizedKeyword + ", children=" + currentScreen.children().size());
 
-        // 遍历所有渲染组件，查找匹配的按钮
-        for (var widget : currentScreen.children()) {
-            if (widget instanceof AbstractWidget button) {
-                Component message = button.getMessage();
-                String buttonText = stripFormatting(message.getString());
-                
-                // 纯文本匹配（忽略颜色和空格）
-                if (buttonText.contains(normalizedKeyword)) {
-                    // 使用反射调用按钮点击
-                    try {
-                        var onPressField = net.minecraft.client.gui.components.Button.class.getDeclaredField("onPress");
-                        onPressField.setAccessible(true);
-                        var onPress = (net.minecraft.client.gui.components.Button.OnPress) onPressField.get(button);
-                        onPress.onPress((net.minecraft.client.gui.components.Button) button);
-                    } catch (Exception e) {
-                        // 反射失败则尝试直接点击
-                    }
-                    
-                    // 关闭GUI
-                    mc.setScreen(null);
-                    
-                    waitingForGui = false;
-                    return true; // 继续等待传送完成
-                }
-            }
+        if (!(currentScreen instanceof AbstractContainerScreen<?> containerScreen)) {
+            return true;
         }
 
-        // 未找到匹配按钮，继续等待
+        AbstractContainerMenu menu = containerScreen.getMenu();
+        if (menu == null || mc.player == null || mc.gameMode == null) {
+            return true;
+        }
+
+        for (Slot slot : menu.slots) {
+            ItemStack stack = slot.getItem();
+            if (stack.isEmpty()) continue;
+
+            String itemText = stripFormatting(stack.getHoverName().getString());
+            if (!itemText.contains(normalizedKeyword)) continue;
+
+            debugReport("C", "CommandManager.handleGuiAutoClick:310", "MATCH slot=" + slot.index + ", text=" + itemText + ", menu=" + menu.getClass().getName());
+            mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, ContainerInput.PICKUP, mc.player);
+            waitingForGui = false;
+            return true;
+        }
+
+        // 未找到匹配槽位，继续等待
         return true;
     }
 

@@ -49,6 +49,23 @@ public final class YiyiaddonTranslator {
             return "（已选择 " + normalized.substring(1, normalized.indexOf(' ')) + " 项）";
         }
         if (normalized.equals("Reconnect")) return "重新连接";
+        if (normalized.matches("Bound to .+\\.")) {
+            return "已绑定至 " + normalized.substring("Bound to ".length(), normalized.length() - 1) + "。";
+        }
+        int boundIndex = normalized.lastIndexOf("Bound to ");
+        if (boundIndex >= 0 && normalized.endsWith(".")) {
+            return normalized.substring(0, boundIndex) + "已绑定至 "
+                + normalized.substring(boundIndex + "Bound to ".length(), normalized.length() - 1) + "。";
+        }
+        if (normalized.endsWith("Bound to .")) {
+            return normalized.substring(0, normalized.length() - "Bound to .".length()) + "已绑定。";
+        }
+        if (normalized.endsWith("Removed bind.")) {
+            return normalized.substring(0, normalized.length() - "Removed bind.".length()) + "已移除按键绑定。";
+        }
+        if (normalized.matches("Set bind to .+\\.")) {
+            return "已将按键设置为 " + normalized.substring("Set bind to ".length(), normalized.length() - 1) + "。";
+        }
         if (normalized.equals("Toggle Auto Reconnect")) return "切换自动重连";
         if (normalized.equals("Bind") || normalized.startsWith("Bind:")) return "绑定";
         if (normalized.equals("Toggle on bind release") || normalized.startsWith("Toggle on bind release:")) {

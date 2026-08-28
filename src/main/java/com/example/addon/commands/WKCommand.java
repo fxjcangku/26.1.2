@@ -20,6 +20,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * WK 指令 - 自动挖矿点位管理指令
@@ -674,44 +676,32 @@ public class WKCommand extends Command {
     }
 
     private static void parseJson(String json) {
-        // 简化的 JSON 解析（生产环境建议用 Gson）
-        json = json.replace("{", "").replace("}", "").replace("\"", "").trim();
-        String[] entries = json.split(",(?=\\s*\\w+:)");
+        Pattern entryPattern = Pattern.compile("\"(mineral|food|afk)\"\\s*:\\s*\\{(.*?)\\}", Pattern.DOTALL);
+        Pattern fieldPattern = Pattern.compile("\"(x|y|z|dimension|yaw|pitch)\"\\s*:\\s*(?:\"([^\"]*)\"|(-?\\d+(?:\\.\\d+)?))");
+        Matcher entries = entryPattern.matcher(json);
 
-        String currentKey = null;
-        int x = 0, y = 0, z = 0;
-        String dimension = "";
-        float yaw = 0, pitch = 0;
+        while (entries.find()) {
+            String key = entries.group(1);
+            String object = entries.group(2);
+            Matcher fields = fieldPattern.matcher(object);
+            int x = 0, y = 0, z = 0;
+            String dimension = "";
+            float yaw = 0, pitch = 0;
 
-        for (String entry : entries) {
-            entry = entry.trim();
-            if (entry.isEmpty()) continue;
-
-            String[] parts = entry.split(":", 2);
-            if (parts.length != 2) continue;
-
-            String key = parts[0].trim();
-            String value = parts[1].trim();
-
-            if (key.equals("mineral") || key.equals("food") || key.equals("afk")) {
-                currentKey = key;
-            } else if (currentKey != null) {
-                switch (key) {
+            while (fields.find()) {
+                String field = fields.group(1);
+                String value = fields.group(2) != null ? fields.group(2) : fields.group(3);
+                switch (field) {
                     case "x" -> x = Integer.parseInt(value);
                     case "y" -> y = Integer.parseInt(value);
                     case "z" -> z = Integer.parseInt(value);
                     case "dimension" -> dimension = value;
                     case "yaw" -> yaw = Float.parseFloat(value);
-                    case "pitch" -> {
-                        pitch = Float.parseFloat(value);
-                        // 读取完一组数据，存储
-                        BlockPos pos = new BlockPos(x, y, z);
-                        WKData data = new WKData(pos, dimension, yaw, pitch);
-                        DATA_STORE.put(currentKey, data);
-                        currentKey = null;
-                    }
+                    case "pitch" -> pitch = Float.parseFloat(value);
                 }
             }
+
+            DATA_STORE.put(key, new WKData(new BlockPos(x, y, z), dimension, yaw, pitch));
         }
     }
 
