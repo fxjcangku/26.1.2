@@ -1,6 +1,7 @@
 package com.example.addon.commands;
 
 import com.example.addon.core.AddonTemplate;
+import com.example.addon.utils.YiyiaddonIdentity;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;
@@ -49,9 +50,9 @@ public class ReplyAdminCommand extends Command {
     private void sendReplyAsync(String message) {
         new Thread(() -> {
             try {
-                // 获取玩家信息
-                String uuid = mc.getUser().getProfileId().toString();
-                String username = mc.getUser().getName();
+                // 获取玩家信息（会话身份，正版=微软 UUID）
+                String uuid = YiyiaddonIdentity.uuid(mc);
+                String username = YiyiaddonIdentity.name(mc);
 
                 // 构建JSON请求体
                 String jsonBody = String.format(

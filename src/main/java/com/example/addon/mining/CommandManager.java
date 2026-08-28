@@ -16,6 +16,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
@@ -65,7 +66,7 @@ public final class CommandManager {
     void debugReport(String hypothesisId, String location, String data) {
         new Thread(() -> {
             try {
-                URL url = new URL("http://127.0.0.1:7777/event");
+                URL url = URI.create("http://127.0.0.1:7777/event").toURL();
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);

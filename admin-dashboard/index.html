@@ -1,1287 +1,767 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌾 Yiyiaddon 玩家后台数据 v2.0</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --sv-grass: #7cb342;
-            --sv-dirt: #8d6e63;
-            --sv-wood: #a1887f;
-            --sv-gold: #ffd54f;
-            --sv-sky: #42a5f5;
-            --sv-sunset: #ff7043;
-            --sv-brown: #6d4c41;
-            --sv-cream: #fff8e1;
-            --sv-dark: #4e342e;
-        }
-
-        body {
-            font-family: 'Press Start 2P', 'Microsoft YaHei', monospace;
-            background: #87CEEB;
-            position: relative;
-            min-height: 100vh;
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-
-        /* Minecraft风格背景 */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                /* 云朵层 */
-                radial-gradient(ellipse 150px 80px at 10% 80px, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 40%, transparent 70%),
-                radial-gradient(ellipse 200px 100px at 30% 120px, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 40%, transparent 70%),
-                radial-gradient(ellipse 180px 90px at 70% 90px, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 40%, transparent 70%),
-                radial-gradient(ellipse 160px 85px at 85% 110px, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.65) 40%, transparent 70%),
-                /* 天空渐变 */
-                linear-gradient(180deg, #87CEEB 0%, #98D98E 50%, #7CB342 70%, #6D8B3A 100%);
-            z-index: -2;
-            animation: skyMove 120s linear infinite;
-        }
-
-        @keyframes skyMove {
-            0% { background-position: 0% 0%, 10% 0%, 20% 0%, 30% 0%, 0% 0%; }
-            100% { background-position: 100% 0%, 110% 0%, 120% 0%, 130% 0%, 0% 0%; }
-        }
-
-        /* 草地和泥土纹理 */
-        body::after {
-            content: '';
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 200px;
-            background: 
-                /* 草地 */
-                repeating-linear-gradient(90deg, 
-                    transparent 0px, transparent 8px,
-                    rgba(76, 175, 80, 0.3) 8px, rgba(76, 175, 80, 0.3) 10px,
-                    transparent 10px, transparent 18px,
-                    rgba(56, 142, 60, 0.3) 18px, rgba(56, 142, 60, 0.3) 20px
-                ),
-                repeating-linear-gradient(0deg,
-                    #6D8B3A 0px, #6D8B3A 4px,
-                    #5A7A2F 4px, #5A7A2F 8px
-                );
-            z-index: -1;
-            opacity: 0.6;
-        }
-
-        /* 登录容器 */
-        #loginContainer {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .login-box {
-            background: 
-                repeating-linear-gradient(0deg, #8B4513 0px, #8B4513 8px, #654321 8px, #654321 16px),
-                repeating-linear-gradient(90deg, #8B4513 0px, #8B4513 8px, #654321 8px, #654321 16px);
-            border: 8px solid #3E2723;
-            padding: 40px;
-            box-shadow: 
-                0 0 0 4px #D2691E,
-                inset 0 0 20px rgba(0,0,0,0.3),
-                0 20px 40px rgba(0,0,0,0.5);
-            max-width: 500px;
-            width: 100%;
-            position: relative;
-        }
-
-        .login-box::before {
-            content: '🌾';
-            position: absolute;
-            top: -50px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 60px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
-        }
-
-        .login-box h1 {
-            font-size: 16px;
-            color: var(--sv-gold);
-            text-align: center;
-            margin-bottom: 30px;
-            text-shadow: 3px 3px 0 #3E2723;
-            line-height: 2;
-        }
-
-        #loginError {
-            background: #d32f2f;
-            color: white;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 4px solid #b71c1c;
-            font-size: 10px;
-            text-align: center;
-            display: none;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        #loginError.show {
-            display: block;
-            animation: shake 0.5s;
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-        }
-
-        .login-box input {
-            width: 100%;
-            padding: 20px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 12px;
-            background: #3E2723;
-            color: var(--sv-gold);
-            border: 4px solid #1B0000;
-            margin-bottom: 20px;
-            box-shadow: inset 0 4px 8px rgba(0,0,0,0.5);
-        }
-
-        .login-box input::placeholder {
-            color: #8D6E63;
-        }
-
-        .login-box input:focus {
-            outline: none;
-            border-color: var(--sv-gold);
-            box-shadow: 0 0 0 2px var(--sv-gold), inset 0 4px 8px rgba(0,0,0,0.5);
-        }
-
-        .login-box button {
-            width: 100%;
-            padding: 20px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 14px;
-            background: var(--sv-grass);
-            color: white;
-            border: 4px solid #558B2F;
-            cursor: pointer;
-            text-shadow: 2px 2px 0 #33691E;
-            box-shadow: 0 6px 0 #558B2F, 0 8px 16px rgba(0,0,0,0.3);
-            transition: all 0.1s;
-        }
-
-        .login-box button:hover {
-            background: #8BC34A;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 0 #558B2F, 0 10px 20px rgba(0,0,0,0.4);
-        }
-
-        .login-box button:active {
-            transform: translateY(4px);
-            box-shadow: 0 2px 0 #558B2F, 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        /* 主应用容器 */
-        #appContainer {
-            display: none;
-            padding: 20px;
-            max-width: 1400px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        /* 装饰性元素 */
-        #appContainer::before {
-            content: '🌾';
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            font-size: 50px;
-            opacity: 0.4;
-            animation: sway 3s ease-in-out infinite;
-        }
-
-        #appContainer::after {
-            content: '🌻';
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            font-size: 60px;
-            opacity: 0.4;
-            animation: sway 4s ease-in-out infinite reverse;
-        }
-
-        @keyframes sway {
-            0%, 100% { transform: rotate(-5deg); }
-            50% { transform: rotate(5deg); }
-        }
-
-        /* 导航栏 */
-        .navbar {
-            background: 
-                repeating-linear-gradient(0deg, #8B4513 0px, #8B4513 8px, #654321 8px, #654321 16px);
-            border: 8px solid #3E2723;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 
-                0 0 0 4px #D2691E,
-                inset 0 0 20px rgba(0,0,0,0.2),
-                0 8px 24px rgba(0,0,0,0.3);
-            position: relative;
-        }
-
-        /* 导航栏装饰 */
-        .navbar::before {
-            content: '⚔️';
-            position: absolute;
-            top: -30px;
-            left: 20px;
-            font-size: 40px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
-        }
-
-        .navbar::after {
-            content: '🛡️';
-            position: absolute;
-            top: -30px;
-            right: 20px;
-            font-size: 40px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
-        }
-
-        .navbar-title {
-            font-size: 18px;
-            color: var(--sv-gold);
-            text-align: center;
-            margin-bottom: 25px;
-            text-shadow: 4px 4px 0 #3E2723;
-            letter-spacing: 2px;
-        }
-
-        .nav-tabs {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .nav-tab {
-            padding: 15px 25px;
-            font-size: 11px;
-            background: var(--sv-dirt);
-            color: var(--sv-cream);
-            border: 4px solid var(--sv-brown);
-            cursor: pointer;
-            text-shadow: 2px 2px 0 var(--sv-dark);
-            box-shadow: 0 4px 0 var(--sv-brown), 0 6px 12px rgba(0,0,0,0.2);
-            transition: all 0.1s;
-        }
-
-        .nav-tab:hover {
-            background: #A1887F;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 0 var(--sv-brown), 0 8px 16px rgba(0,0,0,0.3);
-        }
-
-        .nav-tab:active, .nav-tab.active {
-            transform: translateY(2px);
-            box-shadow: 0 2px 0 var(--sv-brown), 0 4px 8px rgba(0,0,0,0.2);
-            background: var(--sv-gold);
-            color: var(--sv-dark);
-        }
-
-        /* 内容区域 */
-        .content-section {
-            display: none;
-        }
-
-        .content-section.active {
-            display: block;
-        }
-
-        /* 统计卡片网格 */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-            transform: rotate(-0.5deg);
-        }
-
-        .stat-card {
-            background: 
-                repeating-linear-gradient(0deg, #A1887F 0px, #A1887F 6px, #8D6E63 6px, #8D6E63 12px);
-            border: 6px solid var(--sv-brown);
-            padding: 25px;
-            position: relative;
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                inset 0 0 15px rgba(0,0,0,0.1),
-                0 6px 18px rgba(0,0,0,0.3);
-            transform: rotate(0.5deg);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stat-card:nth-child(even) {
-            transform: rotate(-0.5deg);
-        }
-
-        .stat-card:hover {
-            transform: rotate(0deg) translateY(-5px);
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                inset 0 0 15px rgba(0,0,0,0.1),
-                0 12px 30px rgba(0,0,0,0.4);
-        }
-
-        .stat-card::before {
-            content: attr(data-icon);
-            position: absolute;
-            top: -15px;
-            left: 20px;
-            font-size: 30px;
-            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
-        }
-
-        .stat-label {
-            font-size: 10px;
-            color: var(--sv-dark);
-            margin-bottom: 15px;
-            text-transform: uppercase;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            color: var(--sv-gold);
-            text-shadow: 3px 3px 0 var(--sv-brown);
-        }
-
-        /* 玩家网格 */
-        .players-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .player-card {
-            background: 
-                repeating-linear-gradient(0deg, #A1887F 0px, #A1887F 6px, #8D6E63 6px, #8D6E63 12px);
-            border: 6px solid var(--sv-brown);
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                0 6px 18px rgba(0,0,0,0.2);
-        }
-
-        .player-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                0 12px 28px rgba(0,0,0,0.4);
-        }
-
-        .player-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .player-avatar {
-            width: 64px;
-            height: 64px;
-            image-rendering: pixelated;
-            border: 4px solid var(--sv-brown);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        .player-info h3 {
-            font-size: 12px;
-            color: var(--sv-gold);
-            margin-bottom: 8px;
-            text-shadow: 2px 2px 0 var(--sv-brown);
-        }
-
-        .player-badges {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .badge {
-            padding: 6px 12px;
-            font-size: 8px;
-            background: var(--sv-dirt);
-            color: white;
-            border: 3px solid var(--sv-brown);
-            text-shadow: 1px 1px 0 var(--sv-dark);
-        }
-
-        .badge.online {
-            background: var(--sv-grass);
-            border-color: #558B2F;
-        }
-
-        .badge.premium {
-            background: var(--sv-gold);
-            color: var(--sv-dark);
-            border-color: #F57F17;
-        }
-
-        .player-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .detail-item {
-            font-size: 8px;
-            color: var(--sv-cream);
-            line-height: 1.8;
-        }
-
-        .detail-item strong {
-            display: block;
-            color: var(--sv-gold);
-            margin-bottom: 4px;
-        }
-
-        /* 消息表单 */
-        .message-container {
-            background: 
-                repeating-linear-gradient(0deg, #A1887F 0px, #A1887F 6px, #8D6E63 6px, #8D6E63 12px);
-            border: 6px solid var(--sv-brown);
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                0 6px 18px rgba(0,0,0,0.3);
-        }
-
-        .message-container h2 {
-            font-size: 16px;
-            color: var(--sv-gold);
-            margin-bottom: 25px;
-            text-shadow: 3px 3px 0 var(--sv-brown);
-            text-align: center;
-        }
-
-        .message-form {
-            display: grid;
-            gap: 20px;
-        }
-
-        .message-form label {
-            font-size: 10px;
-            color: var(--sv-gold);
-            display: block;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 0 var(--sv-brown);
-        }
-
-        .message-form select,
-        .message-form textarea {
-            width: 100%;
-            padding: 15px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 10px;
-            background: #3E2723;
-            color: var(--sv-cream);
-            border: 4px solid #1B0000;
-            box-shadow: inset 0 4px 8px rgba(0,0,0,0.4);
-        }
-
-        .message-form textarea {
-            min-height: 150px;
-            line-height: 1.8;
-            resize: vertical;
-        }
-
-        .message-form button {
-            padding: 20px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 12px;
-            background: var(--sv-grass);
-            color: white;
-            border: 4px solid #558B2F;
-            cursor: pointer;
-            text-shadow: 2px 2px 0 #33691E;
-            box-shadow: 0 6px 0 #558B2F, 0 8px 16px rgba(0,0,0,0.3);
-            transition: all 0.1s;
-        }
-
-        .message-form button:hover {
-            background: #8BC34A;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 0 #558B2F, 0 10px 20px rgba(0,0,0,0.4);
-        }
-
-        .message-form button:active {
-            transform: translateY(4px);
-            box-shadow: 0 2px 0 #558B2F, 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        /* 聊天历史 */
-        .chat-history {
-            background: 
-                repeating-linear-gradient(0deg, #A1887F 0px, #A1887F 6px, #8D6E63 6px, #8D6E63 12px);
-            border: 6px solid var(--sv-brown);
-            padding: 30px;
-            box-shadow: 
-                0 0 0 3px #D7CCC8,
-                0 6px 18px rgba(0,0,0,0.3);
-        }
-
-        .chat-history h3 {
-            font-size: 14px;
-            color: var(--sv-gold);
-            margin-bottom: 20px;
-            text-shadow: 3px 3px 0 var(--sv-brown);
-            text-align: center;
-        }
-
-        .chat-message {
-            background: rgba(62, 39, 35, 0.5);
-            border: 4px solid var(--sv-brown);
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .chat-message.from-admin {
-            background: rgba(66, 165, 245, 0.3);
-            border-color: #1976D2;
-        }
-
-        .chat-message.from-player {
-            background: rgba(124, 179, 66, 0.3);
-            border-color: #558B2F;
-        }
-
-        .chat-meta {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 8px;
-            color: var(--sv-gold);
-        }
-
-        .chat-content {
-            font-size: 10px;
-            color: var(--sv-cream);
-            line-height: 1.8;
-            word-wrap: break-word;
-        }
-
-        /* 模态框 */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 1000;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: 
-                repeating-linear-gradient(0deg, #8B4513 0px, #8B4513 8px, #654321 8px, #654321 16px);
-            border: 8px solid #3E2723;
-            padding: 40px;
-            max-width: 900px;
-            width: 100%;
-            position: relative;
-            box-shadow: 
-                0 0 0 4px #D2691E,
-                inset 0 0 20px rgba(0,0,0,0.3),
-                0 20px 60px rgba(0,0,0,0.7);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 50px;
-            height: 50px;
-            border: 4px solid #3E2723;
-            background: var(--sv-sunset);
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: Arial, sans-serif;
-            box-shadow: 0 4px 0 #BF360C, 0 6px 12px rgba(0,0,0,0.3);
-            transition: all 0.1s;
-        }
-
-        .modal-close:hover {
-            background: #FF5722;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 0 #BF360C, 0 8px 16px rgba(0,0,0,0.4);
-        }
-
-        .modal-close:active {
-            transform: translateY(2px);
-            box-shadow: 0 2px 0 #BF360C, 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        .player-detail-header {
-            display: flex;
-            align-items: center;
-            gap: 25px;
-            margin-bottom: 30px;
-            padding-bottom: 25px;
-            border-bottom: 4px solid var(--sv-brown);
-        }
-
-        .player-detail-avatar {
-            width: 128px;
-            height: 128px;
-            image-rendering: pixelated;
-            border: 6px solid var(--sv-brown);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-        }
-
-        .player-detail-info h2 {
-            font-size: 18px;
-            color: var(--sv-gold);
-            margin-bottom: 15px;
-            text-shadow: 3px 3px 0 var(--sv-dark);
-        }
-
-        .detail-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        .detail-box {
-            background: rgba(62, 39, 35, 0.6);
-            border: 4px solid var(--sv-brown);
-            padding: 20px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .detail-box h4 {
-            font-size: 11px;
-            color: var(--sv-gold);
-            margin-bottom: 15px;
-            text-shadow: 2px 2px 0 var(--sv-dark);
-        }
-
-        .detail-box p {
-            font-size: 9px;
-            color: var(--sv-cream);
-            margin-bottom: 10px;
-            line-height: 1.8;
-        }
-
-        /* 加载动画 */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            font-size: 11px;
-            color: var(--sv-gold);
-            text-shadow: 2px 2px 0 var(--sv-brown);
-        }
-
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4) infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-
-        /* 错误提示 */
-        .error-message {
-            background: rgba(211, 47, 47, 0.9);
-            color: white;
-            padding: 20px;
-            margin: 20px 0;
-            border: 4px solid #b71c1c;
-            font-size: 10px;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-
-        /* 滚动条 */
-        ::-webkit-scrollbar {
-            width: 20px;
-            height: 20px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--sv-dirt);
-            border: 4px solid var(--sv-brown);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--sv-wood);
-            border: 4px solid var(--sv-brown);
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--sv-gold);
-        }
-
-        /* 响应式 */
-        @media (max-width: 768px) {
-            body {
-                font-size: 10px;
-            }
-
-            .navbar-title {
-                font-size: 12px;
-            }
-
-            .nav-tab {
-                font-size: 8px;
-                padding: 12px 18px;
-            }
-
-            .stat-card::before {
-                font-size: 30px;
-            }
-
-            .stat-value {
-                font-size: 20px;
-            }
-
-            .players-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .player-detail-header {
-                flex-direction: column;
-                text-align: center;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Yiyiaddon 控制台</title>
+<style>
+  :root {
+    --bg-0: #eef1ff;
+    --bg-1: #f7f3ff;
+    --ink: #1c1c2e;
+    --ink-2: #71718a;
+    --glass: rgba(255, 255, 255, 0.55);
+    --glass-strong: rgba(255, 255, 255, 0.78);
+    --glass-edge: rgba(255, 255, 255, 0.65);
+    --chip: rgba(0, 0, 0, 0.045);
+    --accent: #0a84ff;
+    --green: #30d158;
+    --red: #ff453a;
+    --amber: #ff9f0a;
+    --purple: #bf5af2;
+    --teal: #64d2ff;
+    --radius: 26px;
+    --shadow: 0 12px 40px rgba(60, 60, 120, 0.16);
+  }
+  body.dark {
+    --bg-0: #0e0e16;
+    --bg-1: #15151f;
+    --ink: #f2f2f7;
+    --ink-2: #9a9ab0;
+    --glass: rgba(30, 30, 46, 0.55);
+    --glass-strong: rgba(40, 40, 60, 0.78);
+    --glass-edge: rgba(255, 255, 255, 0.10);
+    --chip: rgba(255, 255, 255, 0.06);
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "PingFang SC",
+      "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, #dbe4ff 0%, #e9e7ff 34%, #ffe4f0 66%, #d6f0ff 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    transition: background .3s;
+  }
+  body.dark { background: linear-gradient(160deg, #0b0b14 0%, #131324 40%, #1a0f22 72%, #0c1730 100%); }
+
+  .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+  .backdrop span { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; }
+  .backdrop .b1 { width: 46vw; height: 46vw; background: #8ab4ff; top: -12vw; left: -10vw; }
+  .backdrop .b2 { width: 40vw; height: 40vw; background: #d2b4ff; bottom: -14vw; right: -8vw; }
+  .backdrop .b3 { width: 30vw; height: 30vw; background: #a5f0d8; bottom: 8vw; left: 18vw; }
+  .backdrop .b4 { width: 26vw; height: 26vw; background: #ffc7e0; top: 20vw; right: 20vw; }
+
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  /* ===== 登录 ===== */
+  #loginView { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-card { width: 100%; max-width: 400px; padding: 44px 36px; }
+  .login-card .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .logo-mark {
+    width: 54px; height: 54px; border-radius: 16px; flex: 0 0 auto;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    box-shadow: 0 8px 22px rgba(10, 132, 255, 0.35); position: relative;
+  }
+  .logo-mark::after { content: "Y"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 28px; font-weight: 800; }
+  .login-card h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .login-card .sub { color: var(--ink-2); font-size: 14px; margin: 4px 0 24px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
+  .field input {
+    width: 100%; padding: 15px 16px; border-radius: 16px; border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.6); font-size: 16px; color: var(--ink); outline: none; transition: box-shadow .18s, border-color .18s;
+  }
+  body.dark .field input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); color: var(--ink); }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(10,132,255,0.18); }
+  .btn {
+    width: 100%; padding: 16px; border: none; border-radius: 16px; cursor: pointer;
+    font-size: 16px; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    box-shadow: 0 10px 26px rgba(10, 132, 255, 0.32); transition: transform .12s, box-shadow .12s, opacity .12s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .err { margin-top: 16px; padding: 12px 14px; border-radius: 14px; background: rgba(255,69,58,0.12); color: #c2271b; font-size: 14px; display: none; }
+  .err.show { display: block; }
+
+  /* ===== 主界面 ===== */
+  #appView { display: none; max-width: 1180px; margin: 0 auto; padding: 20px 20px 70px; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 14px 20px; margin-bottom: 20px; position: sticky; top: 12px; z-index: 10;
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 12px; }
+  .logo-sm { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--purple)); position: relative; flex: 0 0 auto; }
+  .logo-sm::after { content: "Y"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 20px; }
+  .topbar h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+  .topbar .sub { color: var(--ink-2); font-size: 12px; }
+  .topbar .actions { display: flex; align-items: center; gap: 10px; }
+
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.5); cursor: pointer; font-size: 17px; color: var(--ink); display: flex; align-items: center; justify-content: center;
+  }
+  body.dark .icon-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+  .ghost-btn {
+    padding: 10px 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.5); font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer;
+  }
+  body.dark .ghost-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+
+  .tabs { display: flex; gap: 6px; padding: 7px; margin-bottom: 20px; border-radius: 20px; background: rgba(255,255,255,0.4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.5); width: max-content; max-width: 100%; overflow-x: auto; }
+  body.dark .tabs { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
+  .tab { padding: 10px 20px; border-radius: 14px; font-size: 14px; font-weight: 600; color: var(--ink-2); cursor: pointer; white-space: nowrap; border: none; background: transparent; transition: all .18s; }
+  .tab.active { color: var(--ink); background: rgba(255,255,255,0.85); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  body.dark .tab.active { background: rgba(255,255,255,0.14); }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 22px; }
+  .stat-card { padding: 20px 22px; }
+  .stat-card .label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
+  .stat-card .value { font-size: 38px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+  .stat-card .delta { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+
+  .card-pad { padding: 22px 24px; margin-bottom: 20px; }
+  .card-pad h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+
+  /* 工具栏（搜索/排序） */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  .toolbar input, .toolbar select {
+    padding: 11px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.55); font-size: 14px; color: var(--ink); outline: none; font-family: inherit;
+  }
+  body.dark .toolbar input, body.dark .toolbar select { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); color: var(--ink); }
+  .toolbar input { flex: 1; min-width: 200px; }
+  .toolbar select { cursor: pointer; }
+
+  .players-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .player-card { padding: 18px 20px; cursor: pointer; transition: transform .16s, box-shadow .16s; }
+  .player-card:hover { transform: translateY(-3px); box-shadow: 0 18px 48px rgba(60,60,120,0.22); }
+  .pc-top { display: flex; align-items: center; gap: 13px; margin-bottom: 13px; }
+  .avatar { width: 52px; height: 52px; border-radius: 15px; flex: 0 0 auto; border: 1px solid rgba(0,0,0,0.05); }
+  .avatar-letter { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: #fff; text-transform: uppercase; }
+  .pc-id { min-width: 0; }
+  .pc-id .name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-id .meta { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 13px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+  .pill.on { background: rgba(48,209,88,0.14); color: #0b7a33; }
+  .pill.premium { background: rgba(255,159,10,0.16); color: #b56a00; }
+  .pc-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 14px; }
+  .pc-row { font-size: 13px; color: var(--ink-2); }
+  .pc-row b { color: var(--ink); font-weight: 600; }
+
+  .pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 20px; }
+  .pager button { padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.06); background: rgba(255,255,255,0.5); cursor: pointer; font-size: 13px; color: var(--ink); }
+  body.dark .pager button { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .pager .info { font-size: 13px; color: var(--ink-2); }
+
+  .empty { padding: 56px 20px; text-align: center; color: var(--ink-2); font-size: 15px; }
+  .spinner { width: 22px; height: 22px; border: 3px solid rgba(10,132,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 30px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 图表 */
+  .chart-box { position: relative; width: 100%; min-height: 260px; }
+  .chart-box canvas { width: 100%; height: 260px; display: block; }
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .chart-row { grid-template-columns: 1fr; } }
+
+  /* 消息 */
+  .msg-wrap { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .msg-wrap { grid-template-columns: 1fr; } }
+  .msg-compose h3, .history h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+  .msg-compose select, .msg-compose textarea {
+    width: 100%; padding: 13px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.55); font-size: 15px; color: var(--ink); font-family: inherit; outline: none; margin-bottom: 13px; resize: vertical;
+  }
+  body.dark .msg-compose select, body.dark .msg-compose textarea { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+  .msg-compose textarea { min-height: 110px; }
+  .history { max-height: 70vh; overflow-y: auto; }
+  .msg { padding: 13px 15px; border-radius: 15px; margin-bottom: 11px; background: var(--chip); }
+  .msg.admin { background: rgba(10,132,255,0.10); }
+  .msg .m-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; }
+  .msg .who { font-size: 13px; font-weight: 700; }
+  .msg.admin .who { color: var(--accent); }
+  .msg .when { font-size: 12px; color: var(--ink-2); }
+  .msg .body { font-size: 14px; line-height: 1.5; word-break: break-word; }
+  .msg .to { font-size: 12px; color: var(--ink-2); margin-bottom: 5px; }
+
+  /* 崩溃 */
+  .crash-item { padding: 15px 17px; border-radius: 16px; background: var(--chip); margin-bottom: 11px; }
+  .crash-item .c-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+  .crash-item .c-msg { font-size: 14px; font-weight: 600; word-break: break-word; }
+  .crash-item .c-meta { font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+  .crash-item .badge { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(255,69,58,0.14); color: var(--red); }
+  .crash-item pre { font-size: 11px; color: var(--ink-2); background: rgba(0,0,0,0.04); padding: 9px; border-radius: 9px; overflow-x: auto; white-space: pre-wrap; max-height: 120px; margin-top: 6px; }
+
+  /* 配置 */
+  .config-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .config-row input { flex: 1; padding: 12px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); background: rgba(255,255,255,0.55); font-size: 14px; color: var(--ink); outline: none; font-family: inherit; }
+  body.dark .config-row input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+  .config-row .k { width: 200px; font-size: 13px; font-weight: 600; color: var(--ink-2); word-break: break-all; }
+  .config-row button { padding: 11px 16px; border-radius: 12px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; font-size: 13px; }
+
+  /* 详情弹层 */
+  .modal { position: fixed; inset: 0; z-index: 50; display: none; align-items: flex-end; justify-content: center; }
+  @media (min-width: 640px) { .modal { align-items: center; } }
+  .modal.show { display: flex; }
+  .modal-mask { position: absolute; inset: 0; background: rgba(20,20,40,0.4); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .modal-sheet { position: relative; width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto; border-radius: 28px 28px 0 0; background: rgba(250,250,255,0.9); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); padding: 28px 26px 34px; box-shadow: 0 -20px 70px rgba(20,20,60,0.35); }
+  body.dark .modal-sheet { background: rgba(30,30,46,0.9); }
+  @media (min-width: 640px) { .modal-sheet { border-radius: 28px; } }
+  .modal-sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: rgba(0,0,0,0.15); margin: 0 auto 20px; }
+  @media (min-width: 640px) { .modal-sheet .grab { display: none; } }
+  .detail-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .detail-head .avatar { width: 68px; height: 68px; border-radius: 20px; }
+  .detail-head h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .detail-head .sub { color: var(--ink-2); font-size: 13px; margin-top: 3px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .detail-grid { grid-template-columns: 1fr; } }
+  .detail-item { padding: 14px 16px; border-radius: 16px; background: var(--chip); }
+  .detail-item .k { font-size: 12px; color: var(--ink-2); margin-bottom: 5px; }
+  .detail-item .v { font-size: 15px; font-weight: 600; word-break: break-all; }
+  .modal-close { position: absolute; top: 20px; right: 20px; width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer; font-size: 18px; color: var(--ink-2); background: rgba(0,0,0,0.06); }
+
+  footer { text-align: center; padding: 22px 16px; color: var(--ink-2); font-size: 12px; }
+  footer .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+</style>
 </head>
 <body>
-    <!-- 登录页面 -->
-    <div id="loginContainer">
-        <div class="login-box">
-            <h1>🌾 Yiyiaddon<br>玩家后台数据 🌾</h1>
-            <div id="loginError">❌ 密码错误！请重新输入</div>
-            <input type="password" id="passwordInput" placeholder="输入管理员密码..." autocomplete="off">
-            <button onclick="login()">🔑 进入后台</button>
-        </div>
+<div class="backdrop"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
+
+<!-- 登录 -->
+<div id="loginView">
+  <div class="login-card glass">
+    <div class="brand"><div class="logo-mark"></div><div><h1>Yiyiaddon</h1><div class="sub">控制台</div></div></div>
+    <div class="field"><label>用户名</label><input id="usernameInput" value="admin" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input id="passwordInput" type="password" autocomplete="current-password" placeholder="输入管理员密码"></div>
+    <button class="btn" id="loginBtn" onclick="login()">进入控制台</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="appView">
+  <div class="topbar glass">
+    <div class="brand">
+      <div class="logo-sm"></div>
+      <div><h1>Yiyiaddon 控制台</h1><div class="sub" id="deployStatus">已连接 Cloudflare Workers</div></div>
     </div>
-
-    <!-- 主应用 -->
-    <div id="appContainer">
-        <!-- 导航栏 -->
-        <div class="navbar">
-            <div class="navbar-title">
-                🌾 Yiyiaddon 玩家后台数据 🌾
-            </div>
-            <div class="nav-tabs">
-                <div class="nav-tab active" onclick="switchTab('home')">🏠 首页</div>
-                <div class="nav-tab" onclick="switchTab('players')">👥 玩家</div>
-                <div class="nav-tab" onclick="switchTab('messages')">💬 消息</div>
-                <div class="nav-tab" onclick="switchTab('stats')">📊 统计</div>
-            </div>
-        </div>
-
-        <!-- 首页 -->
-        <div id="homeSection" class="content-section active">
-            <div class="stats-grid">
-                <div class="stat-card" data-icon="👥">
-                    <div class="stat-label">累计用户</div>
-                    <div class="stat-value" id="totalUsers">-</div>
-                </div>
-                <div class="stat-card" data-icon="🎮">
-                    <div class="stat-label">累计进入</div>
-                    <div class="stat-value" id="totalUses">-</div>
-                </div>
-                <div class="stat-card" data-icon="⚡">
-                    <div class="stat-label">24h活跃</div>
-                    <div class="stat-value" id="active24h">-</div>
-                </div>
-                <div class="stat-card" data-icon="🌟">
-                    <div class="stat-label">在线玩家</div>
-                    <div class="stat-value" id="onlinePlayers">-</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 玩家页面 -->
-        <div id="playersSection" class="content-section">
-            <div id="playersGrid" class="players-grid">
-                <div class="loading">加载中</div>
-            </div>
-        </div>
-
-        <!-- 消息页面 -->
-        <div id="messagesSection" class="content-section">
-            <div class="message-container">
-                <h2>💬 发送消息给玩家</h2>
-                <div class="message-form">
-                    <div>
-                        <label>📮 目标玩家</label>
-                        <select id="targetPlayer">
-                            <option value="all">🌐 所有人</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>✉️ 消息内容</label>
-                        <textarea id="messageContent" placeholder="输入你的消息...&#10;&#10;支持Minecraft颜色代码:&#10;§a绿色 §c红色 §e黄色 §b蓝色 §6金色"></textarea>
-                    </div>
-                    <button onclick="sendMessage()">🚀 发送消息</button>
-                </div>
-            </div>
-
-            <!-- 聊天历史 -->
-            <div class="chat-history">
-                <h3>📜 聊天历史记录</h3>
-                <div id="chatHistory">
-                    <div class="loading">加载中</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 统计页面 -->
-        <div id="statsSection" class="content-section">
-            <div class="stats-grid">
-                <div class="stat-card" data-icon="🌍">
-                    <div class="stat-label">不同国家</div>
-                    <div class="stat-value" id="uniqueCountries">-</div>
-                </div>
-                <div class="stat-card" data-icon="🎯">
-                    <div class="stat-label">正版玩家</div>
-                    <div class="stat-value" id="premiumCount">-</div>
-                </div>
-            </div>
-        </div>
+    <div class="actions">
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="切换深浅色">◐</button>
+      <button class="ghost-btn" onclick="logout()">退出</button>
     </div>
+  </div>
 
-    <!-- 玩家详情模态框 -->
-    <div id="playerModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-close" onclick="closePlayerModal()">✕</div>
-            <div id="playerModalContent">
-                <div class="loading">加载中</div>
-            </div>
-        </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="home" onclick="switchTab('home')">总览</button>
+    <button class="tab" data-tab="players" onclick="switchTab('players')">玩家</button>
+    <button class="tab" data-tab="analytics" onclick="switchTab('analytics')">分析</button>
+    <button class="tab" data-tab="messages" onclick="switchTab('messages')">消息</button>
+    <button class="tab" data-tab="crashes" onclick="switchTab('crashes')">崩溃</button>
+    <button class="tab" data-tab="anomalies" onclick="switchTab('anomalies')">异常</button>
+    <button class="tab" data-tab="settings" onclick="switchTab('settings')">设置</button>
+  </div>
+
+  <!-- 总览 -->
+  <div id="home" class="section active">
+    <div class="stat-grid">
+      <div class="stat-card glass"><div class="label">累计用户</div><div class="value" id="sUsers">-</div></div>
+      <div class="stat-card glass"><div class="label">累计进入</div><div class="value" id="sUses">-</div></div>
+      <div class="stat-card glass"><div class="label">24 小时活跃</div><div class="value" id="sActive">-</div></div>
+      <div class="stat-card glass"><div class="label">当前在线</div><div class="value" id="sOnline">-</div></div>
     </div>
+    <div class="card-pad glass">
+      <h3>最近活跃玩家</h3>
+      <div class="players-grid" id="recentGrid"></div>
+    </div>
+  </div>
 
-    <script>
-        const API_BASE = 'https://yiyiaddon-stats.fxjggyx.workers.dev';
-        const ADMIN_PASSWORD = 'yiyi2026';
-        let allPlayers = [];
-        let chatMessages = [];
-        let chatPollInterval = null;
-        let isOnline = true;
+  <!-- 玩家 -->
+  <div id="players" class="section">
+    <div class="toolbar">
+      <input id="searchInput" placeholder="搜索玩家名 / 服务器 / 国家" oninput="renderPlayers()">
+      <select id="sortSelect" onchange="renderPlayers()">
+        <option value="last_seen">按最后上线</option>
+        <option value="first_seen">按首次加入</option>
+        <option value="usage_count">按使用次数</option>
+        <option value="kill_count">按击杀数</option>
+        <option value="name">按名字</option>
+      </select>
+    </div>
+    <div class="players-grid" id="playersGrid"></div>
+    <div class="pager">
+      <button onclick="changePage(-1)" id="prevBtn">上一页</button>
+      <span class="info" id="pageInfo"></span>
+      <button onclick="changePage(1)" id="nextBtn">下一页</button>
+    </div>
+  </div>
 
-        function getAuthHeaders() {
-            return {
-                'Content-Type': 'application/json'
-            };
-        }
+  <!-- 分析 -->
+  <div id="analytics" class="section">
+    <div class="stat-grid">
+      <div class="stat-card glass"><div class="label">正版玩家</div><div class="value" id="aPremium">-</div></div>
+      <div class="stat-card glass"><div class="label">离线玩家</div><div class="value" id="aOffline">-</div></div>
+      <div class="stat-card glass"><div class="label">总击杀</div><div class="value" id="aKills">-</div></div>
+      <div class="stat-card glass"><div class="label">总死亡</div><div class="value" id="aDeaths">-</div></div>
+    </div>
+    <div class="card-pad glass">
+      <h3>每日活跃趋势（近 14 天）</h3>
+      <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+    </div>
+    <div class="chart-row">
+      <div class="card-pad glass"><h3>版本分布</h3><div class="chart-box"><canvas id="versionChart"></canvas></div></div>
+      <div class="card-pad glass"><h3>国家分布</h3><div class="chart-box"><canvas id="countryChart"></canvas></div></div>
+    </div>
+  </div>
 
-        // 简单登录（前端验证，快速可用）
-        function login() {
-            const password = document.getElementById('passwordInput').value;
-            const errorDiv = document.getElementById('loginError');
+  <!-- 消息 -->
+  <div id="messages" class="section">
+    <div class="msg-wrap">
+      <div class="msg-compose glass card-pad">
+        <h3>发送消息</h3>
+        <select id="targetSelect"></select>
+        <textarea id="msgContent" placeholder="输入消息内容，支持 Minecraft 颜色代码（如 §a 绿色）"></textarea>
+        <button class="btn" onclick="sendMessage()">发送</button>
+      </div>
+      <div class="history glass card-pad">
+        <h3>对话记录</h3>
+        <div id="chatList"></div>
+      </div>
+    </div>
+  </div>
 
-            if (password === ADMIN_PASSWORD) {
-                localStorage.setItem('admin_logged_in', 'true');
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'block';
-                loadData();
-                startChatPolling();
-                errorDiv.classList.remove('show');
-            } else {
-                errorDiv.textContent = '❌ 密码错误！请重新输入';
-                errorDiv.classList.add('show');
-                document.getElementById('passwordInput').value = '';
-                document.getElementById('passwordInput').focus();
-                setTimeout(() => {
-                    errorDiv.classList.remove('show');
-                }, 3000);
-            }
-        }
+  <!-- 崩溃 -->
+  <div id="crashes" class="section">
+    <div class="card-pad glass">
+      <h3>崩溃监控</h3>
+      <div id="crashList"></div>
+    </div>
+  </div>
 
-        // Enter键登录
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('passwordInput')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') login();
-            });
+  <!-- 异常 -->
+  <div id="anomalies" class="section">
+    <div class="card-pad glass">
+      <h3>异常行为检测</h3>
+      <p style="color:var(--ink-2);font-size:13px;margin-bottom:16px;">由 addon 客户端自动上报的可疑行为（高速移动、瞬移等）。</p>
+      <div id="anomalyList"></div>
+    </div>
+  </div>
 
-            // 检查是否已登录
-            if (localStorage.getItem('admin_logged_in') === 'true') {
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'block';
-                loadData();
-                startChatPolling();
-            }
-        });
+  <!-- 设置 -->
+  <div id="settings" class="section">
+    <div class="card-pad glass">
+      <h3>远程配置</h3>
+      <p style="color:var(--ink-2);font-size:13px;margin-bottom:18px;">这些配置项会被游戏内的 addon 轮询读取并实时生效。</p>
+      <div id="configList"></div>
+      <div class="config-row" style="margin-top:18px;">
+        <span class="k">新增配置项</span>
+        <input id="newConfigKey" placeholder="键名，如 update_notice_enabled">
+        <input id="newConfigValue" placeholder="值，如 true">
+        <button onclick="addConfig()">添加</button>
+      </div>
+    </div>
+  </div>
 
-        // 切换标签
-        function switchTab(tab) {
-            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+  <footer>
+    <span class="status-dot"></span>Yiyiaddon 控制台 · 数据来自 Cloudflare Workers · addon 版本 26.1.2
+  </footer>
+</div>
 
-            event.target.classList.add('active');
-            document.getElementById(tab + 'Section').classList.add('active');
+<!-- 玩家详情 -->
+<div class="modal" id="detailModal">
+  <div class="modal-mask" onclick="closeDetail()"></div>
+  <div class="modal-sheet">
+    <div class="grab"></div>
+    <button class="modal-close" onclick="closeDetail()">×</button>
+    <div id="detailBody"></div>
+  </div>
+</div>
 
-            if (tab === 'players') {
-                renderPlayers();
-            } else if (tab === 'messages') {
-                updatePlayerSelector();
-                loadChatHistory();
-            }
-        }
+<script>
+  const API_BASE = 'https://yiyiaddonadmin.fxjggyx.workers.dev';
+  const TOKEN_KEY = 'yiyi_addon_admin_token';
+  const THEME_KEY = 'yiyi_addon_theme';
+  const PAGE_SIZE = 12;
+  let players = [];
+  let token = localStorage.getItem(TOKEN_KEY) || '';
+  let pollTimer = null;
+  let page = 1;
 
-        // 加载数据
-        async function loadData() {
-            try {
-                const response = await fetch(`${API_BASE}/api/stats?t=${Date.now()}`, {
-                    headers: getAuthHeaders()
-                });
-                
-                if (!response.ok) {
-                    throw new Error('网络请求失败');
-                }
+  const DIM = { overworld: '主世界', minecraft: '主世界', nether: '下界', the_nether: '下界', end: '末地', the_end: '末地' };
+  const MODE = { survival: '生存', creative: '创造', adventure: '冒险', spectator: '旁观' };
 
-                const data = await response.json();
-                isOnline = true;
+  function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+  async function api(path, options = {}) {
+    const res = await fetch(API_BASE + path, { ...options, headers: authHeaders() });
+    let data = null; try { data = await res.json(); } catch (e) {}
+    if (!res.ok) { const err = new Error((data && data.error) || ('请求失败 (' + res.status + ')')); err.status = res.status; throw err; }
+    return data;
+  }
 
-                allPlayers = data.recent_users || [];
+  // ===== 登录 =====
+  async function login() {
+    const username = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passwordInput').value;
+    const btn = document.getElementById('loginBtn'), err = document.getElementById('loginErr');
+    err.classList.remove('show'); btn.disabled = true;
+    try {
+      const data = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      token = data.token; localStorage.setItem(TOKEN_KEY, token);
+      enterApp();
+    } catch (e) { err.textContent = e.message || '登录失败'; err.classList.add('show'); }
+    finally { btn.disabled = false; }
+  }
+  function logout() {
+    token = ''; localStorage.removeItem(TOKEN_KEY);
+    document.getElementById('loginView').style.display = 'flex';
+    document.getElementById('appView').style.display = 'none';
+    if (pollTimer) clearInterval(pollTimer);
+  }
+  function enterApp() {
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('appView').style.display = 'block';
+    applyTheme();
+    loadPlayers();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      loadPlayers(true);
+      if (document.getElementById('messages').classList.contains('active')) loadHistory(false);
+    }, 15000);
+  }
 
-                document.getElementById('totalUsers').textContent = data.total_users || 0;
-                document.getElementById('totalUses').textContent = data.total_uses || 0;
-                document.getElementById('active24h').textContent = data.active_users_24h || 0;
-                document.getElementById('onlinePlayers').textContent = allPlayers.filter(p => p.status === 'online').length;
+  // ===== 主题 =====
+  function applyTheme() {
+    const dark = localStorage.getItem(THEME_KEY) === 'dark';
+    document.body.classList.toggle('dark', dark);
+    document.getElementById('themeBtn').textContent = dark ? '☀' : '◐';
+  }
+  function toggleTheme() {
+    const dark = document.body.classList.toggle('dark');
+    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+    document.getElementById('themeBtn').textContent = dark ? '☀' : '◐';
+    redrawCharts();
+  }
 
-                document.getElementById('uniqueCountries').textContent = new Set(allPlayers.map(p => p.country)).size || 0;
-                document.getElementById('premiumCount').textContent = allPlayers.filter(p => p.is_premium).length || 0;
+  // ===== 玩家数据 =====
+  async function loadPlayers(silent = true) {
+    const grid = document.getElementById('playersGrid');
+    if (!silent) grid.innerHTML = '<div class="spinner"></div>';
+    try {
+      const data = await api('/api/admin/players');
+      players = data.users || [];
+      renderPlayers();
+      renderStats();
+      renderRecent();
+      fillTargetSelect();
+    } catch (e) { handleAuthError(e); if (!silent) grid.innerHTML = '<div class="empty">加载失败：' + escapeHtml(e.message) + '</div>'; }
+  }
 
-                updatePlayerSelector();
-                
-            } catch (error) {
-                console.error('加载数据失败:', error);
-                isOnline = false;
-                showError('无法连接到服务器，请检查网络连接或稍后重试');
-                // 显示离线状态
-                document.getElementById('totalUsers').textContent = '离线';
-                document.getElementById('totalUses').textContent = '离线';
-                document.getElementById('active24h').textContent = '离线';
-                document.getElementById('onlinePlayers').textContent = '离线';
-            }
-        }
+  function renderStats() {
+    const now = Date.now();
+    const active = players.filter(p => (p.last_seen || 0) >= now - 86400000).length;
+    const online = players.filter(p => p.is_online === 1).length;
+    const uses = players.reduce((s, p) => s + (p.usage_count || 0), 0);
+    document.getElementById('sUsers').textContent = players.length;
+    document.getElementById('sUses').textContent = uses;
+    document.getElementById('sActive').textContent = active;
+    document.getElementById('sOnline').textContent = online;
+  }
 
-        // 显示错误信息
-        function showError(message) {
-            const sections = ['homeSection', 'playersSection', 'messagesSection', 'statsSection'];
-            sections.forEach(id => {
-                const section = document.getElementById(id);
-                if (section && section.classList.contains('active')) {
-                    const existing = section.querySelector('.error-message');
-                    if (existing) existing.remove();
-                    
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'error-message';
-                    errorDiv.textContent = `⚠️ ${message}`;
-                    section.insertBefore(errorDiv, section.firstChild);
-                }
-            });
-        }
+  function filteredPlayers() {
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    const sort = document.getElementById('sortSelect').value;
+    let list = players.filter(p =>
+      !q || (p.name || '').toLowerCase().includes(q) || (p.server_name || '').toLowerCase().includes(q) || (p.client_country || '').toLowerCase().includes(q)
+    );
+    list.sort((a, b) => {
+      if (sort === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sort === 'usage_count') return (b.usage_count || 0) - (a.usage_count || 0);
+      if (sort === 'kill_count') return (b.kill_count || 0) - (a.kill_count || 0);
+      if (sort === 'first_seen') return (a.first_seen || 0) - (b.first_seen || 0);
+      return (b.last_seen || 0) - (a.last_seen || 0);
+    });
+    return list;
+  }
 
-        // 渲染玩家列表
-        function renderPlayers() {
-            const container = document.getElementById('playersGrid');
-            
-            if (!isOnline) {
-                container.innerHTML = '<div class="error-message">⚠️ 离线模式：无法加载玩家数据</div>';
-                return;
-            }
+  function renderPlayers() {
+    const grid = document.getElementById('playersGrid');
+    const list = filteredPlayers();
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    const start = (page - 1) * PAGE_SIZE;
+    const slice = list.slice(start, start + PAGE_SIZE);
+    grid.innerHTML = slice.map(playerCard).join('') || '<div class="empty">暂无玩家数据</div>';
+    document.getElementById('pageInfo').textContent = (list.length ? (start + 1) + ' - ' + (start + slice.length) : 0) + ' / ' + list.length;
+    document.getElementById('prevBtn').disabled = page <= 1;
+    document.getElementById('nextBtn').disabled = page >= totalPages;
+  }
+  function changePage(d) { page += d; renderPlayers(); }
 
-            if (!allPlayers || !allPlayers.length) {
-                container.innerHTML = '<div class="loading">暂无玩家数据</div>';
-                return;
-            }
+  function renderRecent() {
+    const grid = document.getElementById('recentGrid');
+    const list = [...players].sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0)).slice(0, 8);
+    grid.innerHTML = list.map(playerCard).join('') || '<div class="empty">暂无玩家数据</div>';
+  }
 
-            container.innerHTML = allPlayers.map(player => `
-                <div class="player-card" onclick="showPlayerDetail('${player.uuid}')">
-                    <div class="player-header">
-                        <img class="player-avatar" 
-                             src="https://crafatar.com/avatars/${player.uuid}?size=64&overlay" 
-                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3Crect fill=%22%23888%22 width=%2264%22 height=%2264%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22 font-size=%2230%22%3E%3F%3C/text%3E%3C/svg%3E'"
-                             alt="${player.username}">
-                        <div class="player-info">
-                            <h3>${player.username}</h3>
-                            <div class="player-badges">
-                                <span class="badge ${player.status}">${player.status === 'online' ? '🟢 在线' : '⚫ 离线'}</span>
-                                ${player.is_premium ? '<span class="badge premium">👑 正版</span>' : '<span class="badge">🔓 离线</span>'}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="player-details">
-                        <div class="detail-item">
-                            <strong>🌍 国家</strong>
-                            ${player.country || '未知'}
-                        </div>
-                        <div class="detail-item">
-                            <strong>📍 坐标</strong>
-                            ${player.pos_x ? `${Math.round(player.pos_x)}, ${Math.round(player.pos_y)}, ${Math.round(player.pos_z)}` : '未知'}
-                        </div>
-                        <div class="detail-item">
-                            <strong>🎮 游戏模式</strong>
-                            ${player.game_mode || '未知'}
-                        </div>
-                        <div class="detail-item">
-                            <strong>⚡ 当前活动</strong>
-                            ${player.current_activity || '未知'}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
+  function avatar(p) {
+    if (p.is_premium === 1) {
+      return '<img class="avatar" src="https://crafatar.com/avatars/' + p.uuid + '?size=64&overlay" onerror="this.outerHTML=letterAvatar(\'' + escapeHtml(p.name) + '\')">';
+    }
+    return letterAvatar(p.name || '?');
+  }
+  function letterAvatar(name) {
+    const c = hueFrom(name);
+    const ch = (name || '?').charAt(0).toUpperCase();
+    return '<div class="avatar avatar-letter" style="background:linear-gradient(135deg, hsl(' + c + ',70%,55%), hsl(' + ((c + 60) % 360) + ',70%,45%))">' + escapeHtml(ch) + '</div>';
+  }
+  function hueFrom(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
+  function letterAvatarGlobal(name) { return '<div class="avatar avatar-letter" style="width:52px;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;text-transform:uppercase;background:linear-gradient(135deg, hsl(' + hueFrom(name) + ',70%,55%), hsl(' + ((hueFrom(name) + 60) % 360) + ',70%,45%))">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</div>'; }
 
-        // 显示玩家详情
-        function showPlayerDetail(uuid) {
-            const player = allPlayers.find(p => p.uuid === uuid);
-            if (!player) return;
+  function playerCard(p) {
+    const online = p.is_online === 1;
+    return '<div class="player-card glass" onclick="openDetail(\'' + p.uuid + '\')">' +
+      '<div class="pc-top">' + avatar(p) +
+        '<div class="pc-id"><div class="name">' + escapeHtml(p.name || '未知') + '</div>' +
+        '<div class="meta">' + escapeHtml(p.server_name || '单机') + '</div></div></div>' +
+      '<div class="pills">' +
+        '<span class="pill ' + (online ? 'on' : '') + '">' + (online ? '在线' : '离线') + '</span>' +
+        (p.is_premium === 1 ? '<span class="pill premium">正版</span>' : '<span class="pill">离线模式</span>') +
+        (p.game_mode ? '<span class="pill">' + escapeHtml(modeName(p.game_mode)) + '</span>' : '') +
+      '</div>' +
+      '<div class="pc-rows">' +
+        '<div class="pc-row">国家 <b>' + escapeHtml(p.client_country || '未知') + '</b></div>' +
+        '<div class="pc-row">坐标 <b>' + fmtPos(p) + '</b></div>' +
+        '<div class="pc-row">生命 <b>' + (p.health != null ? Math.round(p.health) : '—') + ' / 20</b></div>' +
+        '<div class="pc-row">进入 <b>' + (p.usage_count || 0) + '</b> 次</div>' +
+      '</div></div>';
+  }
 
-            const modal = document.getElementById('playerModal');
-            const content = document.getElementById('playerModalContent');
+  function fmtPos(p) {
+    if (p.pos_x == null && p.pos_z == null) return '—';
+    const x = p.pos_x != null ? Math.round(p.pos_x) : '?', y = p.pos_y != null ? Math.round(p.pos_y) : '?', z = p.pos_z != null ? Math.round(p.pos_z) : '?';
+    return x + ', ' + y + ', ' + z;
+  }
+  function modeName(m) { const k = String(m).replace(/^minecraft:/, '').toLowerCase(); return MODE[k] || m; }
+  function dimName(d) { if (!d) return '—'; const k = String(d).replace(/^minecraft:/, '').toLowerCase(); return DIM[k] || d; }
+  function fmtTime(t) { return t ? new Date(t).toLocaleString('zh-CN') : '—'; }
+  function fmtDur(ms) {
+    if (!ms) return '—'; const m = Math.floor(ms / 60000);
+    if (m < 60) return m + ' 分钟'; const h = Math.floor(m / 60);
+    if (h < 24) return h + ' 小时 ' + (m % 60) + ' 分';
+    return Math.floor(h / 24) + ' 天 ' + (h % 24) + ' 小时';
+  }
 
-            content.innerHTML = `
-                <div class="player-detail-header">
-                    <img class="player-detail-avatar" src="https://crafatar.com/avatars/${player.uuid}?size=128&overlay" 
-                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22128%22 height=%22128%22%3E%3Crect fill=%22%23888%22 width=%22128%22 height=%22128%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22 font-size=%2260%22%3E%3F%3C/text%3E%3C/svg%3E'">
-                    <div class="player-detail-info">
-                        <h2>${player.username}</h2>
-                        <div class="player-badges">
-                            <span class="badge ${player.status}">${player.status === 'online' ? '🟢 在线' : '⚫ 离线'}</span>
-                            ${player.is_premium ? '<span class="badge premium">👑 正版账号</span>' : '<span class="badge">🔓 离线账号</span>'}
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-grid">
-                    <div class="detail-box">
-                        <h4>📝 基本信息</h4>
-                        <p>UUID: ${player.uuid}</p>
-                        <p>版本: ${player.version || '未知'}</p>
-                        <p>使用次数: ${player.usage_count || 1}</p>
-                    </div>
-                    <div class="detail-box">
-                        <h4>🌍 网络信息</h4>
-                        <p>IP: ${player.ip || '未知'}</p>
-                        <p>国家: ${player.country || '未知'}</p>
-                        <p>服务器: ${player.server_name || '单人游戏'}</p>
-                    </div>
-                    <div class="detail-box">
-                        <h4>📍 位置信息</h4>
-                        <p>维度: ${player.dimension || '未知'}</p>
-                        <p>坐标 X: ${player.pos_x ? Math.round(player.pos_x) : '未知'}</p>
-                        <p>坐标 Y: ${player.pos_y ? Math.round(player.pos_y) : '未知'}</p>
-                        <p>坐标 Z: ${player.pos_z ? Math.round(player.pos_z) : '未知'}</p>
-                    </div>
-                    <div class="detail-box">
-                        <h4>❤️ 玩家状态</h4>
-                        <p>生命值: ${player.health !== null ? player.health : '未知'}</p>
-                        <p>饥饿值: ${player.hunger !== null ? player.hunger : '未知'}</p>
-                        <p>游戏模式: ${player.game_mode || '未知'}</p>
-                        <p>当前活动: ${player.current_activity || '未知'}</p>
-                    </div>
-                    <div class="detail-box">
-                        <h4>⏰ 时间信息</h4>
-                        <p>首次登录: ${new Date(player.first_seen).toLocaleString('zh-CN')}</p>
-                        <p>最后登录: ${new Date(player.last_seen).toLocaleString('zh-CN')}</p>
-                    </div>
-                    <div class="detail-box">
-                        <h4>🎯 其他信息</h4>
-                        <p>等级: ${player.level !== null ? player.level : '未知'}</p>
-                        <p>经验: ${player.xp !== null ? player.xp : '未知'}</p>
-                    </div>
-                </div>
-            `;
+  // ===== 详情 =====
+  function openDetail(uuid) {
+    const p = players.find(x => x.uuid === uuid); if (!p) return;
+    const online = p.is_online === 1;
+    document.getElementById('detailBody').innerHTML =
+      '<div class="detail-head">' + avatar(p) + '<div><h3>' + escapeHtml(p.name || '未知') + '</h3><div class="sub">' + (online ? '在线' : '离线') + ' · ' + (p.is_premium === 1 ? '正版' : '离线模式') + '</div></div></div>' +
+      '<div class="detail-grid">' +
+      detailItem('UUID', p.uuid) + detailItem('服务器', p.server_name || '单机') +
+      detailItem('服务器地址', p.server_ip || '—') + detailItem('国家', p.client_country || '未知') +
+      detailItem('坐标', fmtPos(p)) + detailItem('维度', dimName(p.dimension)) +
+      detailItem('生命', p.health != null ? Math.round(p.health) + ' / 20' : '—') + detailItem('饥饿', p.food_level != null ? p.food_level + ' / 20' : '—') +
+      detailItem('游戏模式', modeName(p.game_mode)) + detailItem('当前活动', p.current_activity || '—') +
+      detailItem('客户端版本', p.version || '—') + detailItem('MC 版本', p.minecraft_version || '—') +
+      detailItem('击杀 / 死亡', (p.kill_count || 0) + ' / ' + (p.death_count || 0)) + detailItem('游戏时长', fmtDur(p.total_playtime)) +
+      detailItem('使用次数', p.usage_count || 0) + detailItem('最近上线', fmtTime(p.last_seen)) +
+      '</div>';
+    document.getElementById('detailModal').classList.add('show');
+  }
+  function detailItem(k, v) { return '<div class="detail-item"><div class="k">' + k + '</div><div class="v">' + escapeHtml(v) + '</div></div>'; }
+  function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
 
-            modal.classList.add('active');
-        }
+  // ===== 分析 =====
+  async function loadAnalytics() {
+    const wrap = document.querySelector('#analytics .stat-grid');
+    try {
+      const a = await api('/api/admin/analytics');
+      document.getElementById('aPremium').textContent = a.premium.premium;
+      document.getElementById('aOffline').textContent = a.premium.offline;
+      document.getElementById('aKills').textContent = a.kills_deaths.kills;
+      document.getElementById('aDeaths').textContent = a.kills_deaths.deaths;
 
-        // 关闭玩家详情
-        function closePlayerModal() {
-            document.getElementById('playerModal').classList.remove('active');
-        }
+      drawLineChart(document.getElementById('dailyChart'), a.daily_active.map(d => d.active), a.daily_active.map(d => d.date.slice(5)));
+      drawBarChart(document.getElementById('versionChart'), a.version_distribution.map(v => [v.version, v.c]));
+      drawBarChart(document.getElementById('countryChart'), a.country_distribution.map(c => [c.client_country, c.c]));
+    } catch (e) { handleAuthError(e); }
+  }
 
-        // 点击模态框外部关闭
-        document.getElementById('playerModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closePlayerModal();
-            }
-        });
+  function drawLineChart(canvas, values, labels) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.parentElement.clientWidth, h = 260;
+    canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = '100%'; canvas.style.height = h + 'px';
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    if (!values.length) return;
+    const pad = 30, max = Math.max(...values, 1);
+    const x = i => pad + i * ((w - pad * 2) / (values.length - 1 || 1));
+    const y = v => h - pad - (v / max) * (h - pad * 2);
+    ctx.strokeStyle = '#0a84ff'; ctx.lineWidth = 3; ctx.beginPath();
+    values.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(10,132,255,0.12)';
+    ctx.lineTo(x(values.length - 1), h - pad); ctx.lineTo(x(0), h - pad); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#71718a'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    values.forEach((v, i) => { ctx.fillText(v, x(i), y(v) - 8); });
+    if (labels) { ctx.fillStyle = '#71718a'; ctx.font = '10px sans-serif'; const step = Math.ceil(labels.length / 8); labels.forEach((l, i) => { if (i % step === 0) ctx.fillText(l, x(i), h - 8); }); }
+  }
+  function drawBarChart(canvas, items) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.parentElement.clientWidth, h = 260;
+    canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = '100%'; canvas.style.height = h + 'px';
+    ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
+    if (!items.length) { ctx.fillStyle = '#71718a'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('暂无数据', w / 2, h / 2); return; }
+    const pad = 30, bw = Math.min(40, (w - pad * 2) / items.length - 8), max = Math.max(...items.map(i => i[1]), 1);
+    items.forEach((it, i) => {
+      const x = pad + i * ((w - pad * 2) / items.length) + ((w - pad * 2) / items.length - bw) / 2;
+      const bh = (it[1] / max) * (h - pad * 2);
+      ctx.fillStyle = '#bf5af2'; ctx.fillRect(x, h - pad - bh, bw, bh);
+      ctx.fillStyle = '#71718a'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(it[0], x + bw / 2, h - pad - bh - 4);
+      ctx.fillText(it[1], x + bw / 2, h - 6);
+    });
+  }
+  function redrawCharts() { if (document.getElementById('analytics').classList.contains('active')) loadAnalytics(); }
 
-        // 更新玩家选择器
-        function updatePlayerSelector() {
-            const select = document.getElementById('targetPlayer');
-            if (!select) return;
+  // ===== 崩溃 =====
+  async function loadCrashes() {
+    const list = document.getElementById('crashList');
+    list.innerHTML = '<div class="spinner"></div>';
+    try {
+      const data = await api('/api/admin/crashes');
+      const cs = data.crashes || [];
+      list.innerHTML = cs.length ? cs.map(c =>
+        '<div class="crash-item"><div class="c-top"><span class="c-msg">' + escapeHtml(c.message || '(无消息)') + '</span>' +
+        '<span class="badge">' + (c.count || 1) + ' 次</span></div>' +
+        '<div class="c-meta">版本 ' + escapeHtml(c.version || '?') + ' · MC ' + escapeHtml(c.minecraft_version || '?') + ' · 最近 ' + fmtTime(c.last_seen) + '</div>' +
+        (c.stack_trace ? '<pre>' + escapeHtml(c.stack_trace) + '</pre>' : '') + '</div>'
+      ).join('') : '<div class="empty">暂无崩溃记录</div>';
+    } catch (e) { handleAuthError(e); list.innerHTML = '<div class="empty">加载失败</div>'; }
+  }
 
-            const currentValue = select.value;
-            select.innerHTML = '<option value="all">🌐 所有人</option>';
-            
-            if (allPlayers && allPlayers.length) {
-                allPlayers.forEach(player => {
-                    const option = document.createElement('option');
-                    option.value = player.uuid;
-                    option.textContent = `${player.status === 'online' ? '🟢' : '⚫'} ${player.username}`;
-                    select.appendChild(option);
-                });
-            }
+  // ===== 异常 =====
+  async function loadAnomalies() {
+    const list = document.getElementById('anomalyList');
+    list.innerHTML = '<div class="spinner"></div>';
+    try {
+      const data = await api('/api/admin/anomalies');
+      const as = data.anomalies || [];
+      list.innerHTML = as.length ? as.map(a =>
+        '<div class="crash-item"><div class="c-top"><span class="c-msg">' + escapeHtml(a.message || a.type) + '</span>' +
+        '<span class="badge" style="background:' + (a.severity === 'high' ? 'rgba(255,69,58,0.14)' : a.severity === 'medium' ? 'rgba(255,159,10,0.16)' : 'rgba(48,209,88,0.14)') + ';color:' + (a.severity === 'high' ? 'var(--red)' : a.severity === 'medium' ? '#b56a00' : '#0b7a33') + '">' + severityLabel(a.severity) + '</span></div>' +
+        '<div class="c-meta">类型 ' + escapeHtml(a.type || '?') + ' · 玩家 ' + escapeHtml(a.name || '?') + ' · 版本 ' + escapeHtml(a.version || '?') + ' · ' + (a.count || 1) + ' 次 · 最近 ' + fmtTime(a.last_seen) + '</div>' +
+        (a.data ? '<pre>' + escapeHtml(a.data) + '</pre>' : '') + '</div>'
+      ).join('') : '<div class="empty">暂无异常记录</div>';
+    } catch (e) { handleAuthError(e); list.innerHTML = '<div class="empty">加载失败</div>'; }
+  }
+  function severityLabel(s) { return s === 'high' ? '高危' : s === 'medium' ? '中危' : '低危'; }
 
-            select.value = currentValue;
-        }
+  // ===== 配置 =====
+  async function loadConfig() {
+    const box = document.getElementById('configList');
+    try {
+      const data = await api('/api/config');
+      const cfg = data.config || {};
+      const keys = Object.keys(cfg);
+      box.innerHTML = keys.length ? keys.map(k =>
+        '<div class="config-row"><span class="k">' + escapeHtml(k) + '</span><input id="cfg-' + escapeHtml(k) + '" value="' + escapeHtml(cfg[k]) + '"><button onclick="saveConfig(\'' + escapeHtml(k) + '\')">保存</button></div>'
+      ).join('') : '<div class="empty">暂无配置项</div>';
+    } catch (e) { handleAuthError(e); }
+  }
+  function saveConfig(key) {
+    const v = document.getElementById('cfg-' + key).value;
+    api('/api/admin/config', { method: 'POST', body: JSON.stringify({ key, value: v }) }).then(() => loadConfig()).catch(e => alert(e.message));
+  }
+  function addConfig() {
+    const k = document.getElementById('newConfigKey').value.trim();
+    const v = document.getElementById('newConfigValue').value;
+    if (!k) { alert('请输入键名'); return; }
+    api('/api/admin/config', { method: 'POST', body: JSON.stringify({ key: k, value: v }) }).then(() => {
+      document.getElementById('newConfigKey').value = ''; document.getElementById('newConfigValue').value = ''; loadConfig();
+    }).catch(e => alert(e.message));
+  }
 
-        // 发送消息
-        async function sendMessage() {
-            if (!isOnline) {
-                alert('⚠️ 当前处于离线模式，无法发送消息');
-                return;
-            }
+  // ===== 消息 =====
+  function fillTargetSelect() {
+    const sel = document.getElementById('targetSelect');
+    const cur = sel.value;
+    const list = [...players].sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0));
+    sel.innerHTML = '<option value="all">广播（所有人）</option>' + list.map(p => '<option value="' + p.uuid + '">' + escapeHtml(p.name || '未知') + (p.is_online === 1 ? '（在线）' : '') + '</option>').join('');
+    if (cur) sel.value = cur;
+  }
+  async function sendMessage() {
+    const sel = document.getElementById('targetSelect');
+    const content = document.getElementById('msgContent').value.trim();
+    if (!content) { alert('请输入消息内容'); return; }
+    const opt = sel.options[sel.selectedIndex];
+    const target_uuid = sel.value === 'all' ? null : sel.value;
+    const target_name = sel.value === 'all' ? null : (opt ? opt.textContent.replace(/（在线）/g, '') : null);
+    try {
+      await api('/api/messages/send', { method: 'POST', body: JSON.stringify({ target_uuid, target_name, message: content }) });
+      document.getElementById('msgContent').value = ''; loadHistory(false);
+    } catch (e) { alert(e.message || '发送失败'); }
+  }
+  async function loadHistory(spinner = true) {
+    const list = document.getElementById('chatList');
+    if (spinner) list.innerHTML = '<div class="spinner"></div>';
+    try { renderHistory(await api('/api/messages/history')); }
+    catch (e) { handleAuthError(e); list.innerHTML = '<div class="empty">加载失败</div>'; }
+  }
+  function renderHistory(msgs) {
+    const list = document.getElementById('chatList');
+    if (!msgs || !msgs.length) { list.innerHTML = '<div class="empty">暂无对话记录</div>'; return; }
+    list.innerHTML = msgs.sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).map(m => {
+      const isAdmin = m.from_admin === 1;
+      const who = isAdmin ? '管理员' : (m.sender || '玩家');
+      const to = isAdmin ? (m.target_name ? '发给：' + m.target_name : '广播') : '回复管理员';
+      return '<div class="msg ' + (isAdmin ? 'admin' : '') + '"><div class="m-top"><span class="who">' + escapeHtml(who) + '</span><span class="when">' + fmtTime(m.created_at) + '</span></div><div class="to">' + escapeHtml(to) + '</div><div class="body">' + escapeHtml(m.message) + '</div></div>';
+    }).join('');
+  }
 
-            const target = document.getElementById('targetPlayer').value;
-            const message = document.getElementById('messageContent').value.trim();
+  // ===== 工具 =====
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === tab));
+    if (tab === 'players') renderPlayers();
+    if (tab === 'analytics') loadAnalytics();
+    if (tab === 'messages') { fillTargetSelect(); loadHistory(false); }
+    if (tab === 'crashes') loadCrashes();
+    if (tab === 'anomalies') loadAnomalies();
+    if (tab === 'settings') loadConfig();
+  }
+  function handleAuthError(e) { if (e.status === 401 || e.status === 403) { alert('登录已失效，请重新登录'); logout(); } }
+  function escapeHtml(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
 
-            if (!message) {
-                alert('⚠️ 请输入消息内容');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/api/messages/send`, {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({
-                        target_uuid: target === 'all' ? null : target,
-                        message: message
-                    })
-                });
-
-                if (response.ok) {
-                    alert('✅ 消息发送成功！');
-                    document.getElementById('messageContent').value = '';
-                    loadChatHistory(); // 刷新聊天历史
-                } else {
-                    alert('❌ 消息发送失败，请重试');
-                }
-            } catch (error) {
-                console.error('发送消息失败:', error);
-                alert('❌ 网络错误，消息发送失败');
-            }
-        }
-
-        // 加载聊天历史
-        async function loadChatHistory() {
-            if (!isOnline) {
-                document.getElementById('chatHistory').innerHTML = '<div class="error-message">⚠️ 离线模式：无法加载聊天记录</div>';
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/api/messages/history?t=${Date.now()}`, {
-                    headers: getAuthHeaders()
-                });
-                if (!response.ok) throw new Error('加载失败');
-                
-                chatMessages = await response.json();
-                renderChatHistory();
-            } catch (error) {
-                console.error('加载聊天历史失败:', error);
-                document.getElementById('chatHistory').innerHTML = '<div class="error-message">⚠️ 加载聊天记录失败</div>';
-            }
-        }
-
-        // 渲染聊天历史
-        function renderChatHistory() {
-            const container = document.getElementById('chatHistory');
-            
-            if (!chatMessages || !chatMessages.length) {
-                container.innerHTML = '<div class="loading">暂无聊天记录</div>';
-                return;
-            }
-
-            // 按时间倒序排列
-            const sorted = [...chatMessages].sort((a, b) => b.created_at - a.created_at);
-
-            container.innerHTML = sorted.map(msg => {
-                const player = allPlayers.find(p => p.uuid === msg.target_uuid || p.uuid === msg.from_uuid);
-                const playerName = msg.sender || (player ? player.username : '未知玩家');
-                const isFromAdmin = msg.from_admin === 1;
-                const timeStr = new Date(msg.created_at).toLocaleString('zh-CN');
-
-                return `
-                    <div class="chat-message ${isFromAdmin ? 'from-admin' : 'from-player'}">
-                        <div class="chat-meta">
-                            <span>${isFromAdmin ? '👑 管理员' : '👤 ' + playerName}</span>
-                            <span>${timeStr}</span>
-                        </div>
-                        <div class="chat-content">${escapeHtml(msg.message)}</div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // 开始轮询聊天消息
-        function startChatPolling() {
-            // 每15秒轮询一次
-            chatPollInterval = setInterval(() => {
-                if (isOnline) {
-                    loadChatHistory();
-                    loadData(); // 同时更新玩家数据
-                }
-            }, 15000);
-        }
-
-        // 转义HTML
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // 页面卸载时清除定时器
-        window.addEventListener('beforeunload', () => {
-            if (chatPollInterval) clearInterval(chatPollInterval);
-        });
-    </script>
+  document.getElementById('passwordInput').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+  applyTheme();
+  if (token) { api('/api/admin/players').then(() => enterApp()).catch(() => { token = ''; localStorage.removeItem(TOKEN_KEY); }); }
+</script>
 </body>
 </html>
