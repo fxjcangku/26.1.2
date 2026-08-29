@@ -102,6 +102,8 @@ tasks {
         injars(inputJar)
         outjars(outputJar)
         libraryjars(configurations.runtimeClasspath.get())
+        // 显式添加 baritone jar（避免 META-INF/jars 内嵌导致类层次分析失败）
+        libraryjars(files("libs/baritone-fabric-26.1.2.jar"))
 
         // 只保留运行时必需的注解属性，删掉调试和类型信息：
         //   保留：运行时注解（Mixin/Fabric 需要）
@@ -165,6 +167,13 @@ tasks {
         
         dontwarn("**")
         dontnote("**")
+        
+        // 忽略类层次警告（村民交易/挖矿模块引入复杂枚举类型导致 ProGuard 分析失败）
+        // 临时方案：写入配置文件再加载
+        val tempConfig = layout.buildDirectory.file("tmp/proguard-extra.pro").get().asFile
+        tempConfig.parentFile.mkdirs()
+        tempConfig.writeText("-ignorewarnings\n")
+        configuration(tempConfig)
     }
 
     register("buildOfficial") {
