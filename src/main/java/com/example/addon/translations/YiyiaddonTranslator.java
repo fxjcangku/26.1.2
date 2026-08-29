@@ -40,6 +40,16 @@ public final class YiyiaddonTranslator {
         return TRANSLATIONS.getOrDefault(key, fallback);
     }
 
+    /**
+     * 返回模块的中文显示名（供心跳上报给后台），翻译未开启或未命中时回退原始英文名。
+     */
+    public static String moduleTitle(Module module) {
+        if (module == null || module.name == null) return "";
+        if (!enabled()) return module.name;
+        load();
+        return TRANSLATIONS.getOrDefault("module." + key(module.name), module.name);
+    }
+
     public static String translateVisible(String text) {
         if (!enabled() || text == null) return text;
         load();
@@ -49,6 +59,10 @@ public final class YiyiaddonTranslator {
             return "（已选择 " + normalized.substring(1, normalized.indexOf(' ')) + " 项）";
         }
         if (normalized.equals("Reconnect")) return "重新连接";
+        if (normalized.matches("Reconnect \\(.+\\)")) {
+            return "重新连接 " + normalized.substring("Reconnect ".length());
+        }
+        if (normalized.matches("Return to Server List")) return "返回到服务器列表";
         if (normalized.matches("Bound to .+\\.")) {
             return "已绑定至 " + normalized.substring("Bound to ".length(), normalized.length() - 1) + "。";
         }

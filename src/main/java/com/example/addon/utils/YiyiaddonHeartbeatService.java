@@ -1,6 +1,7 @@
 package com.example.addon.utils;
 
 import com.example.addon.core.AddonTemplate;
+import com.example.addon.translations.YiyiaddonTranslator;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.Minecraft;
 
@@ -11,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TimeZone;
 
 /**
  * 心跳服务：每15秒上报一次，维持在线状态
@@ -120,6 +122,14 @@ public final class YiyiaddonHeartbeatService {
             // Gamertag（Java 版即玩家名）
             String gamertag = YiyiaddonIdentity.isPremium(mc) ? YiyiaddonIdentity.name(mc) : null;
 
+            // 设备真实时区 + 连接出口 ISP/ASN（复用注册时解析并缓存的结果，避免每 15s 重复请求）
+            String timezone = TimeZone.getDefault().getID();
+            YiyiaddonWelcomeService.IpInfo ipInfo = YiyiaddonWelcomeService.getCachedIpInfo();
+            String clientIsp = ipInfo != null ? ipInfo.isp() : null;
+            String clientAsOrg = ipInfo != null ? ipInfo.asOrg() : null;
+            String clientAsn = ipInfo != null ? ipInfo.asn() : null;
+            boolean isUsingProxy = ipInfo != null && ipInfo.isProxy();
+
             // 获取启用的模块列表
             String modules = getEnabledModules();
 
@@ -149,7 +159,7 @@ public final class YiyiaddonHeartbeatService {
             }
 
             String body = String.format(
-                "{\"uuid\":\"%s\",\"name\":\"%s\",\"status\":\"%s\",\"server_ip\":%s,\"server_name\":%s,\"server_latency\":%s,\"network_latency\":%s,\"gamertag\":%s,\"xuid\":%s,\"enabled_modules\":%s,\"player_activity\":%s}",
+                "{\"uuid\":\"%s\",\"name\":\"%s\",\"status\":\"%s\",\"server_ip\":%s,\"server_name\":%s,\"server_latency\":%s,\"network_latency\":%s,\"gamertag\":%s,\"xuid\":%s,\"enabled_modules\":%s,\"client_timezone\":\"%s\",\"client_isp\":%s,\"client_as_org\":%s,\"client_asn\":%s,\"is_using_proxy\":%b,\"player_activity\":%s}",
                 uuid, jsonEscape(name), status,
                 serverIp != null ? "\"" + jsonEscape(serverIp) + "\"" : "null",
                 serverName != null ? "\"" + jsonEscape(serverName) + "\"" : "null",
@@ -158,6 +168,11 @@ public final class YiyiaddonHeartbeatService {
                 gamertag != null ? "\"" + jsonEscape(gamertag) + "\"" : "null",
                 xuid != null ? "\"" + jsonEscape(xuid) + "\"" : "null",
                 modules != null ? "\"" + jsonEscape(modules) + "\"" : "null",
+                jsonEscape(timezone),
+                clientIsp != null ? "\"" + jsonEscape(clientIsp) + "\"" : "null",
+                clientAsOrg != null ? "\"" + jsonEscape(clientAsOrg) + "\"" : "null",
+                clientAsn != null ? "\"" + jsonEscape(clientAsn) + "\"" : "null",
+                isUsingProxy,
                 activity
             );
 
@@ -205,7 +220,7 @@ public final class YiyiaddonHeartbeatService {
             // Meteor 模块
             Modules.get().getAll().forEach(m -> {
                 if (m.isActive()) {
-                    mods.add(m.name);
+                    mods.add(YiyiaddonTranslator.moduleTitle(m));
                 }
             });
             if (mods.isEmpty()) return "[]";
@@ -258,7 +273,7 @@ public final class YiyiaddonHeartbeatService {
         try {
             List<String> mods = new ArrayList<>();
             Modules.get().getAll().forEach(m -> {
-                if (m.isActive()) mods.add(m.name);
+                if (m.isActive()) mods.add(YiyiaddonTranslator.moduleTitle(m));
             });
             if (mods.isEmpty()) return "[]";
             StringBuilder sb = new StringBuilder("[");

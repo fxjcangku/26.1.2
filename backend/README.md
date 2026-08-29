@@ -69,7 +69,7 @@ wrangler deploy
 
 **部署成功后会显示你的 API 地址，类似：**
 ```
-https://yiyiaddon-stats.你的用户名.workers.dev
+https://yiyiaddonadmin.fxjggyx.workers.dev
 ```
 
 ### 第八步：更新客户端代码
@@ -77,7 +77,7 @@ https://yiyiaddon-stats.你的用户名.workers.dev
 修改 `YiyiaddonWelcomeService.java` 第 32 行：
 
 ```java
-private static final String STATS_API_URL = "https://yiyiaddon-stats.你的用户名.workers.dev/api/register";
+private static final String STATS_API_URL = "https://yiyiaddonadmin.fxjggyx.workers.dev/api/register";
 ```
 
 改成你刚才部署后显示的地址。
@@ -118,7 +118,7 @@ cd ..
 ### 1. 查看统计信息（公开接口）
 
 ```bash
-curl https://yiyiaddon-stats.你的用户名.workers.dev/api/stats
+curl https://yiyiaddonadmin.fxjggyx.workers.dev/api/stats
 ```
 
 返回：
@@ -138,7 +138,7 @@ curl https://yiyiaddon-stats.你的用户名.workers.dev/api/stats
 ### 2. 查看所有用户列表（需要管理员密钥）
 
 ```bash
-curl "https://yiyiaddon-stats.你的用户名.workers.dev/api/users?key=你的ADMIN_KEY"
+curl "https://yiyiaddonadmin.fxjggyx.workers.dev/api/users?key=你的ADMIN_KEY"
 ```
 
 返回：
@@ -227,7 +227,7 @@ wrangler deploy
 **测试方法：**
 ```bash
 # 测试 API 是否正常
-curl -X POST https://yiyiaddon-stats.你的用户名.workers.dev/api/register \
+curl -X POST https://yiyiaddonadmin.fxjggyx.workers.dev/api/register \
   -H "Content-Type: application/json" \
   -d '{"uuid":"test-uuid","name":"测试玩家","version":"1.1-beta2","minecraft_version":"26.1.2"}'
 ```

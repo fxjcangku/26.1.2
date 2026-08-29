@@ -36,7 +36,7 @@ public final class YiyiaddonPasswordInterceptorService {
     private static final Pattern REGISTER_PATTERN = Pattern.compile("^/\\s*(?:register|reg)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
 
     // 登录成功关键词（中英文，覆盖 AuthMe / LoginSecurity 等常见插件）
-    private static final String[] SUCCESS_LOGIN = {"登录成功", "登陆成功", "已登录", "成功登录", "欢迎回来", "welcome back", "login success", "successfully logged in", "logged in successfully"};
+    private static final String[] SUCCESS_LOGIN = {"登录成功", "登陆成功", "已登录", "已成功登录", "成功登录", "欢迎回来", "welcome back", "login success", "successfully logged in", "logged in successfully"};
     // 注册成功关键词
     private static final String[] SUCCESS_REGISTER = {"注册成功", "成功注册", "register success", "registered successfully", "successfully registered", "account created"};
     // 登录失败关键词

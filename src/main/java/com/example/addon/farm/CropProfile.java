@@ -164,10 +164,14 @@ public enum CropProfile {
         return switch (kind) {
             // 果实方块存在即可收割
             case VINE -> true;
-            // 取根部往上第一格：下方是同种（说明自己不是根），再下一格不是同种（说明下方就是根）
+            // 取根部往上第一格：下方是根（同种方块或竹笋），且根的下方不再是同种
             case PILLAR -> {
                 BlockPos below = pos.below();
-                if (!level.getBlockState(below).is(block)) yield false;
+                BlockState belowState = level.getBlockState(below);
+                // 竹子的根是竹笋（BAMBOO_SAPLING）而非竹子本身，必须一并识别，
+                // 否则种在竹笋上的竹子 below 不是同种，永远进不了收割队列
+                boolean belowIsRoot = belowState.is(block) || isPillarRoot(belowState);
+                if (!belowIsRoot) yield false;
                 yield !level.getBlockState(below.below()).is(block);
             }
             // 农作物读 age 属性

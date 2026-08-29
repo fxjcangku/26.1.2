@@ -182,6 +182,7 @@ nav.topbar .icon-btn:active { transform: scale(.92); }
 .skin { width: 44px; height: 44px; border-radius: 50%; background: transparent; flex-shrink: 0; image-rendering: auto; box-shadow: inset 0 0 0 1px var(--hairline); object-fit: cover; }
 .row .info { flex: 1; min-width: 0; }
 .row .name { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.row .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .row .sub { font-size: 13px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .right { text-align: right; font-size: 13px; color: var(--text2); flex-shrink: 0; }
 
@@ -308,7 +309,7 @@ nav.topbar .icon-btn:active { transform: scale(.92); }
     <p>后台管理控制台</p>
     <div class="field"><input id="lg-user" type="text" placeholder="用户名" autocomplete="username"></div>
     <div class="field"><input id="lg-pass" type="password" placeholder="密码" autocomplete="current-password"></div>
-    <button class="primary" id="lg-btn">登 录</button>
+    <button class="primary" id="lg-btn" type="button" onclick="(function(b){var u=document.getElementById('lg-user').value.trim(),p=document.getElementById('lg-pass').value,e=document.getElementById('lg-err');e.textContent='登录中…';b.disabled=true;fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})}).then(function(r){return r.json();}).then(function(x){if(x.success&&x.token){localStorage.setItem('admin_token',x.token);location.reload();}else{e.textContent=x.error||'登录失败';b.disabled=false;}}).catch(function(){e.textContent='网络错误：无法连接后台';b.disabled=false;});})(this); return false;">登 录</button>
     <div class="err" id="lg-err"></div>
   </div>
 </div>
@@ -370,8 +371,9 @@ function fmtTime(ts) {
   return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
 }
 function fmtDuration(ms) {
-  if (!ms) return '—';
+  if (ms === null || ms === undefined) return '';
   var m = Math.floor(ms / 60000);
+  if (m < 1) return '0 分钟';
   if (m < 60) return m + ' 分钟';
   return Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分';
 }
@@ -382,8 +384,38 @@ function flagEmoji(code) {
 }
 function countryName(code) {
   if (!code) return '未知';
-  try { return new Intl.DisplayNames(['zh'], {type:'region'}).of(code.toUpperCase()) || code; }
-  catch(e) { return code; }
+  var upper = code.toUpperCase();
+  // 优先用浏览器自动翻译
+  try { 
+    var translated = new Intl.DisplayNames(['zh-CN'], {type:'region'}).of(upper);
+    if (translated && translated !== upper) return translated;
+  } catch(e) {}
+  // 备用手动翻译（兜底）
+  var manual = {
+    'CN':'中国', 'US':'美国', 'JP':'日本', 'KR':'韩国', 'TW':'台湾', 'HK':'香港', 'MO':'澳门',
+    'SG':'新加坡', 'GB':'英国', 'DE':'德国', 'FR':'法国', 'CA':'加拿大', 'AU':'澳大利亚',
+    'RU':'俄罗斯', 'IN':'印度', 'BR':'巴西', 'MX':'墨西哥', 'ES':'西班牙', 'IT':'意大利',
+    'NL':'荷兰', 'SE':'瑞典', 'CH':'瑞士', 'TH':'泰国', 'VN':'越南', 'MY':'马来西亚',
+    'ID':'印度尼西亚', 'PH':'菲律宾', 'PL':'波兰', 'TR':'土耳其', 'AR':'阿根廷'
+  };
+  return manual[upper] || upper;
+}
+// 常见城市 -> 中文（VPN 出口高频城市优先）
+var CITY_ZH = { "Los Angeles":"洛杉矶","New York":"纽约","San Francisco":"旧金山","San Jose":"圣何塞","Seattle":"西雅图","Chicago":"芝加哥","Dallas":"达拉斯","Houston":"休斯顿","Atlanta":"亚特兰大","Miami":"迈阿密","Phoenix":"凤凰城","Denver":"丹佛","Ashburn":"阿什本","Buffalo":"布法罗","Fremont":"弗里蒙特","Santa Clara":"圣克拉拉","Boardman":"博德曼","London":"伦敦","Frankfurt":"法兰克福","Paris":"巴黎","Amsterdam":"阿姆斯特丹","Berlin":"柏林","Madrid":"马德里","Moscow":"莫斯科","Tokyo":"东京","Osaka":"大阪","Seoul":"首尔","Singapore":"新加坡","Hong Kong":"香港","Taipei":"台北","Sydney":"悉尼","Melbourne":"墨尔本","Toronto":"多伦多","Vancouver":"温哥华","Shanghai":"上海","Beijing":"北京","Guangzhou":"广州","Shenzhen":"深圳","Hangzhou":"杭州","Chengdu":"成都","Nanjing":"南京","Wuhan":"武汉" };
+// 常见地区/州/省 -> 中文
+var REGION_ZH = { "California":"加利福尼亚州","New York":"纽约州","Texas":"得克萨斯州","Washington":"华盛顿州","Virginia":"弗吉尼亚州","Illinois":"伊利诺伊州","Florida":"佛罗里达州","Georgia":"佐治亚州","Massachusetts":"马萨诸塞州","Pennsylvania":"宾夕法尼亚州","Ohio":"俄亥俄州","Michigan":"密歇根州","Arizona":"亚利桑那州","Colorado":"科罗拉多州","Oregon":"俄勒冈州","Utah":"犹他州","Nevada":"内华达州","New Jersey":"新泽西州","North Carolina":"北卡罗来纳州","Missouri":"密苏里州","Ontario":"安大略省","Quebec":"魁北克省","British Columbia":"不列颠哥伦比亚省","England":"英格兰","Hesse":"黑森州","Hessen":"黑森州","Bavaria":"巴伐利亚州","North Rhine-Westphalia":"北莱茵-威斯特法伦州","Tokyo":"东京都","Osaka":"大阪府","Seoul":"首尔","Guangdong":"广东省","Zhejiang":"浙江省","Beijing":"北京市","Shanghai":"上海市","Jiangsu":"江苏省","Sichuan":"四川省","Fujian":"福建省","Shandong":"山东省" };
+// 常见运营商/机房/云厂商 -> 中文（数据中心类标注“机房”，方便识别为梯子出口）
+var ISP_ZH = { "fdcservers":"FDC 机房（数据中心）","m247":"M247 机房（数据中心）","choopa":"Choopa 机房（数据中心）","colocrossing":"ColoCrossing 机房","psychz":"Psychz 机房","quadranet":"QuadraNet 机房","ovh":"OVH 机房","hetzner":"Hetzner 机房","contabo":"Contabo 机房","leaseweb":"LeaseWeb 机房","digitalocean":"DigitalOcean 云","linode":"Linode 云","vultr":"Vultr 云","cloudflare":"Cloudflare","amazon":"亚马逊云（AWS）","google":"谷歌云（GCP）","microsoft":"微软云（Azure）","oracle":"甲骨文云（Oracle）","alibaba":"阿里云","aliyun":"阿里云","tencent":"腾讯云","huawei":"华为云","china telecom":"中国电信","china unicom":"中国联通","china mobile":"中国移动","comcast":"康卡斯特（Comcast）","verizon":"Verizon","deutsche telekom":"德国电信","ntt":"NTT（日本）","kddi":"KDDI（日本）","cogent":"Cogent（骨干网）" };
+function fmtCity(c) { return c ? (CITY_ZH[c] || c) : ''; }
+function fmtRegion(r) { return r ? (REGION_ZH[r] || r) : ''; }
+function fmtIsp(org) {
+  if (!org) return '';
+  // 去掉冗余的 AS 编号（如 (AS30058) / AS30058），只保留运营商主体更易读
+  var cleaned = String(org).replace(/\\(?\\s*AS\\d+\\s*\\)?/gi, '').replace(/[\\s,;]+$/, '').trim();
+  if (!cleaned) return String(org).trim();
+  var key = cleaned.toLowerCase();
+  for (var k in ISP_ZH) { if (key.indexOf(k) !== -1) return ISP_ZH[k]; }
+  return cleaned;
 }
 // 玩家当前状态徽标：主菜单 / 单人世界 / 多人服务器
 function statusBadge(s) {
@@ -392,13 +424,152 @@ function statusBadge(s) {
   return '<span class="badge green">🌐 多人服务器</span>';
 }
 function latClass(v) { if (v === null || v === undefined) return ''; if (v < 60) return 'good'; if (v < 150) return 'mid'; return 'bad'; }
-// 皮肤头像：正版按 UUID、离线按名字拉取真实皮肤（mc-heads 稳定可用，解析失败自动回退 Steve）
-// 离线账号 UUID 非 Mojang 注册，皮肤站按名字也拉不到真人皮肤，会自然回退到 Steve。
+// XUID 仅接受纯数字；authlib 未注入时返回的 auth_xuid 占位符一律按空处理，避免显示异常字符串
+function fmtXuid(x) {
+  if (x == null) return null;
+  var v = String(x).trim();
+  return /^\d{8,20}$/.test(v) ? v : null;
+}
+// Meteor 模块名 -> 中文映射（由 zh_cn.json 生成）
+var MODULE_ZH = {"weather-changer":"天气更改","air-jump":"空中跳跃","auto-fish":"自动钓鱼","name-protect":"名称保护","velocity":"反击退","no-ghost-blocks":"防幽灵方块","bed-aura":"床光环","auto-jump":"自动连跳","ambience":"环境","better-tooltips":"更好的提示框","notifier":"通知器","item-physics":"物品物理","air-place":"空中放置","enderman-look":"末影人注视","excavator":"挖掘机","timer":"全局加速","surround":"自我包围","no-rotate":"无旋转","long-jump":"远跳","trajectories":"弹道预测","chams":"实体渲染","server-spoof":"服务器伪装","fullbright":"全局亮度","freecam":"灵魂出窍","exp-thrower":"经验投掷器","auto-totem":"自动图腾","book-bot":"书机器人","auto-gap":"自动金苹果","packet-logger":"数据包记录器","middle-click-extra":"中键增强","logout-spots":"登出标记","nuker":"范围破坏","sound-blocker":"声音屏蔽","vein-miner":"连锁采集","auto-trap":"自动陷阱","wall-hack":"透视","no-render":"禁止渲染","hand-view":"手部视角","instant-rebreak":"瞬间重新破坏","liquid-interact":"液体交互","crystal-aura":"水晶光环","spider":"蜘蛛","auto-log":"自动下线","high-jump":"高跳","speed":"速度","offhand":"副手","arrow-dodge":"箭矢闪避","multitask":"多任务","auto-replenish":"自动补充","break-indicators":"破坏指示器","potion-saver":"药水节约器","block-esp":"方块透视","packet-mine":"数据包挖掘","liquid-filler":"液体填充","quiver":"箭袋","chest-swap":"胸甲交换","fast-use":"快速使用","anchor":"锚点","anti-anvil":"防铁砧","highway-builder":"高速路建造者","infinity-miner":"无限矿工","breadcrumbs":"足迹","auto-brewer":"自动酿造器","storage-esp":"存储物透视","no-status-effects":"禁止状态效果","attribute-swap":"属性切换","echest-farmer":"末影箱农场","self-anvil":"自身铁砧","flamethrower":"火焰喷射器","anti-bed":"防床","auto-mend":"自动修补","auto-anvil":"自动铁砧","burrow":"钻地","auto-sign":"自动告示牌","swarm":"群组","auto-reconnect":"自动重连","build-height":"建筑高度","time-changer":"时间更改","hole-esp":"坑洞透视","city-esp":"连基透视","anti-afk":"防 AFK","gui-move":"GUI 中移动","trident-boost":"三叉戟助推","better-tab":"更好的 Tab 列表","mount-bypass":"骑乘绕过","anti-packet-kick":"防数据包踢出","light-overlay":"光照覆盖层","hole-filler":"坑洞填充","message-aura":"消息光环","fast-climb":"快速攀爬","sprint":"自动疾跑","xray":"X 光","notebot":"音符盒机器人","item-highlight":"物品高亮","auto-mount":"自动骑乘","zoom":"缩放","bow-spam":"弓连射","free-look":"自由视角","auto-walk":"自动行走","self-trap":"自我陷阱","safe-walk":"安全行走","auto-wasp":"自动黄蜂","break-delay":"破坏延迟","auto-armor":"自动盔甲","pop-chams":"图腾残影","ghost-hand":"幽灵之手","slippy":"滑溜","auto-tool":"自动工具","anti-hunger":"抗饥饿","auto-clicker":"自动点击器","auto-shearer":"自动剪毛","boss-stack":"BOSS 条合并","camera-tweaks":"相机调整","auto-weapon":"自动武器","better-chat":"更好的聊天","offhand-crash":"副手崩溃","auto-breed":"自动繁殖","spawn-proofer":"防刷怪","step":"自动上阶","entity-owner":"实体所有者","scaffold":"脚手架","sneak":"自动潜行","no-slow":"无减速","fake-player":"假人","nametags":"名称标签","esp":"实体透视","rotation":"朝向锁定","elytra-fly":"鞘翅飞行","auto-respawn":"自动重生","entity-control":"实体控制","stash-finder":"藏匿点查找器","better-beacons":"更好的信标","auto-nametag":"自动命名牌","elytra-boost":"鞘翅助推","blink":"闪现","block-selection":"方块选择","auto-city":"自动连基","waypoints":"路径点","auto-web":"自动蜘蛛网","auto-eat":"自动进食","hitboxes":"碰撞箱","trail":"轨迹粒子","self-web":"自我蜘蛛网","flight":"飞行","reverse-step":"快速下落","blur":"模糊背景","discord-presence":"Discord 状态","void-esp":"虚空透视","reach":"超长臂展","speed-mine":"快速挖掘","inventory-tweaks":"背包调整","no-fall":"防摔落","no-interact":"禁止交互","portals":"传送门","marker":"标记","criticals":"暴击","tunnel-esp":"隧道透视","auto-smelter":"自动冶炼","anchor-aura":"重生锚光环","anti-void":"防虚空","kill-aura":"杀戮光环","parkour":"跑酷","spam":"刷屏","collisions":"碰撞箱","click-tp":"点击传送","packet-canceller":"数据包取消器","tracers":"射线","auto-exp":"自动经验","jesus":"水上行走","no-mining-trace":"无挖掘痕迹","bow-aimbot":"弓自瞄","anti-kick-bypass":"终极防踢","flight-bypass":"飞行绕过","server-detector":"服务器检测"};
+function fmtModule(n) { return MODULE_ZH[n] || n; }
+
+// 维度汉化
+var DIM_ZH = { overworld: '主世界', the_nether: '下界', the_end: '末地' };
+function fmtDimension(d) {
+  if (!d) return null;
+  var key = String(d).toLowerCase().replace(/^minecraft:/, '');
+  return DIM_ZH[key] || d;
+}
+// 游戏模式汉化
+var MODE_ZH = { survival: '生存', creative: '创造', adventure: '冒险', spectator: '旁观' };
+function fmtGameMode(m) {
+  if (!m) return null;
+  return MODE_ZH[String(m).toLowerCase()] || m;
+}
+// 时区显示：区域中文简称 + UTC 数字偏移（去掉冗长的「夏令时间」全称，只留易懂数字）
+var TZ_REGION_ZH = { America: '北美', Asia: '亚洲', Europe: '欧洲', Africa: '非洲', Oceania: '大洋洲', Australia: '澳洲' };
+function fmtTimezone(tz) {
+  if (!tz) return '';
+  var seg = String(tz).split('/');
+  var region = TZ_REGION_ZH[seg[0]] || seg[0] || '';
+  var off = '';
+  try {
+    var parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date());
+    var g = parts.find(function(p){ return p.type === 'timeZoneName'; });
+    if (g && g.value) off = String(g.value).replace('GMT', 'UTC');
+  } catch (e) {}
+  var base = region || tz;
+  return off ? base + '（' + off + '）' : base;
+}
+// 皮肤头像：统一走 mc-heads.net 原始皮肤（按游戏名解析，正版名自动命中 Mojang），
+// canvas 手动裁剪头部正面 + 保留 Alpha，透明皮肤像素不再渲染成黑块（crafatar 已停服 500）。
 function skin(p, size) {
   var s = size || 64;
-  var id = (p && p.is_premium) ? (p.uuid || p.name) : (p.name || p.uuid);
-  id = id ? String(id) : '';
-  return '<img class="skin" src="https://mc-heads.net/avatar/' + encodeURIComponent(id) + '/' + s + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\\'https://mc-heads.net/avatar/MHF_Steve/' + s + '\\';">';
+  var name = (p && p.name) ? String(p.name) : 'MHF_Steve';
+  var raw = 'https://mc-heads.net/skin/' + encodeURIComponent(name);
+  var fb = 'https://mc-heads.net/avatar/' + encodeURIComponent(name) + '/' + s;
+  return '<canvas class="skin" width="' + s + '" height="' + s + '" data-head-raw="' + raw + '" data-head-fallback="' + fb + '"></canvas>';
+}
+
+// 把原始皮肤头部正面的 8x8 区域绘制到 canvas，保留透明像素（透明不再渲染成黑块）
+function drawHead(canvas, img) {
+  var c = canvas.getContext('2d');
+  var s = canvas.width;
+  c.clearRect(0, 0, s, s);
+  c.imageSmoothingEnabled = false; // 像素风，清晰显示每个像素
+  try { c.drawImage(img, 8, 8, 8, 8, 0, 0, s, s); } catch (e) {}   // 头部正面（底层，8x8）
+  try { c.drawImage(img, 40, 8, 8, 8, 0, 0, s, s); } catch (e) {}  // 帽子/第二层（40,8，同样保留 alpha）
+}
+// 扫描 DOM 中新出现的皮肤 canvas 并异步加载原始皮肤纹理渲染
+function renderHeadCanvases(root) {
+  var scope = root || document;
+  scope.querySelectorAll('canvas[data-head-raw]').forEach(function(canvas) {
+    if (canvas.__headRendered) return;
+    canvas.__headRendered = true;
+    var raw = canvas.getAttribute('data-head-raw');
+    var fb = canvas.getAttribute('data-head-fallback');
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() { drawHead(canvas, img); };
+    img.onerror = function() {
+      var fbImg = new Image();
+      fbImg.crossOrigin = 'anonymous';
+      fbImg.onload = function() {
+        var c = canvas.getContext('2d');
+        c.clearRect(0, 0, canvas.width, canvas.height);
+        c.imageSmoothingEnabled = false;
+        c.drawImage(fbImg, 0, 0, canvas.width, canvas.height);
+      };
+      fbImg.src = fb;
+    };
+    img.src = raw;
+  });
+}
+// 监听 DOM 变化，列表/详情每次刷新后自动渲染新的皮肤头像
+new MutationObserver(function(muts) {
+  muts.forEach(function(m) {
+    (m.addedNodes || []).forEach(function(n) {
+      if (n.nodeType === 1) renderHeadCanvases(n);
+    });
+  });
+}).observe(document.body, { childList: true, subtree: true });
+
+// 内联 MD5（与 worker.js 同款，浏览器端计算离线 UUID 用）
+function md5(message) {
+  const rot = (v, c) => (v << c) | (v >>> (32 - c));
+  const K = new Int32Array([
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+    0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+    0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+    0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+    0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+    0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
+  ]);
+  const S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const bytes = new TextEncoder().encode(String(message));
+  const n = bytes.length;
+  const padded = new Uint8Array((((n + 8) >>> 6) + 1) << 6);
+  padded.set(bytes);
+  padded[n] = 0x80;
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(padded.length - 8, (n << 3) >>> 0, true);
+  dv.setUint32(padded.length - 4, Math.floor((n << 3) / 0x100000000), true);
+
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+  for (let off = 0; off < padded.length; off += 64) {
+    const M = new Int32Array(16);
+    for (let i = 0; i < 16; i++) M[i] = dv.getInt32(off + i * 4, true);
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let f, g;
+      if (i < 16) { f = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { f = (D & B) | (~D & C); g = (5 * i + 1) & 15; }
+      else if (i < 48) { f = B ^ C ^ D; g = (3 * i + 5) & 15; }
+      else { f = C ^ (B | ~D); g = (7 * i) & 15; }
+      const tmp = D;
+      D = C; C = B;
+      B = (B + rot((A + f + K[i] + M[g]) | 0, S[i])) | 0;
+      A = tmp;
+    }
+    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+  }
+
+  function hex(w) {
+    let s = '';
+    for (let i = 0; i < 4; i++) s += ((w >>> (i * 8)) & 0xff).toString(16).padStart(2, '0');
+    return s;
+  }
+  return hex(a0) + hex(b0) + hex(c0) + hex(d0);
+}
+
+function offlineUuid(name) {
+  const d = md5('OfflinePlayer:' + String(name));
+  const variant = (x) => ((parseInt(x, 16) & 0x3) | 0x8).toString(16);
+  return d.slice(0, 8) + '-' + d.slice(8, 12) + '-' + '3' + d.slice(13, 16)
+    + '-' + variant(d[16]) + d.slice(17, 20) + '-' + d.slice(20, 32);
 }
 
 // ── 主题切换（真·深色/浅色，localStorage 持久化） ──
@@ -426,7 +597,8 @@ function api(path, opts) {
   var headers = { 'Content-Type': 'application/json' };
   if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
   return fetch(API_BASE + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined })
-    .then(function(r) { return r.json().catch(function(){ return {}; }).then(function(j){ j._status = r.status; return j; }); });
+    .then(function(r) { return r.json().catch(function(){ return {}; }).then(function(j){ j._status = r.status; return j; }); })
+    .catch(function(){ return { _status: 0, error: '网络错误：无法连接后台，请检查网络或 VPN 节点', _network: true }; });
 }
 
 // ── 登录 ──
@@ -434,13 +606,17 @@ function tryLogin() {
   var u = $('lg-user').value.trim(), p = $('lg-pass').value;
   $('lg-err').textContent = '';
   api('/api/admin/login', { method: 'POST', body: { username: u, password: p } }).then(function(res) {
-    if (res.success && res.token) {
+    if (res._network) {
+      $('lg-err').textContent = res.error || '网络错误';
+    } else if (res.success && res.token) {
       state.token = res.token;
       localStorage.setItem('admin_token', res.token);
       showApp();
     } else {
       $('lg-err').textContent = res.error || '登录失败';
     }
+  }).catch(function(err) {
+    $('lg-err').textContent = '网络错误：' + (err.message || '无法连接后台');
   });
 }
 function logout() {
@@ -496,6 +672,7 @@ function switchTab(id) {
 function refreshIfNeeded() {
   if (state.tab === 'players') loadPlayers();
   if (state.tab === 'overview') loadOverview();
+  if (state.tab === 'premium') loadPremium();
   if (state.tab === 'chat') loadChat();
 }
 
@@ -566,8 +743,11 @@ function loadPlayers() {
     var html = '<div style="padding:2px 4px 4px;" class="sec-title">共 ' + state.players.length + ' 人 · 在线 ' + online + '</div>';
     html += '<div class="toolbar">';
     html += '<input class="search" id="p-search" type="text" placeholder="搜索名字 / UUID / 国家 / 服务器" value="' + esc(state.playerFilter) + '">';
-    html += chip('all', '全部'); chip('online', '🟢 在线'); chip('offline', '⚪ 离线');
-    html += chip('premium', '✅ 正版'); chip('vpn', '🔒 VPN');
+    html += chip('all', '全部');
+    html += chip('online', '🟢 在线');
+    html += chip('offline', '⚪ 离线');
+    html += chip('premium', '✅ 正版');
+    html += chip('vpn', '🔒 VPN');
     html += '</div>';
     html += '<div class="card">';
     list.forEach(function(p) {
@@ -586,20 +766,27 @@ function chip(val, label) {
 }
 function playerRow(p) {
   var badges = '';
-  if (p.is_online) badges += '<span class="dot on"></span>';
-  badges += p.is_premium ? '<span class="badge green">✅正版</span>' : '<span class="badge gray">⚪离线</span>';
-  badges += statusBadge(p.status);
+  badges += p.is_premium ? '<span class="badge green">✅正版</span>' : '<span class="badge gray">🔓离线账号</span>';
+  badges += p.is_online ? '<span class="badge green">🟢在线</span>' : '<span class="badge gray">⚪离线</span>';
+  // 仅在在线时才显示状态徽标，离线玩家不再残留「多人服务器」等上一次状态
+  if (p.is_online) badges += statusBadge(p.status);
   if (p.is_vpn_suspected) badges += '<span class="badge red">🔒VPN</span>';
   var sub = (p.client_country ? flagEmoji(p.client_country) + ' ' + countryName(p.client_country) : '') +
-    (p.client_city ? ' · ' + esc(p.client_city) : '') +
+    (p.client_city ? ' · ' + esc(fmtCity(p.client_city)) : '') +
+    (p.client_timezone ? ' · ⏰ ' + esc(fmtTimezone(p.client_timezone)) : '') +
+    (p.client_as_org ? ' · 📡 ' + esc(fmtIsp(p.client_as_org)) : '') +
     (p.server_name ? ' · 🎮 ' + esc(p.server_name) : '');
   var lat = '';
-  if (p.server_latency !== null && p.server_latency !== undefined) lat += '🖥 <span class="lat ' + latClass(p.server_latency) + '">' + Math.round(p.server_latency) + 'ms</span>';
-  if (p.network_latency !== null && p.network_latency !== undefined) lat += ' · 📶 <span class="lat ' + latClass(p.network_latency) + '">' + Math.round(p.network_latency) + 'ms</span>';
+  // 只有在线玩家才显示延迟
+  if (p.is_online) {
+    if (p.server_latency !== null && p.server_latency !== undefined && p.server_latency > 0) lat += '🖥 <span class="lat ' + latClass(p.server_latency) + '">' + Math.round(p.server_latency) + 'ms</span>';
+    if (p.network_latency !== null && p.network_latency !== undefined && p.network_latency > 0) lat += ' · 📶 <span class="lat ' + latClass(p.network_latency) + '">' + Math.round(p.network_latency) + 'ms</span>';
+  }
   var idx = state.players.indexOf(p);
   return '<div class="row" onclick="openSheet(' + idx + ')">' +
     skin(p, 64) +
-    '<div class="info"><div class="name">' + esc(p.name) + ' ' + badges + '</div>' +
+    '<div class="info"><div class="name">' + esc(p.name) + '</div>' +
+    '<div class="badges">' + badges + '</div>' +
     '<div class="sub">' + sub + '</div>' +
     '<div class="sub">' + lat + '</div></div>' +
     '<div class="right">' + fmtTime(p.last_seen) + '</div></div>';
@@ -622,12 +809,15 @@ function loadPremium() {
 
 // 正版玩家单行：皮肤 + 玩家名 + 微软账号 XUID + 所在服务器
 function premiumRow(p) {
+  var msAccount = p.gamertag || p.name;
+  var msId = fmtXuid(p.xuid);
   return '<div class="row">' +
     skin(p, 64) +
     '<div class="info">' +
     '<div class="name">' + esc(p.name) + ' <span class="badge green">✅正版</span></div>' +
-    '<div class="sub">🔑 微软账号 XUID：<span class="mono">' + esc(p.xuid || '—') + '</span></div>' +
-    '<div class="sub">🎮 ' + esc(p.gamertag || p.name) + (p.server_name ? ' · 🖥 ' + esc(p.server_name) : '') + '</div>' +
+    '<div class="sub">🎮 微软账户：<span class="mono">' + esc(msAccount) + '</span></div>' +
+    (msId ? '<div class="sub">🔑 XUID：<span class="mono">' + esc(msId) + '</span></div>' : '') +
+    (p.server_name ? '<div class="sub">🖥 ' + esc(p.server_name) + (p.server_ip ? ' · ' + esc(p.server_ip) : '') + '</div>' : '') +
     '</div>' +
     '<div class="right">' + fmtTime(p.last_seen) + '</div>' +
     '</div>';
@@ -699,39 +889,81 @@ function fallbackCopy(text) {
 function openSheet(i) {
   var p = state.players[i];
   if (!p) return;
-  var modules = (p.modules || []).map(function(m){ return '<span class="tag blue">' + esc(m) + '</span>'; }).join('') || '<span class="tag">无</span>';
+  var modules = (p.modules || []).map(function(m){ return '<span class="tag blue">' + esc(fmtModule(m)) + '</span>'; }).join('') || '<span class="tag">无</span>';
   var html = '<div class="sheet-head"><div class="grab"></div><button class="sheet-close" onclick="closeSheet()" aria-label="关闭">✕</button></div>';
   html += '<h2>' + skin(p, 96) + '<span>' + flagEmoji(p.client_country) + ' ' + esc(p.name) + '</span></h2>';
   html += '<div style="font-size:13px;color:var(--text2);margin:6px 0 4px;">' + (p.is_online ? '<span class="dot on"></span> 在线' : '⚪ 离线') + ' · ' + fmtTime(p.last_seen) + '</div>';
+  html += '<div style="margin:12px 0;">';
+  if (p.is_premium) {
+    html += '<button onclick="togglePremium(&quot;' + p.uuid + '&quot;, 0)" style="padding:6px 12px;border:1px solid #ccc;background:#fff;cursor:pointer;border-radius:4px;">标记为离线</button>';
+  } else {
+    html += '<button onclick="togglePremium(&quot;' + p.uuid + '&quot;, 1)" style="padding:6px 12px;border:1px solid #4CAF50;background:#4CAF50;color:#fff;cursor:pointer;border-radius:4px;">标记为正版</button>';
+  }
+  html += '</div>';
   html += kv('UUID', p.uuid);
-  html += kv('正版账户', p.is_premium ? '✅ 是' + (p.gamertag ? '（' + esc(p.gamertag) + '）' : '') : '⚪ 离线');
-  html += kv('微软账号 XUID', p.xuid || '—');
+  html += kv('正版账户', p.is_premium ? '✅ 是' + (p.gamertag ? '（' + p.gamertag + '）' : '') : '⚪ 离线');
+  html += kv('微软账号', fmtXuid(p.xuid) || (p.is_premium ? p.name : '无') || null);
   html += kv('IP', p.client_ip);
-  html += kv('国家/地区', (p.client_country ? countryName(p.client_country) : '未知') + (p.client_region ? ' · ' + esc(p.client_region) : ''));
-  html += kv('城市/时区', (p.client_city || '—') + (p.client_timezone ? ' · ' + esc(p.client_timezone) : ''));
-  html += kv('运营商 ASN', p.client_as_org ? (esc(p.client_as_org) + ' (AS' + p.client_asn + ')') : '—');
-  html += kv('VPN 判定', p.is_vpn_suspected ? '🔒 疑似 VPN/机房' : '正常');
-  html += kv('服务器', p.server_name ? (esc(p.server_name) + ' · ' + esc(p.server_ip || '')) : '—');
-  html += kv('服务器延迟', p.server_latency !== null && p.server_latency !== undefined ? Math.round(p.server_latency) + ' ms' : '—');
-  html += kv('网络延迟', p.network_latency !== null && p.network_latency !== undefined ? Math.round(p.network_latency) + ' ms' : '—');
-  html += kv('坐标', (p.pos_x !== null && p.pos_x !== undefined) ? Math.round(p.pos_x) + ', ' + Math.round(p.pos_y) + ', ' + Math.round(p.pos_z) : '—');
-  html += kv('维度', p.dimension || '—');
-  html += kv('游戏模式', p.game_mode || '—');
-  html += kv('当前活动', p.current_activity || '—');
+  var loc = [];
+  if (p.client_country) loc.push(countryName(p.client_country));
+  if (p.client_region) loc.push(fmtRegion(p.client_region));
+  html += kv('国家/地区', loc.join(' · ') || null);
+  var ct = [];
+  var city = fmtCity(p.client_city);
+  if (city) ct.push(city);
+  if (p.client_timezone) ct.push(fmtTimezone(p.client_timezone));
+  html += kv('城市/时区', ct.join(' · ') || null);
+  html += kv('运营商', p.client_as_org ? fmtIsp(p.client_as_org) : null);
+  // 只有在线玩家才显示 VPN 判定、服务器、延迟等实时信息
+  if (p.is_online) {
+    html += kv('VPN 判定', p.is_vpn_suspected ? '🔒 疑似 VPN/机房' : '正常');
+    var svr = p.server_name ? p.server_name : '';
+    if (svr && p.server_ip) svr += ' · ' + p.server_ip;
+    html += kv('服务器', svr || null);
+    html += kv('服务器延迟', p.server_latency !== null && p.server_latency !== undefined ? Math.round(p.server_latency) + ' ms' : null);
+    html += kv('网络延迟', p.network_latency !== null && p.network_latency !== undefined ? Math.round(p.network_latency) + ' ms' : null);
+  }
+  html += kv('坐标', (p.pos_x !== null && p.pos_x !== undefined) ? Math.round(p.pos_x) + ', ' + Math.round(p.pos_y) + ', ' + Math.round(p.pos_z) : null);
+  html += kv('维度', fmtDimension(p.dimension));
+  html += kv('游戏模式', fmtGameMode(p.game_mode));
+  html += kv('当前活动', p.current_activity || null);
   html += kv('击杀/死亡', (p.kill_count || 0) + ' / ' + (p.death_count || 0));
   html += kv('游戏时长', fmtDuration(p.total_playtime));
   html += kv('使用次数', p.usage_count);
-  html += kv('版本', esc(p.version || '') + ' · MC ' + esc(p.minecraft_version || ''));
+  var ver = [];
+  if (p.version) ver.push(p.version);
+  if (p.minecraft_version) ver.push('MC ' + p.minecraft_version);
+  html += kv('版本', ver.join(' · ') || null);
   html += '<div class="kv" style="display:block;"><div class="k" style="margin-bottom:8px;">已开启模块</div><div>' + modules + '</div></div>';
   var sheet = $('sheet');
   sheet.innerHTML = html;
   $('sheet-overlay').classList.add('open');
   requestAnimationFrame(function(){ sheet.classList.add('open'); });
 }
-function kv(k, v) { return '<div class="kv"><span class="k">' + k + '</span><span class="val">' + esc(String(v === undefined ? '—' : v)) + '</span></div>'; }
+// 空值统一显示「未知待刷新」：null/undefined/空串/占位符 不再显示成 —、null、unknown
+function park(v) {
+  if (v === undefined || v === null) return '未知待刷新';
+  var s = String(v).trim();
+  if (!s || s === '—' || s.toLowerCase() === 'null' || s.toLowerCase() === 'unknown') return '未知待刷新';
+  return v;
+}
+function kv(k, v) { return '<div class="kv"><span class="k">' + k + '</span><span class="val">' + esc(String(park(v))) + '</span></div>'; }
 function closeSheet() {
   $('sheet').classList.remove('open');
   $('sheet-overlay').classList.remove('open');
+}
+
+function togglePremium(uuid, isPremium) {
+  if (!confirm('确定要' + (isPremium ? '标记为正版' : '标记为离线') + '吗？')) return;
+  api('/api/admin/toggle-premium', { method: 'POST', body: { uuid: uuid, is_premium: isPremium } }).then(function(res) {
+    if (res.success) {
+      alert('已更新');
+      loadPlayers();
+      closeSheet();
+    } else {
+      alert('操作失败：' + (res.error || '未知错误'));
+    }
+  });
 }
 
 // ── 消息 ──
@@ -869,6 +1101,23 @@ window.addEventListener('scroll', function() {
 // 启动
 initTheme();
 if (state.token) { showApp(); } else { $('app').style.display = 'none'; $('login').style.display = 'flex'; }
+</script>
+<script>
+(function () {
+  var login = document.getElementById('login');
+  var app = document.getElementById('app');
+  var button = document.getElementById('lg-btn');
+  function restoreApp() {
+    if (!localStorage.getItem('admin_token')) return;
+    if (login) login.style.display = 'none';
+    if (app) app.style.display = 'block';
+    if (typeof showApp === 'function') showApp();
+  }
+  restoreApp();
+  if (button) button.addEventListener('click', function () {
+    window.setTimeout(restoreApp, 800);
+  });
+}());
 </script>
 </body>
 </html>`;

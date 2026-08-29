@@ -53,16 +53,19 @@ public class NongChangCommand extends Command {
             farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             for (SiteType type : SiteType.values()) {
                 FarmSite site = module.site(type);
-                String icon = switch (type) {
-                    case START -> "§a■";
-                    case END -> "§e■";
-                    case DUMP -> "§6■";
-                    case SUPPLY -> "§2■";
+                String icon = "■";
+                String color = switch (type) {
+                    case START -> "§a";
+                    case END -> "§e";
+                    case DUMP -> "§6";
+                    case SUPPLY -> "§2";
                 };
                 if (site == null) {
-                    farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §c未绑定");
+                    farmInfo("  " + color + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
                 } else {
-                    farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe());
+                    farmInfo("  " + color + icon + " §f§l" + type.cn());
+                    farmInfo("    §8├─ §7坐标 ▸ §7X§f" + site.pos().getX() + " §7Y§f" + site.pos().getY() + " §7Z§f" + site.pos().getZ());
+                    farmInfo("    §8└─ §7维度 ▸ §b" + site.describe().split("▸ ")[1]);
                 }
             }
             return SINGLE_SUCCESS;
@@ -97,23 +100,24 @@ public class NongChangCommand extends Command {
         }
 
         farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        farmInfo("§b§l         自动农场 ▸ 详细信息");
+        farmInfo("§b§l         自动农场 ▸ 坐标绑定");
         farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         farmInfo("  §7服务器 ▸ §f" + serverInfo);
         
         for (SiteType type : SiteType.values()) {
             FarmSite site = module.site(type);
-            String icon = switch(type) {
-                case START -> "▶";
-                case END -> "◀";
-                case DUMP -> "↓";
-                case SUPPLY -> "↑";
+            String icon = "■";
+            String color = switch(type) {
+                case START -> "§a";
+                case END -> "§e";
+                case DUMP -> "§6";
+                case SUPPLY -> "§2";
             };
-            
+
             if (site == null) {
-                farmInfo("  " + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
+                farmInfo("  " + color + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
             } else {
-                farmInfo("  " + icon + " §f§l" + type.cn());
+                farmInfo("  " + color + icon + " §f§l" + type.cn());
                 farmInfo("    §8├─ §7坐标 ▸ §7X§f" + site.pos().getX() + " §7Y§f" + site.pos().getY() + " §7Z§f" + site.pos().getZ());
                 farmInfo("    §8└─ §7维度 ▸ §b" + site.describe().split("▸ ")[1]);
             }
@@ -182,22 +186,16 @@ public class NongChangCommand extends Command {
 
         module.bindSite(type, site);
         
-        String icon = switch(type) {
-            case START -> "▶";
-            case END -> "◀";
-            case DUMP -> "↓";
-            case SUPPLY -> "↑";
-        };
-        
-        String dimColor = switch(type) {
+        String icon = "■";
+        String color = switch(type) {
             case START -> "§a";
             case END -> "§e";
             case DUMP -> "§6";
             case SUPPLY -> "§2";
         };
-        
+
         farmInfo("§a§l✓ 绑定成功");
-        farmInfo("  " + icon + " §f" + type.cn() + " §8▸ §a" + site.describe(dimColor));
+        farmInfo("  " + color + icon + " §f§l" + type.cn() + " §8▸ §a" + site.describe(color));
         
         return SINGLE_SUCCESS;
     }
@@ -234,30 +232,33 @@ public class NongChangCommand extends Command {
         AutoFarmMatrix module = module();
         if (module == null) return SINGLE_SUCCESS;
 
-        farmInfo("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        farmInfo("§6§l           自动农场");
-        farmInfo("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        farmInfo("§b§l           自动农场 ▸ 锚点绑定");
+        farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         farmInfo("");
         
         for (SiteType type : SiteType.values()) {
             FarmSite site = module.site(type);
-            String icon = switch(type) {
-                case START -> "▶";
-                case END -> "◀";
-                case DUMP -> "↓";
-                case SUPPLY -> "↑";
+            String icon = "■";
+            String color = switch(type) {
+                case START -> "§a";
+                case END -> "§e";
+                case DUMP -> "§6";
+                case SUPPLY -> "§2";
             };
-            
+
             if (site == null) {
-                farmInfo("  " + icon + " §7" + type.cn() + " §8→ §c未绑定");
+                farmInfo("  " + color + icon + " §f§l" + type.cn() + " §8▸ §c未绑定");
             } else {
-                farmInfo("  " + icon + " §7" + type.cn() + " §8▸ §a" + site.describe());
+                farmInfo("  " + color + icon + " §f§l" + type.cn());
+                farmInfo("    §8├─ §7坐标 ▸ §7X§f" + site.pos().getX() + " §7Y§f" + site.pos().getY() + " §7Z§f" + site.pos().getZ());
+                farmInfo("    §8└─ §7维度 ▸ §b" + site.describe().split("▸ ")[1]);
             }
         }
         
         farmInfo("");
-        farmInfo("§e提示: 使用 §e§l.nongchang status §r§e查看详细信息");
-        farmInfo("§6§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        farmInfo("§e提示：使用 §e§l.farm status §r§e查看详细信息");
+        farmInfo("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         return SINGLE_SUCCESS;
     }
 
@@ -309,15 +310,27 @@ public class NongChangCommand extends Command {
             cmd.farmError("自动农场模块未加载");
             return false;
         }
-        
+
         SiteType type = switch (key) {
             case "dump" -> SiteType.DUMP;
             case "supply" -> SiteType.SUPPLY;
             default -> null;
         };
-        
+
         if (type == null) return false;
-        
+
+        // 与指令绑定路径一致：模块运行中禁止修改锚点，防止状态机跑一半点位漂移
+        if (module.isActive()) {
+            cmd.farmError("模块运行中无法修改锚点，请先关闭模块");
+            return false;
+        }
+
+        // 覆盖保护：已有绑定必须先删除
+        if (module.site(type) != null) {
+            cmd.farmError(type.cn() + "已绑定，请先删除旧绑定再重新设置");
+            return false;
+        }
+
         // 检查目标方块
         BlockPos target = cmd.targetBlock();
         if (target == null) {
@@ -328,7 +341,7 @@ public class NongChangCommand extends Command {
             cmd.farmError("目标方块不是容器（箱子/桶/潜影盒等），请重新设置");
             return false;
         }
-        
+
         cmd.bind(type);
         return true;
     }

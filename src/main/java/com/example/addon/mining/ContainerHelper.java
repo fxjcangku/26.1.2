@@ -133,12 +133,12 @@ public final class ContainerHelper {
      */
     public void openContainer(BlockPos pos) {
         if (mc.player == null || mc.level == null) return;
-        module.getCmdManager().debugReport("B", "ContainerHelper.unloadingTrace:2", "open request player=" + mc.player.blockPosition() + ", pos=" + pos + ", screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()) + ", menu=" + (currentMenu == null ? "null" : currentMenu.getClass().getSimpleName()) + ", stableTicks=" + stableStateTicks + ", attempts=" + openAttempts);
         int dx = Math.abs(mc.player.blockPosition().getX() - pos.getX());
         int dy = Math.abs(mc.player.blockPosition().getY() - pos.getY());
         int dz = Math.abs(mc.player.blockPosition().getZ() - pos.getZ());
-        if (dx + dy + dz != 1) {
-            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:130", "not adjacent to container pos=" + pos + ", player=" + mc.player.blockPosition());
+        // 切比雪夫邻域（含对角）：与 MinerFSM.isAdjacentTo 同判定，
+        // Baritone 停在对角格时同样允许开箱（interact 包距离校验足够宽松）
+        if (dx > 1 || dy > 1 || dz > 1 || (dx | dy | dz) == 0) {
             return;
         }
         if (openingCooldown > 0) {
@@ -146,18 +146,15 @@ public final class ContainerHelper {
             return;
         }
         if (mc.screen instanceof AbstractContainerScreen<?> screen && screen.getMenu().containerId != 0) {
-            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:124", "skip duplicate open, screen=" + screen.getClass().getSimpleName());
             return;
         }
 
         openAttempts++;
         if (openAttempts > MAX_OPEN_ATTEMPTS) {
-            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:130", "open attempts exhausted pos=" + pos);
             return;
         }
         BlockEntity blockEntity = mc.level.getBlockEntity(pos);
         if (!(blockEntity instanceof Container)) {
-            module.getCmdManager().debugReport("E", "ContainerHelper.openContainer:140", "target is not container pos=" + pos);
             return;
         }
 
@@ -170,7 +167,6 @@ public final class ContainerHelper {
 
         // 发送交互包
         if (mc.gameMode != null) {
-            module.getCmdManager().debugReport("B", "ContainerHelper.openContainer:144", "useItemOn pos=" + pos);
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
         }
     }
@@ -238,7 +234,6 @@ public final class ContainerHelper {
     public boolean depositOres() {
         if (mc.player == null || mc.gameMode == null) return false;
         if (!isContainerOpen()) {
-            module.getCmdManager().debugReport("B", "ContainerHelper.depositOres:229", "container not stable screen=" + (mc.screen == null ? "null" : mc.screen.getClass().getSimpleName()));
             return mc.screen instanceof AbstractContainerScreen<?>;
         }
         if (actionCooldown > 0) {
@@ -250,25 +245,22 @@ public final class ContainerHelper {
         if (menu == null) return false;
 
         Inventory inventory = mc.player.getInventory();
-        boolean foundAny = false;
 
-        // 扫描背包侧槽位，找到矿物后 Shift 点击
+        // 扫描背包侧槽位，找到矿物后 Shift 点击（每5tick一格，直到全部目标矿转移完）
         for (Slot slot : menu.slots) {
             if (slot.container != inventory) continue;
 
             ItemStack stack = slot.getItem();
             if (stack.isEmpty()) continue;
 
-            String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             if (isAllowedOre(stack)) {
                 InvUtils.shiftClick().slot(slot.index);
                 actionCooldown = 5;
-                module.getCmdManager().debugReport("B", "ContainerHelper.depositOres:248", "shiftClick slot=" + slot.index + ", item=" + itemId + ", count=" + stack.getCount());
                 return true;
             }
         }
 
-        return foundAny;
+        return false;
     }
 
     private boolean isAllowedOre(ItemStack stack) {
@@ -295,11 +287,13 @@ public final class ContainerHelper {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * 从食物箱提取食物（只拿白名单内的，默认拿1组）
+     * 从食物箱提取食物（只拿白名单内的）
      * 
-     * 优化策略：等待GUI稳定后快速提取
+     * 拿满策略：循环 Shift 点击直到背包白名单食物达到「食物阈值」，
+     * 或箱子里没有更多白名单食物（拿空即止）。
+     * 每格点击间隔 5 tick，等待服务端到账后再拿下一格。
      * 
-     * @return 是否成功提取
+     * @return true=本次补给结束（已拿满或箱子拿空）；false=还在拿（继续调用）
      */
     public boolean withdrawFood() {
         if (!isContainerOpen() || mc.player == null || mc.gameMode == null) {
@@ -312,12 +306,19 @@ public final class ContainerHelper {
         }
 
         int currentFoodCount = countWhitelistedFood();
+
+        // 已拿满（达到食物阈值），结束补给
+        if (currentFoodCount >= module.getHungerThreshold()) {
+            return true;
+        }
+
+        // 上一格等待到账：数量增长才视为成功
         if (foodCountBeforeWithdraw >= 0) {
             if (currentFoodCount > foodCountBeforeWithdraw) {
-                foodCountBeforeWithdraw = -1;
-                return true;
+                foodCountBeforeWithdraw = -1; // 到账，继续拿下一格
+            } else {
+                return false; // 物品还在服务器端飞行，等下一tick
             }
-            return false;
         }
 
         AbstractContainerMenu menu = currentMenu;
@@ -343,7 +344,8 @@ public final class ContainerHelper {
             }
         }
 
-        return false;
+        // 箱子里已没有白名单食物（拿空即止），结束补给
+        return true;
     }
 
     private int countWhitelistedFood() {

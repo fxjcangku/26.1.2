@@ -15,10 +15,6 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 /**
  * 指令管理与防卡死网络中心
@@ -41,6 +37,7 @@ public final class CommandManager {
     private boolean executing = false;
     private int executeTick = 0;
     private int maxWaitTicks = 600; // 动态设置，默认30秒
+    private int stationaryTicks = 0; // 位置静止累计tick（真正的「静止超过5 tick」检测）
 
     // 区块加载检测
     private BlockPos lastPlayerPos = BlockPos.ZERO;
@@ -62,28 +59,10 @@ public final class CommandManager {
         this.mc = Minecraft.getInstance();
     }
 
-    // #region debug-point A:E:init
-    void debugReport(String hypothesisId, String location, String data) {
-        new Thread(() -> {
-            try {
-                URL url = URI.create("http://127.0.0.1:7777/event").toURL();
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("POST");
-                connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json");
-                String body = "{\"sessionId\":\"automine-igui-click\",\"runId\":\"verify-fix\",\"hypothesisId\":\"" + hypothesisId + "\",\"location\":\"" + location + "\",\"msg\":\"[DEBUG] automine IGUI trace\",\"data\":\"" + data.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\"ts\":" + System.currentTimeMillis() + "}";
-                connection.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
-                connection.getResponseCode();
-                connection.disconnect();
-            } catch (Exception ignored) {
-            }
-        }, "automine-debug").start();
-    }
-    // #endregion
-
     public void reset() {
         executing = false;
         executeTick = 0;
+        stationaryTicks = 0;
         lastPlayerPos = BlockPos.ZERO;
         chunksLoadedCount = 0;
         lastY = 0;
@@ -100,15 +79,21 @@ public final class CommandManager {
      * 执行聊天指令（如 /rtp, /home kuang）
      * 
      * 发送后进入阻塞状态，直到传送完成并满足安全条件
-     * 自动处理斜杠前缀，无论输入 rtp 或 /rtp 都能正确执行
+     * 标点归一：全角空格/全角斜杠（中文输入法常见）→ 半角，
+     * 自动补斜杠、去多斜杠、修正「/ rtp」这种斜杠后带空格的写法。
      */
     public void executeCommand(String command) {
-        if (mc.player == null || command.isEmpty()) {
+        if (mc.player == null || command == null) {
+            return;
+        }
+
+        // 全角标点归一：全角空格(　)与全角斜杠(／)转半角，再统一 trim
+        String cmd = command.replace('　', ' ').replace('／', '/').trim();
+        if (cmd.isEmpty()) {
             return;
         }
 
         // 自动补充斜杠：如果命令不以/开头，自动添加
-        String cmd = command.trim();
         if (!cmd.startsWith("/")) {
             cmd = "/" + cmd;
         }
@@ -117,16 +102,22 @@ public final class CommandManager {
         while (cmd.startsWith("//")) {
             cmd = cmd.substring(1);
         }
+
+        // 修正「/ rtp」斜杠后带空格的写法：服务器不接受斜杠与指令名之间有空格
+        cmd = cmd.replaceFirst("^/\\s+", "/");
+        if (cmd.length() <= 1) {
+            return;
+        }
         
         // 去掉前缀/后发送
         mc.player.connection.sendCommand(cmd.substring(1));
-        debugReport("A", "CommandManager.executeCommand:115", "command=" + cmd + ", guiEnabled=" + module.isRtpGuiEnabled() + ", keyword=" + module.getRtpGuiKeyword());
 
         // 从模块获取传送等待时长（秒转tick）
         maxWaitTicks = module.getTeleportDelay() * 20;
 
         executing = true;
         executeTick = 0;
+        stationaryTicks = 0;
         lastPlayerPos = mc.player.blockPosition();
         lastY = mc.player.getY();
         chunksLoadedCount = 0;
@@ -154,10 +145,8 @@ public final class CommandManager {
 
         // 超时保护（使用动态设置的等待时长）
         if (executeTick > maxWaitTicks) {
-            module.error("§c[自动挖矿] 传送超时，重新RTP");
+            module.error("§c[自动挖矿] 传送等待超时");
             executing = false;
-            // 标记需要重新传送
-            module.requestRetryTeleport();
             return false;
         }
 
@@ -252,8 +241,8 @@ public final class CommandManager {
      * 检测服务器是否响应正常
      * 
      * 策略：
-     * · 玩家位置发生变化（说明服务器在同步位置）
-     * · 或玩家已落地且静止超过5 tick
+     * · 玩家位置发生变化（说明服务器在同步位置）→ 清除静止计数，继续等
+     * · 玩家落地且连续静止超过5 tick → 判定传送流程结束
      */
     private boolean checkServerResponsive() {
         LocalPlayer player = mc.player;
@@ -261,14 +250,16 @@ public final class CommandManager {
 
         BlockPos currentPos = player.blockPosition();
 
-        // 位置变化说明服务器在响应
+        // 位置变化说明服务器在响应，重置静止计数
         if (!currentPos.equals(lastPlayerPos)) {
             lastPlayerPos = currentPos;
+            stationaryTicks = 0;
             return false; // 还在移动，继续等
         }
 
         // 位置静止超过5 tick，且玩家在地面
-        return executeTick > 25 && player.onGround();
+        stationaryTicks++;
+        return stationaryTicks >= 5 && player.onGround();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -310,7 +301,6 @@ public final class CommandManager {
 
         // 标准化关键词（移除颜色和空格）
         String normalizedKeyword = stripFormatting(keyword);
-        debugReport("A", "CommandManager.handleGuiAutoClick:284", "keywordRaw=" + keyword + ", keywordNormalized=" + normalizedKeyword + ", children=" + currentScreen.children().size());
 
         if (!(currentScreen instanceof AbstractContainerScreen<?> containerScreen)) {
             return true;
@@ -328,7 +318,6 @@ public final class CommandManager {
             String itemText = stripFormatting(stack.getHoverName().getString());
             if (!itemText.contains(normalizedKeyword)) continue;
 
-            debugReport("C", "CommandManager.handleGuiAutoClick:310", "MATCH slot=" + slot.index + ", text=" + itemText + ", menu=" + menu.getClass().getName());
             mc.gameMode.handleContainerInput(menu.containerId, slot.index, 0, ContainerInput.PICKUP, mc.player);
             waitingForGui = false;
             return true;

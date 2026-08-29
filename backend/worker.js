@@ -49,12 +49,6 @@ function isValidUuid(uuid) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid || '');
 }
 
-// ══════════════════════════════════════════════════════════════
-// 微软正版账号识别：判定 UUID 是否等于「标准离线派生 UUID」
-// 离线模式 UUID = Java 的 UUID.nameUUIDFromBytes(("OfflinePlayer:"+名字).getBytes(UTF-8))
-// 正版（微软/Mojang 登录）账号 UUID 是随机分配的，绝不会命中该派生值。
-// ══════════════════════════════════════════════════════════════
-
 // 内联 MD5（WebCrypto 不支持 MD5），返回 32 位小写十六进制摘要
 function md5(message) {
   const rot = (v, c) => (v << c) | (v >>> (32 - c));
@@ -113,11 +107,43 @@ function offlineUuid(name) {
     + '-' + variant(d[16]) + d.slice(17, 20) + '-' + d.slice(20, 32);
 }
 
-// 判定是否正版：有 XUID 必为正版；否则命中标准离线派生 UUID 判为盗版；未命中派生值视为正版
-function computePremium(uuid, name, xuid) {
-  if (xuid && String(xuid).trim()) return 1;
+// XUID 应为纯数字；authlib-injector 未注入时会上报 ${auth_xuid} 之类占位符，统一过滤为 null
+function sanitizeXuid(xuid) {
+  if (xuid == null) return null;
+  const v = String(xuid).trim();
+  return /^\d{8,20}$/.test(v) ? v : null;
+}
+
+// 精准判定正版（Microsoft）账号：有有效 XUID 必为正版；无 XUID 时用 Mojang 名字查真实 UUID，
+// 只有当客户端上报的 UUID 与该正版账号 UUID 一致才判正版——离线冒名同名、第三方 authlib 一律判盗版/离线。
+// 返回值：1 = 正版, 0 = 离线, null = 无法确定（API 失败/超时）
+async function resolvePremium(uuid, name, xuid) {
+  if (sanitizeXuid(xuid)) return 1;
   if (!uuid || !name) return 0;
-  return offlineUuid(name).toLowerCase() === String(uuid).toLowerCase() ? 0 : 1;
+  const mojang = await lookupMojangProfile(name);
+  if (mojang === null) return null; // API 失败，无法确定
+  if (mojang === false) return 0;   // 404，确认为离线
+  return String(uuid).replace(/-/g, '').toLowerCase() === mojang.toLowerCase() ? 1 : 0;
+}
+
+// 通过 Mojang 官方 API 按游戏名查询正版账号，返回真实 Mojang UUID（无连字符）、null（API失败）或 false（404不存在）
+async function lookupMojangProfile(name) {
+  if (!name) return false;
+  const clean = String(name).trim();
+  if (!clean || clean.length > 16) return false;
+  try {
+    const resp = await fetch('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(clean), {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (resp.status === 200) {
+      const data = await resp.json();
+      return data && data.id ? String(data.id) : false;
+    }
+    if (resp.status === 404) return false; // 确认不存在
+    return null; // 其他错误（限流、500等）
+  } catch (e) {
+    return null; // 网络错误/超时
+  }
 }
 
 // 疑似 VPN/代理/机房的 AS 组织名关键字（服务端能判定的最大程度）
@@ -132,11 +158,17 @@ const VPN_ORG_KEYWORDS = [
   'cogent', 'quadranet', 'hostwinds', 'buyvm', 'zenlayer', 'ipxo',
   'packet', 'equinix', 'psychz', 'hostinger', 'namecheap', 'colocrossing',
   'hivelocity', 'datacenter', 'hosting', 'vpn', 'proxy',
+  'fdcservers', 'vps', 'vds', 'colocation', 'wholesale',
+  'seedbox', 'netcup', 'worldstream', 'serverius', 'spartanhost', 'egihosting',
+  'racknerd', 'virmach', 'reliablesite', 'intergrid', 'chocotel',
+  'privateinternetaccess', '24shells', 'solarvps', 'leapswitch', 'phanes',
+  'netprotect', 'dedicated', 'baremetal',
 ];
 
 const VPN_SUSPECT_ASN = new Set([
   13335, 15169, 16509, 14618, 8075, 14061, 16276, 24940, 20473, 9009,
   63949, 36352, 8100, 40676, 29802, 16265, 51167, 46562, 206092, 62240,
+  30058, 212238, 40021, 141995, 49505, 63473, 394256, 54994, 44066,
 ]);
 
 // 判断是否疑似 VPN/代理/机房：命中知名数据中心/VPN ASN 或组织名关键字
@@ -145,6 +177,20 @@ function isVpnSuspected(asOrg, asn) {
   const org = String(asOrg || '').toLowerCase();
   if (!org) return 0;
   return VPN_ORG_KEYWORDS.some(k => org.includes(k)) ? 1 : 0;
+}
+
+// 时区不一致检测：设备真实时区（客户端上报，物理所在地）与连接出口时区（Cloudflare 按来源 IP 判定）不同，
+// 即为疑似梯子。典型场景：物理在中国（Asia/Shanghai）却挂日本节点（Asia/Tokyo）出口。
+// 这是对「住宅/动态出口 IP 无法靠 ASN 命中」的补充 —— 出口 IP 不落机房时，时区仍会暴露真实位置差异。
+function timezoneMismatch(clientTz, exitTz) {
+  if (!clientTz || !exitTz) return 0;
+  const c = String(clientTz).trim();
+  const e = String(exitTz).trim();
+  if (!c || !e) return 0;
+  if (c === e) return 0;
+  // 仅当两者同属一个粗区域（如均为 Asia）才进一步判定：跨区域必然不一致，
+  // 同区域但具体城市不同（Asia/Shanghai vs Asia/Tokyo）同样视为梯子。
+  return 1;
 }
 
 // 计算在线状态：仅以心跳时间为准，杜绝回退 last_seen 造成的“假在线”
@@ -208,21 +254,23 @@ export default {
       return handleLogin(request, env);
     }
 
-    // 注册/更新用户（公开，但过滤假玩家与本地测试）
+    // 注册/更新用户（公开，过滤假玩家）
     if (path === '/api/register' && request.method === 'POST') {
       try {
         const {
           uuid, name, version, minecraft_version, server_ip, server_name,
           is_premium, gamertag, xuid, player_activity,
+          real_ip, real_country, is_using_proxy, proxy_type,
+          client_timezone, client_isp, client_asn, client_as_org,
         } = await request.json();
 
         if (!uuid || !name || !version) {
           return jsonResponse({ error: '缺少必需参数' }, 400);
         }
 
-        // 假玩家与本地测试一律跳过，不计入统计
-        if (isFakePlayerName(name) || isLocalServerIp(server_ip)) {
-          return jsonResponse({ success: true, skipped: true, reason: 'fake_or_local' });
+        // 仅过滤假玩家；单人世界也必须参与用户统计
+        if (isFakePlayerName(name)) {
+          return jsonResponse({ success: true, skipped: true, reason: 'fake_player' });
         }
 
         if (!isValidUuid(uuid)) {
@@ -230,16 +278,22 @@ export default {
         }
 
         const now = Date.now();
-        // 客户端公网 IP 与地理信息：优先 request.cf，回退到请求头
+        // 客户端公网 IP 与地理信息：优先 request.cf，回退到请求头 / 客户端上报
         const cf = request.cf || {};
-        const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
-        const clientCountry = cf.country || request.headers.get('CF-IPCountry') || 'unknown';
+        const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || real_ip || 'unknown';
+        const clientCountry = real_country || cf.country || request.headers.get('CF-IPCountry') || 'unknown';
         const clientCity = cf.city || null;
         const clientRegion = cf.region || null;
-        const clientTimezone = cf.timezone || null;
-        const clientAsn = cf.asn || null;
-        const clientAsOrg = cf.asOrganization || null;
-        const vpnSuspected = isVpnSuspected(clientAsOrg, clientAsn);
+        // 时区：优先客户端上报的真实设备时区（不受 VPN 出口影响），缺失退回 CF
+        const clientTimezone = client_timezone || cf.timezone || null;
+        // 运营商：优先客户端上报（ip-api/ipapi 解析的连接出口 AS 组织），缺失退回 CF asOrganization
+        const clientAsOrg = client_as_org || client_isp || cf.asOrganization || null;
+        const clientAsn = client_asn != null ? client_asn : (cf.asn || null);
+        // VPN 判定：CF 侧 + 客户端上报侧 + 客户端自身代理标记 + 设备/出口时区不一致，取并集
+        const vpnSuspected = (isVpnSuspected(cf.asOrganization, cf.asn)
+          || isVpnSuspected(clientAsOrg, clientAsn)
+          || timezoneMismatch(client_timezone, cf.timezone)
+          || (is_using_proxy ? 1 : 0)) ? 1 : 0;
 
         // 去重：先按 UUID 查，查不到再按游戏名查。同名不同 UUID 视为同一玩家
         // （正版/离线切换产生不同 UUID），合并到已有记录，避免同名重复入库。
@@ -251,8 +305,18 @@ export default {
         // 实际写入的目标 UUID：存在同名旧记录时沿用旧 UUID，后续 UPDATE 会同步为新 UUID
         const effectiveUuid = existingUser ? existingUser.uuid : uuid;
 
-        // 正版账号判定：有 XUID 必为正版；否则命中标准离线派生 UUID 判为盗版
-        const premium = computePremium(uuid, name, xuid);
+        // 正版账号精准判定：有 XUID 必为正版；否则以 Mojang 名字查真实 UUID 与客户端 UUID 比对
+        // API 失败时（返回 null），新用户默认为离线，老用户保留原值
+        let premium = await resolvePremium(uuid, name, xuid);
+        if (premium === null) {
+          if (isNewUser) {
+            premium = 0; // 新用户默认离线
+          } else {
+            // 老用户保留原值
+            const old = await env.DB.prepare('SELECT is_premium FROM users WHERE uuid = ?').bind(effectiveUuid).first();
+            premium = old ? old.is_premium : 0;
+          }
+        }
 
         const activity = player_activity || {};
         const posX = activity.pos_x ?? null;
@@ -272,7 +336,7 @@ export default {
              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(uuid, name, version, minecraft_version || 'unknown', now, now, server_ip || null, server_name || null, clientIp, clientCountry, premium,
             posX, posY, posZ, dimension, health, foodLevel, gameMode, currentActivity,
-            gamertag || null, xuid || null, now, clientCity, clientRegion, clientTimezone, clientAsn, clientAsOrg, vpnSuspected, 'multiplayer').run();
+            gamertag || null, sanitizeXuid(xuid), now, clientCity, clientRegion, clientTimezone, clientAsn, clientAsOrg, vpnSuspected, 'multiplayer').run();
         } else {
           await env.DB.prepare(
             `UPDATE users SET uuid = ?, name = ?, version = ?, minecraft_version = ?, last_seen = ?, usage_count = usage_count + 1, server_ip = ?, server_name = ?, client_ip = ?, client_country = ?, is_premium = ?,
@@ -281,8 +345,12 @@ export default {
              WHERE uuid = ?`
           ).bind(uuid, name, version, minecraft_version || 'unknown', now, server_ip || null, server_name || null, clientIp, clientCountry, premium,
             posX, posY, posZ, dimension, health, foodLevel, gameMode, currentActivity,
-            gamertag || null, xuid || null, now, clientCity, clientRegion, clientTimezone, clientAsn, clientAsOrg, vpnSuspected, effectiveUuid).run();
+            gamertag || null, sanitizeXuid(xuid), now, clientCity, clientRegion, clientTimezone, clientAsn, clientAsOrg, vpnSuspected, effectiveUuid).run();
         }
+
+        // 记录当日活跃（用于 14 天活跃趋势），同一玩家同一天去重
+        const day = new Date(now).toISOString().slice(0, 10);
+        await env.DB.prepare('INSERT OR IGNORE INTO daily_active (day, uuid) VALUES (?, ?)').bind(day, effectiveUuid).run();
 
         const stats = await env.DB.prepare('SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users').first();
         const rank = isNewUser ? stats.total : await getUserRank(env.DB, uuid);
@@ -293,6 +361,7 @@ export default {
           rank,
           total_users: stats.total,
           total_uses: stats.total_uses,
+          is_premium: premium,
         });
       } catch (error) {
         return jsonResponse({ error: error.message }, 500);
@@ -304,7 +373,8 @@ export default {
     // 玩家即使没进多人服务器（主菜单、单人世界）也会上报 IP 国家，后台实时显示其状态。
     if (path === '/api/heartbeat' && request.method === 'POST') {
       try {
-        const { uuid, name, server_latency, network_latency, gamertag, xuid, enabled_modules, player_activity, status, server_ip, server_name } = await request.json();
+        const { uuid, name, server_latency, network_latency, gamertag, xuid, enabled_modules, player_activity, status, server_ip, server_name,
+          client_timezone, client_isp, client_asn, client_as_org, is_using_proxy, real_country } = await request.json();
         if (!uuid) return jsonResponse({ error: 'UUID required' }, 400);
         if (isFakePlayerName(name)) return jsonResponse({ success: true, skipped: true, reason: 'fake' });
 
@@ -316,43 +386,83 @@ export default {
 
         // 状态归一：仅接受三种合法状态，缺省一律视为多人服务器
         const st = ['menu', 'singleplayer', 'multiplayer'].includes(status) ? status : 'multiplayer';
+        const isIdle = st === 'menu' || st === 'singleplayer';
         // 多人模式下连接本地（回环/局域网）仍视为测试跳过；主菜单/单人世界可正常上报
         if (st === 'multiplayer' && isLocalServerIp(server_ip)) {
           return jsonResponse({ success: true, skipped: true, reason: 'local_server' });
         }
 
+        // 心跳同样采集客户端连接侧地理/运营商信息（时区优先客户端真实设备时区）
+        const hbcf = request.cf || {};
+        const hbIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || null;
+        const hbCountry = real_country || hbcf.country || null;
+        const hbCity = hbcf.city || null;
+        const hbRegion = hbcf.region || null;
+        const hbTimezone = client_timezone || hbcf.timezone || null;
+        const hbAsOrg = client_as_org || client_isp || hbcf.asOrganization || null;
+        const hbAsn = client_asn != null ? client_asn : (hbcf.asn || null);
+        const hbVpn = (isVpnSuspected(hbcf.asOrganization, hbcf.asn)
+          || isVpnSuspected(hbAsOrg, hbAsn)
+          || timezoneMismatch(client_timezone, hbcf.timezone)
+          || (is_using_proxy ? 1 : 0)) ? 1 : 0;
+
         // 去重：先按 UUID 查，查不到按名字查，同名不同 UUID 合并为同一条记录
-        let existing = await env.DB.prepare('SELECT uuid FROM users WHERE uuid = ?').bind(uuid).first();
+        let existing = await env.DB.prepare('SELECT uuid, is_premium, last_heartbeat FROM users WHERE uuid = ?').bind(uuid).first();
         if (!existing) {
-          existing = await env.DB.prepare('SELECT uuid FROM users WHERE name = ?').bind(name).first();
+          existing = await env.DB.prepare('SELECT uuid, is_premium, last_heartbeat FROM users WHERE name = ?').bind(name).first();
         }
         const effectiveUuid = existing ? existing.uuid : uuid;
-        // 正版账号判定：有 XUID 必为正版；否则命中标准离线派生 UUID 判为盗版
-        const premium = computePremium(uuid, name, xuid);
+
+        // 正版账号精准判定：有 XUID 必为正版；否则以 Mojang 名字查真实 UUID 与客户端 UUID 比对
+        let premium = await resolvePremium(uuid, name, xuid);
+        if (!premium && existing && existing.is_premium && !sanitizeXuid(xuid)) {
+          premium = 1; // 已确认正版记录在无 XUID 时不做降级
+        }
+
+        // 累计游戏时长：在线即计时（主菜单/单人/多人均计入），增量 = 本次与上次心跳的真实间隔，上限 60 秒
+        let playDelta = 0;
+        if (existing && existing.last_heartbeat) {
+          playDelta = Math.max(0, Math.min(now - existing.last_heartbeat, 60000));
+        }
+
+        // 主菜单/单人世界：清除上一次多人服务器残留的 server_ip/server_name，避免“没进服却显示服务器 IP”
+        const updServerIp = isIdle ? null : (server_ip || null);
+        const updServerName = isIdle ? null : (server_name || null);
 
         if (!existing) {
           // 首次心跳早于注册（异常时序）：补一条最小记录
           await env.DB.prepare(
             `INSERT INTO users (uuid, name, version, minecraft_version, first_seen, last_seen, usage_count, is_online, is_premium,
-             server_latency, network_latency, gamertag, xuid, enabled_modules, last_heartbeat, server_ip, server_name, status)
-             VALUES (?, ?, 'unknown', 'unknown', ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             server_latency, network_latency, gamertag, xuid, enabled_modules, last_heartbeat, server_ip, server_name, status,
+             client_ip, client_country, client_city, client_region, client_timezone, client_asn, client_as_org, is_vpn_suspected)
+             VALUES (?, ?, 'unknown', 'unknown', ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(uuid, name || 'unknown', now, now, premium,
-            server_latency ?? null, network_latency ?? null, gamertag || null, xuid || null, modules, now,
-            server_ip || null, server_name || null, st).run();
+            server_latency ?? null, network_latency ?? null, gamertag || null, sanitizeXuid(xuid), modules, now,
+            updServerIp, updServerName, st,
+            hbIp, hbCountry, hbCity, hbRegion, hbTimezone, hbAsn, hbAsOrg, hbVpn).run();
         } else {
           await env.DB.prepare(
             `UPDATE users SET uuid = ?, name = COALESCE(?, name), last_seen = ?, is_online = 1, is_premium = ?, status = ?,
-             server_latency = ?, network_latency = ?, gamertag = ?, xuid = ?, enabled_modules = ?, last_heartbeat = ?,
-             server_ip = COALESCE(?, server_ip), server_name = COALESCE(?, server_name),
+             server_latency = ?, network_latency = ?, gamertag = ?, xuid = ?, enabled_modules = ?, last_heartbeat = ?, total_playtime = total_playtime + ?,
+             server_ip = ?, server_name = ?,
+             client_ip = COALESCE(?, client_ip), client_country = COALESCE(?, client_country),
+             client_city = COALESCE(?, client_city), client_region = COALESCE(?, client_region),
+             client_timezone = COALESCE(?, client_timezone), client_asn = COALESCE(?, client_asn),
+             client_as_org = COALESCE(?, client_as_org), is_vpn_suspected = ?,
              pos_x = ?, pos_y = ?, pos_z = ?, dimension = ?, health = ?, food_level = ?, game_mode = ?, current_activity = ?
              WHERE uuid = ?`
           ).bind(uuid, name || null, now, premium, st,
-            server_latency ?? null, network_latency ?? null, gamertag || null, xuid || null, modules, now,
-            server_ip || null, server_name || null,
+            server_latency ?? null, network_latency ?? null, gamertag || null, sanitizeXuid(xuid), modules, now, playDelta,
+            updServerIp, updServerName,
+            hbIp, hbCountry, hbCity, hbRegion, hbTimezone, hbAsn, hbAsOrg, hbVpn,
             activity.pos_x ?? null, activity.pos_y ?? null, activity.pos_z ?? null, activity.dimension ?? null,
             activity.health ?? null, activity.food_level ?? null, activity.game_mode ?? null, activity.current_activity ?? null,
             effectiveUuid).run();
         }
+
+        // 记录当日活跃（用于 14 天活跃趋势），同一玩家同一天去重
+        const day = new Date(now).toISOString().slice(0, 10);
+        await env.DB.prepare('INSERT OR IGNORE INTO daily_active (day, uuid) VALUES (?, ?)').bind(day, effectiveUuid).run();
 
         const onlineCount = await env.DB.prepare(
           'SELECT COUNT(*) as c FROM users WHERE last_heartbeat >= ?'
@@ -371,7 +481,7 @@ export default {
         if (!uuid) return jsonResponse({ error: 'UUID required' }, 400);
         if (!isValidUuid(uuid)) return jsonResponse({ success: true, skipped: true, reason: 'invalid_uuid' });
 
-        await env.DB.prepare('UPDATE users SET is_online = 0, last_heartbeat = NULL WHERE uuid = ?').bind(uuid).run();
+        await env.DB.prepare('UPDATE users SET is_online = 0, last_heartbeat = NULL, server_latency = NULL, network_latency = NULL WHERE uuid = ?').bind(uuid).run();
         return jsonResponse({ success: true });
       } catch (error) {
         return jsonResponse({ error: error.message }, 500);
@@ -487,6 +597,47 @@ export default {
       }
     }
 
+    // 管理员：批量刷新正版状态（调用 Mojang API 重新验证所有玩家）
+    if (path === '/api/admin/refresh-premium' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const users = await env.DB.prepare('SELECT uuid, name, xuid FROM users').all();
+        let updated = 0, skipped = 0, failed = 0;
+        for (const u of users.results) {
+          const premium = await resolvePremium(u.uuid, u.name, u.xuid);
+          if (premium === null) {
+            // API 失败/超时，跳过不更新
+            failed++;
+            continue;
+          }
+          await env.DB.prepare('UPDATE users SET is_premium = ? WHERE uuid = ?').bind(premium, u.uuid).run();
+          updated++;
+          // 限流保护：每个请求间隔 100ms
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return jsonResponse({ success: true, updated, skipped, failed });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // 管理员：手动标记玩家正版状态
+    if (path === '/api/admin/toggle-premium' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const { uuid, is_premium } = await request.json();
+        if (!uuid) return jsonResponse({ error: 'UUID required' }, 400);
+        await env.DB.prepare('UPDATE users SET is_premium = ? WHERE uuid = ?').bind(is_premium ? 1 : 0, uuid).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
     // 完整玩家列表（管理员，含坐标/IP/血量/延迟/模块/VPN 判定等敏感数据）
     if (path === '/api/admin/players' && request.method === 'GET') {
       const auth = await requireAuth(request, env);
@@ -508,8 +659,7 @@ export default {
           if (u.enabled_modules) {
             try { modules = JSON.parse(u.enabled_modules) || []; } catch (e) { modules = []; }
           }
-          return { ...u, is_online: computeOnline(u.last_heartbeat, now), modules,
-            is_premium: computePremium(u.uuid, u.name, u.xuid) };
+          return { ...u, is_online: computeOnline(u.last_heartbeat, now), modules };
         });
 
         return jsonResponse({ total: result.length, users: result });
@@ -550,21 +700,19 @@ export default {
           env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE is_vpn_suspected = 1'),
         ]);
 
-        // 正版/离线统计：按 UUID 是否命中标准离线派生值实时判定，避免历史错误数据残留
-        const accts = await env.DB.prepare('SELECT uuid, name, xuid FROM users').all();
-        let premiumCount = 0;
-        for (const a of accts.results) {
-          if (computePremium(a.uuid, a.name, a.xuid) === 1) premiumCount++;
-        }
-        const premiumStats = { premium: premiumCount, offline: accts.results.length - premiumCount };
+        // 正版/离线统计：直接以库中 is_premium 为准（register/heartbeat 已用 Mojang 正名纠偏）
+        const premiumRow = await env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE is_premium = 1').first();
+        const premiumStats = { premium: premiumRow.c, offline: total.results[0].total - premiumRow.c };
 
-        // 最近 14 天每日活跃玩家数
+        // 最近 14 天每日活跃玩家数（基于 daily_active 日志，同一玩家同一天去重）
+        const firstDay = new Date(now - 13 * DAY).toISOString().slice(0, 10);
+        const actRows = await env.DB.prepare('SELECT day, COUNT(*) as c FROM daily_active WHERE day >= ? GROUP BY day ORDER BY day').bind(firstDay).all();
+        const actMap = {};
+        actRows.results.forEach(r => { actMap[r.day] = r.c; });
         const dailyActive = [];
         for (let i = 13; i >= 0; i--) {
-          const start = now - (i + 1) * DAY;
-          const end = now - i * DAY;
-          const r = await env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE last_seen >= ? AND last_seen < ?').bind(start, end).first();
-          dailyActive.push({ date: new Date(end).toISOString().slice(0, 10), active: r.c });
+          const d = new Date(now - i * DAY).toISOString().slice(0, 10);
+          dailyActive.push({ date: d, active: actMap[d] || 0 });
         }
 
         return jsonResponse({
@@ -685,10 +833,10 @@ export default {
           'SELECT id, message, sender, created_at FROM messages WHERE target_uuid = ? AND delivered = 0 ORDER BY created_at ASC'
         ).bind(uuid).all();
 
-        // 广播消息：发给所有人且该玩家尚未读取
+        // 广播消息：发给所有人且该玩家尚未读取（排除玩家回复管理员的消息）
         const broadcast = await env.DB.prepare(
           `SELECT m.id, m.message, m.sender, m.created_at FROM messages m
-           WHERE m.target_uuid IS NULL AND m.id NOT IN (SELECT message_id FROM message_reads WHERE player_uuid = ?)
+           WHERE m.target_uuid IS NULL AND m.from_admin = 1 AND m.id NOT IN (SELECT message_id FROM message_reads WHERE player_uuid = ?)
            ORDER BY m.created_at ASC`
         ).bind(uuid).all();
 
@@ -717,9 +865,11 @@ export default {
         const { uuid, username, message } = await request.json();
         if (!uuid || !message) return jsonResponse({ error: 'UUID and message required' }, 400);
 
+        // 玩家回复：from_uuid = 玩家 UUID，target_uuid = '__ADMIN__' 表示发给管理员，不广播给其他玩家
+        // 通过 from_admin = 0 标记这是玩家发的，管理后台通过 from_uuid IS NOT NULL 筛选玩家回复
         await env.DB.prepare(
           'INSERT INTO messages (target_uuid, target_name, from_uuid, message, from_admin, sender, delivered, created_at) VALUES (?, ?, ?, ?, 0, ?, 1, ?)'
-        ).bind(null, null, uuid, String(message), username || 'Player', Date.now()).run();
+        ).bind('__ADMIN__', 'Admin', uuid, String(message), username || 'Player', Date.now()).run();
 
         return jsonResponse({ success: true, message: '回复已发送' });
       } catch (error) {

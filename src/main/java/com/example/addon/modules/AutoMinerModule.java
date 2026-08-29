@@ -224,7 +224,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("执行传送指令后等待秒数")
             .defaultValue(8)
             .min(1)
-            .sliderMax(30)
+            .max(30)
+            .noSlider()
             .build());
 
         // ═══════════════════════════════════════════════════════════
@@ -236,7 +237,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("背包矿物达到多少组时触发卸货")
             .defaultValue(20)
             .min(1)
-            .sliderMax(36)
+            .max(36)
+            .noSlider()
             .build());
 
         hungerThreshold = sgThreshold.add(new IntSetting.Builder()
@@ -244,7 +246,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("背包食物少于此数量时触发补给")
             .defaultValue(32)
             .min(1)
-            .sliderMax(64)
+            .max(64)
+            .noSlider()
             .build());
 
         durabilityThreshold = sgThreshold.add(new IntSetting.Builder()
@@ -252,7 +255,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("工具剩余耐久低于此值时前往挂机点修补")
             .defaultValue(100)
             .min(1)
-            .sliderMax(500)
+            .max(500)
+            .noSlider()
             .build());
 
         // ═══════════════════════════════════════════════════════════
@@ -307,7 +311,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // ─── 种子挖矿 ───
         seedMiningEnabled = sgBaritone.add(new BoolSetting.Builder()
             .name("启用种子挖矿")
-            .description("根据世界种子预测真实矿石位置，只挖真矿，无视假矿")
+            .description("实测扫描模式：只挖服务器已下发区块中真实存在的目标矿（逐块寻路+合法破坏），不依赖种子推算")
             .defaultValue(false)
             .onChanged(value -> {
                 if (value) {
@@ -320,7 +324,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         worldSeed = sgBaritone.add(new StringSetting.Builder()
             .name("世界种子")
-            .description("服务器的世界种子（Long类型，支持负数，如 -8913466909937400889）")
+            .description("选填·仅记录用。客户端无法凭种子复刻服务器矿物分布，挖矿采用实测扫描，该字段不参与坐标计算")
             .defaultValue("")
             .visible(seedMiningEnabled::get)
             .onChanged(s -> updateOrePredictor())
@@ -328,16 +332,17 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         renderRange = sgBaritone.add(new IntSetting.Builder()
             .name("渲染范围")
-            .description("渲染玩家周围多少格内的预测矿石")
+            .description("渲染玩家周围多少格内的实测矿点（真实存在于服务器上的目标矿）")
             .defaultValue(128)
             .min(32)
-            .sliderMax(256)
+            .max(256)
+            .noSlider()
             .visible(seedMiningEnabled::get)
             .build());
 
         oreRenderColor = sgBaritone.add(new ColorSetting.Builder()
             .name("矿石渲染颜色")
-            .description("预测矿石方块框线的颜色")
+            .description("实测矿点方块框线的颜色")
             .defaultValue(new SettingColor(255, 215, 0, 180))
             .visible(seedMiningEnabled::get)
             .build());
@@ -470,7 +475,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿，默认10tick约0.5秒）")
             .defaultValue(10)
             .min(1)
-            .sliderMax(100)
+            .max(100)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("mineGoalUpdateInterval", value))
             .build());
 
@@ -479,7 +485,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("Baritone一次缓存的最大矿点数量")
             .defaultValue(128)
             .min(1)
-            .sliderMax(256)
+            .max(256)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("mineMaxOreLocationsCount", value))
             .build());
 
@@ -488,7 +495,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("计算怪物危险区域的半径")
             .defaultValue(8)
             .min(1)
-            .sliderMax(16)
+            .max(16)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("mobAvoidanceRadius", value))
             .visible(mobAvoidance::get)
             .build());
@@ -498,7 +506,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("允许从多高的地方跳下（超过会绕路）")
             .defaultValue(3)
             .min(0)
-            .sliderMax(20)
+            .max(20)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("maxFallHeightNoWater", value))
             .build());
 
@@ -507,7 +516,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("判断矿石是否暴露时使用的检测距离")
             .defaultValue(1)
             .min(1)
-            .sliderMax(8)
+            .max(8)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("allowOnlyExposedOresDistance", value))
             .visible(allowOnlyExposedOres::get)
             .build());
@@ -517,7 +527,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("Baritone 挖矿时不会低于此高度")
             .defaultValue(-64)
             .min(-64)
-            .sliderMax(320)
+            .max(320)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("minYLevelWhileMining", value))
             .build());
 
@@ -526,7 +537,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("Baritone 挖矿时不会高于此高度")
             .defaultValue(320)
             .min(-64)
-            .sliderMax(320)
+            .max(320)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("maxYLevelWhileMining", value))
             .build());
 
@@ -535,7 +547,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("合法挖掘模式进行条带探索时使用的高度")
             .defaultValue(12)
             .min(-64)
-            .sliderMax(320)
+            .max(320)
+            .noSlider()
             .onChanged(value -> baritone.updateSetting("legitMineYLevel", value))
             .visible(legitMine::get)
             .build());
@@ -659,19 +672,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
             boolean isNetherOre = nether != null && !nether.equals(Blocks.AIR);
 
             // 末地没有任何矿石
-            if (dim == Level.END) {
+            if (isDimension(dim, "minecraft:the_end")) {
                 notifyError("§c§l末地没有任何矿石，换个维度再启动！");
                 toggle();  // 直接停止模块
                 return;
             }
             // 选了主世界矿但在下界
-            else if (isOverworldOre && dim == Level.NETHER) {
+            else if (isOverworldOre && isDimension(dim, "minecraft:the_nether")) {
                 notifyError("§c§l选了主世界矿但在下界，传送到主世界再启动！");
                 toggle();  // 直接停止模块
                 return;
             }
             // 选了下界矿但在主世界
-            else if (isNetherOre && dim == Level.OVERWORLD) {
+            else if (isNetherOre && isDimension(dim, "minecraft:overworld")) {
                 notifyError("§c§l选了下界矿但在主世界，传送到下界再启动！");
                 toggle();  // 直接停止模块
                 return;
@@ -680,8 +693,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         // 挖矿模式
         if (seedMiningEnabled.get()) {
-            notify("§f挖矿模式：" + highlightText("种子模式") + "§f（只挖预测真矿，无视假矿）");
-            notify("§f世界种子：" + highlightServer(worldSeed.get().trim()));
+            notify("§f挖矿模式：" + highlightText("种子模式") + "§f（实测扫描：只挖服务器上真实存在的目标矿）");
             notify("§f渲染范围：" + highlightText(renderRange.get() + " 格"));
         } else {
             notify("§f挖矿模式：" + highlightText("普通模式") + "§f（挖视野内所有目标矿）");
@@ -698,11 +710,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
      */
     private String getDimensionName() {
         if (mc.level == null) return "未知";
-        ResourceKey<Level> dim = mc.level.dimension();
-        if (dim == Level.OVERWORLD) return "主世界";
-        if (dim == Level.NETHER) return "下界";
-        if (dim == Level.END) return "末地";
+        // 不能用 == 比较 ResourceKey（来自世界数据的 key 是重新解析的实例），按字符串匹配
+        String id = mc.level.dimension().toString();
+        if (id.contains("minecraft:overworld")) return "主世界";
+        if (id.contains("minecraft:the_nether")) return "下界";
+        if (id.contains("minecraft:the_end")) return "末地";
         return "自定义维度";
+    }
+
+    /**
+     * 当前维度是否匹配指定维度 ID 片段（默认维度判断专用，不适用于自定义维度）
+     */
+    private boolean isDimension(ResourceKey<Level> dim, String idFragment) {
+        return dim != null && dim.toString().contains(idFragment);
     }
 
     @Override
@@ -716,24 +736,25 @@ public final class AutoMinerModule extends YiyiaddonModule {
     }
 
     /**
-     * 更新矿石预测器配置
-     * 当种子或目标矿石改变时调用
+     * 更新矿石扫描器配置。
+     * 世界种子仅作记录（客户端无法复刻服务器矿物分布），扫描不依赖种子。
      */
     private void updateOrePredictor() {
         if (!seedMiningEnabled.get()) return;
-        
+
+        Block target = getTargetBlock();
+        if (target == null || target == Blocks.AIR) return;
+
+        long recordSeed = 0;
         String seedStr = worldSeed.get().trim();
-        if (seedStr.isEmpty()) return;
-        
-        try {
-            long seed = Long.parseLong(seedStr);
-            Block target = getTargetBlock();
-            if (target != null && target != Blocks.AIR) {
-                orePredictor.configure(seed, target);
+        if (!seedStr.isEmpty()) {
+            try {
+                recordSeed = Long.parseLong(seedStr);
+            } catch (NumberFormatException e) {
+                notifyError("种子格式错误（选填·仅记录）：不是Long数字，已按无种子继续实测扫描");
             }
-        } catch (NumberFormatException e) {
-            notifyError("种子格式错误，必须是Long类型数字");
         }
+        orePredictor.configure(recordSeed, target);
     }
 
     /**
@@ -768,12 +789,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (WKCommand.getFoodChest() == null) missing.add("§2食物箱§f·未绑定");
         if (WKCommand.getAFKPoint() == null) missing.add("§d挂机点§f·未绑定");
 
-        // 指令配置检测
-        if (wildCommand.get().isEmpty()) missing.add("§b前往挖矿指令§f·未填写");
-        if (unloadCommand.get().isEmpty()) missing.add("§b返回卸货指令§f·未填写");
-        if (supplyCommand.get().isEmpty()) missing.add("§b前往补给指令§f·未填写");
-        if (afkCommand.get().isEmpty()) missing.add("§b前往修复指令§f·未填写");
-        if (respawnCommand.get().isEmpty()) missing.add("§b死亡返回指令§f·未填写");
+        // 指令配置检测（标点容错：只填了空格/全角空格也算未填写）
+        if (wildCommand.get().trim().isEmpty()) missing.add("§b前往挖矿指令§f·未填写");
+        if (unloadCommand.get().trim().isEmpty()) missing.add("§b返回卸货指令§f·未填写");
+        if (supplyCommand.get().trim().isEmpty()) missing.add("§b前往补给指令§f·未填写");
+        if (afkCommand.get().trim().isEmpty()) missing.add("§b前往修复指令§f·未填写");
+        if (respawnCommand.get().trim().isEmpty()) missing.add("§b死亡返回指令§f·未填写");
 
         // 装备检测
         if (mc.player != null) {
@@ -805,16 +826,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
             if (foodCount < hungerThreshold.get()) missing.add("§7食物§f·白名单只有" + foodCount + "个（低于阈值" + hungerThreshold.get() + "）");
         }
 
-        // 种子挖矿检测
+        // 种子挖矿检测：种子为选填记录项（挖矿走实测扫描），仅校验格式，不阻塞启动
         if (seedMiningEnabled.get()) {
             String seedStr = worldSeed.get().trim();
-            if (seedStr.isEmpty()) {
-                missing.add("§e种子挖矿§f·已启用但未填种子");
-            } else {
+            if (!seedStr.isEmpty()) {
                 try {
                     Long.parseLong(seedStr);
                 } catch (NumberFormatException e) {
-                    missing.add("§e种子挖矿§f·格式错误（需Long数字）");
+                    missing.add("§e种子挖矿§f·种子格式错误（需Long数字，或留空）");
                 }
             }
         }
@@ -832,6 +851,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         // 垃圾丢弃
         container.tickTrashDisposal(trashList.get(), placeBlocks.get());
+
+        // 实测扫描队列消化（分帧扫描新区块，避免主线程卡顿）
+        orePredictor.processScanQueue();
 
         // 状态机推进
         fsm.tick();
@@ -934,21 +956,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // 公开消息方法供子组件调用
     public void info(String msg) { notify(msg); }
     public void error(String msg) { notifyError(msg); }
-    
-    // 传送超时重试标志
-    private boolean needRetryTeleport = false;
-    
-    public void requestRetryTeleport() {
-        needRetryTeleport = true;
-    }
-    
-    public boolean shouldRetryTeleport() {
-        if (needRetryTeleport) {
-            needRetryTeleport = false;
-            return true;
-        }
-        return false;
-    }
 
     // ═══════════════════════════════════════════════════════════════════
     //  假矿检测
@@ -1218,7 +1225,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "  §6▸ §f传送等待 §8= §e10秒 §7(RTP加载缓冲)"
             ),
             new HelpScreen.HelpSection("种子挖矿 §7(可选)",
-                "  §d▸ §f启用后可预测矿石位置 §7(需填入世界种子)",
+                "  §d▸ §f启用后状态机切换采集流程 §7(两种模式)",
+                "    §7普通模式：Baritone mine 挖视野内所有目标矿",
+                "    §7种子模式：逐块寻路到预测真矿，原版合法破坏，无视假矿",
+                "  §d▸ §f预测位置无矿自动跳过，附近挖完自动重新RTP换区",
                 "  §d▸ §f检测假矿：对准可疑方块 §8→ §f点击「检测假矿」按钮",
                 "  §d▸ §f假矿判定：预测无矿但显示有矿 §8= §c假矿",
                 "  §d▸ §f适用场景：防止挖到管理员放置的诱饵矿"

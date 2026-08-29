@@ -45,6 +45,14 @@ CREATE INDEX IF NOT EXISTS idx_first_seen ON users(first_seen);
 CREATE INDEX IF NOT EXISTS idx_last_seen ON users(last_seen);
 CREATE INDEX IF NOT EXISTS idx_heartbeat ON users(last_heartbeat);
 
+-- 每日活跃玩家日志：心跳/注册时写入（同一玩家同一天去重），用于后台「最近 14 天活跃」趋势
+CREATE TABLE IF NOT EXISTS daily_active (
+    day TEXT NOT NULL,          -- 日期 YYYY-MM-DD（UTC）
+    uuid TEXT NOT NULL,         -- 玩家 UUID
+    PRIMARY KEY (day, uuid)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_active_day ON daily_active(day);
+
 -- 消息表：管理员发给玩家 / 玩家回复管理员
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

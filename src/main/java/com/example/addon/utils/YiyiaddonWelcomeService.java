@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,6 +47,9 @@ public final class YiyiaddonWelcomeService {
         .connectTimeout(Duration.ofSeconds(5))
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build();
+
+    // 缓存最近一次 IP 信息，供心跳（每15s）复用，避免重复请求多个 IP 服务
+    private static volatile IpInfo cachedIpInfo = null;
 
     public static void register() {
         MeteorClient.EVENT_BUS.subscribe(YiyiaddonWelcomeService.class);
@@ -430,22 +434,22 @@ public final class YiyiaddonWelcomeService {
      * @param versionDisplay 版本显示字符串（带颜色代码）
      */
     private static void registerUserAndShowRank(String versionDisplay) {
+        System.out.println("[YiyiaddonWelcomeService] 开始注册用户并显示欢迎消息...");
         new Thread(() -> {
             try {
                 Minecraft mc = Minecraft.getInstance();
+                // GameJoinedEvent 触发时玩家对象可能尚未完成初始化，最多等待 10 秒再开始注册。
+                for (int i = 0; i < 100 && mc.player == null; i++) {
+                    Thread.sleep(100L);
+                }
                 if (mc.player == null) {
+                    showRegistrationFailure("玩家对象初始化超时，无法发送统计信息");
                     return;
                 }
 
-                // 智能识别：本地开发测试（单人/回环/局域网）不上报
-                if (isLocalTestEnvironment(mc)) {
-                    System.out.println("[YiyiaddonWelcomeService] 本地测试环境，跳过上报");
-                    return;
-                }
-
-                // 远程开关：后台可关闭统计上报
+                // 单人世界也参与统计，只有假玩家名称仍然排除。
                 if (!YiyiaddonTelemetryService.configEnabled("stats_report_enabled")) {
-                    System.out.println("[YiyiaddonWelcomeService] 远程配置关闭了统计上报，跳过");
+                    showRegistrationFailure("后台已关闭统计上报");
                     return;
                 }
 
@@ -493,6 +497,11 @@ public final class YiyiaddonWelcomeService {
                 String realCountry = ipInfo != null ? ipInfo.countryCode : null;
                 boolean isUsingProxy = ipInfo != null && ipInfo.isProxy;
                 String proxyType = ipInfo != null ? ipInfo.proxyType : null;
+                String clientIsp = ipInfo != null ? ipInfo.isp : null;
+                String clientAsOrg = ipInfo != null ? ipInfo.asOrg : null;
+                String clientAsn = ipInfo != null ? ipInfo.asn : null;
+                // 设备真实时区（不受 VPN 出口时区影响）
+                String clientTimezone = TimeZone.getDefault().getID();
                 
                 // 微软账号 XUID（Xbox User ID）：只有正版（微软登录）账户才有，离线账户为空
                 // xuid 是微软账号的唯一标识，后台「正版账号」页面靠它展示正版玩家花名册
@@ -520,7 +529,8 @@ public final class YiyiaddonWelcomeService {
                 // 构造 JSON 请求体（包含所有新字段）
                 String jsonBody = String.format(
                     "{\"uuid\":\"%s\",\"name\":\"%s\",\"version\":\"%s\",\"minecraft_version\":\"%s\",\"server_ip\":\"%s\",\"server_name\":\"%s\",\"is_premium\":%b," +
-                    "\"real_ip\":%s,\"real_country\":%s,\"is_using_proxy\":%b,\"proxy_type\":%s,\"server_latency\":%s,\"network_latency\":%s,\"gamertag\":%s,\"xuid\":%s,\"enabled_modules\":%s," +
+                    "\"real_ip\":%s,\"real_country\":%s,\"is_using_proxy\":%b,\"proxy_type\":%s,\"client_timezone\":\"%s\",\"client_isp\":%s,\"client_as_org\":%s,\"client_asn\":%s," +
+                    "\"server_latency\":%s,\"network_latency\":%s,\"gamertag\":%s,\"xuid\":%s,\"enabled_modules\":%s," +
                     "\"player_activity\":{\"pos_x\":%.2f,\"pos_y\":%.2f,\"pos_z\":%.2f,\"dimension\":\"%s\",\"health\":%.1f,\"food_level\":%d,\"game_mode\":\"%s\",\"current_activity\":\"%s\",\"is_online\":true}}",
                     uuid, name, version, mcVersion, 
                     serverIp != null ? serverIp : "unknown",
@@ -530,6 +540,10 @@ public final class YiyiaddonWelcomeService {
                     realCountry != null ? "\"" + realCountry + "\"" : "null",
                     isUsingProxy,
                     proxyType != null ? "\"" + proxyType + "\"" : "null",
+                    jsonEscape(clientTimezone),
+                    clientIsp != null ? "\"" + jsonEscape(clientIsp) + "\"" : "null",
+                    clientAsOrg != null ? "\"" + jsonEscape(clientAsOrg) + "\"" : "null",
+                    clientAsn != null ? "\"" + jsonEscape(clientAsn) + "\"" : "null",
                     serverLatency != null ? String.valueOf(serverLatency) : "null",
                     networkLatency != null ? String.valueOf(networkLatency) : "null",
                     gamertag != null ? "\"" + gamertag + "\"" : "null",
@@ -555,11 +569,14 @@ public final class YiyiaddonWelcomeService {
                     Matcher rankMatcher = Pattern.compile("\"rank\":(\\d+)").matcher(body);
                     Matcher totalMatcher = Pattern.compile("\"total_users\":(\\d+)").matcher(body);
                     Matcher isNewMatcher = Pattern.compile("\"is_new_user\":(true|false)").matcher(body);
+                    Matcher isPremiumMatcher = Pattern.compile("\"is_premium\":(\\d+)").matcher(body);
                     
                     if (rankMatcher.find() && totalMatcher.find() && isNewMatcher.find()) {
                         int rank = Integer.parseInt(rankMatcher.group(1));
                         int total = Integer.parseInt(totalMatcher.group(1));
                         boolean isNew = Boolean.parseBoolean(isNewMatcher.group(1));
+                        // 使用服务器返回的正版状态（0=离线, 1=正版）
+                        boolean serverIsPremium = isPremiumMatcher.find() && Integer.parseInt(isPremiumMatcher.group(1)) == 1;
                         
                         // 复用上面已获取的 ipInfo（IP 与国家信息），避免重复网络请求
                         
@@ -580,14 +597,13 @@ public final class YiyiaddonWelcomeService {
                             public void run() {
                                 mc.execute(() -> {
                                     if (mc.player != null) {
-                                        // 检测正版/离线（正版绿色，离线红色）
-                                        String accountType = YiyiaddonIdentity.isPremium(mc) ? "§a§l[正版]" : "§c§l[离线]";
+                                        // 使用服务器返回的正版状态，而不是本地判断
+                                        String accountType = serverIsPremium ? "§a§l[正版]" : "§c§l[离线]";
                                         
                                         // 顶部分割线
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§3§m═══════════════════════════════════"
                                         ));
-                                        
                                         // 欢迎消息（护眼配色：深青边框+深绿强调）
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§7本扩展已整合§f§l简体中文汉化§7跟汉化§f§lBaritone"
@@ -623,7 +639,6 @@ public final class YiyiaddonWelcomeService {
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§3§m───────────────────────────────────"
                                         ));
-                                        
                                         // 统计信息（账户类型+玩家名加粗）
                                         if (isNew) {
                                             mc.player.sendSystemMessage(Component.literal(
@@ -644,12 +659,12 @@ public final class YiyiaddonWelcomeService {
                                         mc.player.sendSystemMessage(Component.literal(
                                             "§7当前已有 §2§l" + total + " §f§l位玩家使用"
                                         ));
-                                        
                                         // IP 和国家信息（带国旗 emoji 和代理检测）
                                         if (ipInfo != null && ipInfo.ip != null) {
                                             String flag = countryCodeToFlag(ipInfo.countryCode);
-                                            String countryDisplay = ipInfo.countryCode != null 
-                                                ? " §8| " + flag + " §e§l" + ipInfo.countryCode 
+                                            String countryName = translateCountryCode(ipInfo.countryCode);
+                                            String countryDisplay = countryName != null 
+                                                ? " §8| " + flag + " §e§l" + countryName 
                                                 : "";
                                             
                                             // 显示代理状态
@@ -671,14 +686,28 @@ public final class YiyiaddonWelcomeService {
                                 });
                             }
                         }, 500); // 延迟 500ms 确保 player 已加载
+                    } else {
+                        showRegistrationFailure("后端返回数据缺少排名字段");
                     }
+                } else {
+                    showRegistrationFailure("后端请求失败 HTTP " + response.statusCode());
                 }
             } catch (Exception e) {
-                // 调试：打印异常信息以便排查问题
-                e.printStackTrace();
-                System.err.println("[YiyiaddonWelcomeService] 统计请求失败: " + e.getMessage());
+                String message = e.getMessage();
+                showRegistrationFailure("网络请求失败：" + (message == null || message.isBlank()
+                    ? e.getClass().getSimpleName() : message));
             }
         }, "yiyiaddon-user-register").start();
+    }
+
+    private static void showRegistrationFailure(String reason) {
+        System.err.println("[YiyiaddonWelcomeService] 统计注册失败: " + reason);
+        Minecraft.getInstance().execute(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                mc.player.sendSystemMessage(Component.literal("§c§l[yiyiaddon]§r§f§l[用户统计]§r §c✗ " + reason));
+            }
+        });
     }
     
     /**
@@ -692,11 +721,11 @@ public final class YiyiaddonWelcomeService {
         IpInfo result1 = tryFetchFromIpApiCoWithProxy();
         IpInfo result2 = tryFetchFromIpApiWithProxy();
         IpInfo result3 = tryFetchFromCloudflareSimple();
-        
+
         // 判断是否使用代理
         boolean isUsingProxy = false;
         String proxyType = null;
-        
+
         // 策略 1: API 返回的代理标记
         if (result1 != null && result1.isProxy) {
             isUsingProxy = true;
@@ -705,26 +734,81 @@ public final class YiyiaddonWelcomeService {
             isUsingProxy = true;
             proxyType = result2.proxyType;
         }
-        
+
         // 策略 2: IP 不一致检测（多个 API 返回不同 IP）
-        if (result1 != null && result2 != null && !result1.ip.equals(result2.ip)) {
+        if (result1 != null && result2 != null && result1.ip != null && !result1.ip.equals(result2.ip)) {
             isUsingProxy = true;
             if (proxyType == null) proxyType = "VPN";
         }
-        
+
         // 选择最可靠的结果
         IpInfo selected = result1 != null ? result1 : (result2 != null ? result2 : result3);
-        
+
         if (selected != null) {
-            return new IpInfo(selected.ip, selected.countryCode, isUsingProxy, proxyType);
+            // 策略 3: 出口 IP 的 AS 组织命中数据中心/VPN 关键字，视为疑似梯子
+            if (!isUsingProxy && looksLikeVpn(selected.asOrg, selected.asn)) {
+                isUsingProxy = true;
+                proxyType = "VPN";
+            }
+            String tz = selected.timezone != null ? selected.timezone : TimeZone.getDefault().getID();
+            IpInfo info = new IpInfo(selected.ip, selected.countryCode, isUsingProxy, proxyType,
+                selected.isp, selected.asOrg, selected.asn, tz);
+            cachedIpInfo = info;
+            return info;
         }
-        
+
         // 完全失败，进行端口连通性测试
         if (!testNetworkConnectivity()) {
-            return new IpInfo("Network Offline", "??", false, null);
+            return new IpInfo("Network Offline", "??", false, null, null, null, null, TimeZone.getDefault().getID());
         } else {
-            return new IpInfo("Unknown", "??", false, null);
+            return new IpInfo("Unknown", "??", false, null, null, null, null, TimeZone.getDefault().getID());
         }
+    }
+
+    // 数据中心/VPN 出口的 AS 组织关键字（与后台 isVpnSuspected 保持一致）
+    private static final String[] VPN_ORG_KEYWORDS = {
+        "cloudflare", "amazon", "aws", "google", "microsoft", "azure",
+        "digitalocean", "ovh", "hetzner", "linode", "choopa", "vultr",
+        "m247", "nord", "mullvad", "proton", "expressvpn", "surfshark",
+        "cyberghost", "ipvanish", "datacamp", "cdn77", "leaseweb", "contabo",
+        "ionos", "oracle", "alibaba", "aliyun", "tencent", "huawei",
+        "cogent", "quadranet", "hostwinds", "buyvm", "zenlayer", "ipxo",
+        "equinix", "psychz", "hostinger", "namecheap", "colocrossing",
+        "hivelocity", "datacenter", "hosting", "vpn", "proxy",
+        "fdcservers", "vps", "vds", "colocation", "wholesale",
+        "seedbox", "netcup", "worldstream", "serverius", "spartanhost", "egihosting",
+        "racknerd", "virmach", "reliablesite", "intergrid", "chocotel",
+        "privateinternetaccess", "24shells", "solarvps", "leapswitch", "phanes",
+        "netprotect", "dedicated", "baremetal"
+    };
+
+    private static final String[] VPN_SUSPECT_ASN = {
+        "13335", "15169", "16509", "14618", "8075", "14061", "16276", "24940", "20473", "9009",
+        "63949", "36352", "8100", "40676", "29802", "16265", "51167", "46562", "206092", "62240",
+        "30058", "212238", "40021", "141995", "49505", "63473", "394256", "54994", "44066"
+    };
+
+    private static boolean looksLikeVpn(String asOrg, String asn) {
+        if (asn != null) {
+            for (String s : VPN_SUSPECT_ASN) if (s.equals(asn.trim())) return true;
+        }
+        if (asOrg == null) return false;
+        String org = asOrg.toLowerCase();
+        for (String k : VPN_ORG_KEYWORDS) if (org.contains(k)) return true;
+        return false;
+    }
+
+    // 从 JSON 字符串里按 key 提取一个字符串值（简单正则，够用即可）
+    private static String extractJsonString(String body, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]+)\"").matcher(body);
+        return m.find() ? m.group(1) : null;
+    }
+
+    // 从 "AS9009 M247 Europe SRL" 这类字符串中提取纯数字 ASN
+    private static String parseAsnNumber(String as) {
+        if (as == null) return null;
+        Matcher m = Pattern.compile("(\\d+)").matcher(as);
+        return m.find() ? m.group(1) : null;
     }
     
     /**
@@ -768,16 +852,17 @@ public final class YiyiaddonWelcomeService {
             
             if (response.statusCode() == 200) {
                 String body = response.body();
-                Matcher ipMatcher = Pattern.compile("\"ip\":\\s*\"([^\"]+)\"").matcher(body);
-                Matcher countryMatcher = Pattern.compile("\"country_code\":\\s*\"([^\"]+)\"").matcher(body);
-                
-                String ip = ipMatcher.find() ? ipMatcher.group(1) : null;
-                String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
-                
+                String ip = extractJsonString(body, "ip");
+                String countryCode = extractJsonString(body, "country_code");
+                String org = extractJsonString(body, "org");
+                String timezone = extractJsonString(body, "timezone");
+                String asnRaw = extractJsonString(body, "asn"); // ipapi.co 返回 "AS9009"
+                String asn = parseAsnNumber(asnRaw);
+
                 // 检测代理/VPN/TOR
                 boolean isProxy = false;
                 String proxyType = null;
-                
+
                 if (body.contains("\"is_tor\":true") || body.contains("\"tor\":true")) {
                     isProxy = true;
                     proxyType = "TOR";
@@ -788,9 +873,9 @@ public final class YiyiaddonWelcomeService {
                     isProxy = true;
                     proxyType = "VPN";
                 }
-                
+
                 if (ip != null && countryCode != null) {
-                    return new IpInfo(ip, countryCode, isProxy, proxyType);
+                    return new IpInfo(ip, countryCode, isProxy, proxyType, org, org, asn, timezone);
                 }
             }
         } catch (Exception ignored) {
@@ -801,7 +886,7 @@ public final class YiyiaddonWelcomeService {
     private static IpInfo tryFetchFromIpApiWithProxy() {
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://ip-api.com/json/?fields=query,countryCode,proxy,mobile,hosting"))
+                .uri(URI.create("http://ip-api.com/json/?fields=query,countryCode,proxy,mobile,hosting,isp,org,as,asname,timezone"))
                 .timeout(Duration.ofSeconds(3))
                 .GET()
                 .build();
@@ -811,24 +896,30 @@ public final class YiyiaddonWelcomeService {
             
             if (response.statusCode() == 200) {
                 String body = response.body();
-                Matcher ipMatcher = Pattern.compile("\"query\":\\s*\"([^\"]+)\"").matcher(body);
-                Matcher countryMatcher = Pattern.compile("\"countryCode\":\\s*\"([^\"]+)\"").matcher(body);
-                
-                String ip = ipMatcher.find() ? ipMatcher.group(1) : null;
-                String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
-                
-                // 检测代理/VPN
-                boolean isProxy = body.contains("\"proxy\":true") || body.contains("\"hosting\":true");
+                String ip = extractJsonString(body, "query");
+                String countryCode = extractJsonString(body, "countryCode");
+                String isp = extractJsonString(body, "isp");
+                String org = extractJsonString(body, "org");
+                String asname = extractJsonString(body, "asname");
+                String timezone = extractJsonString(body, "timezone");
+                String asnRaw = extractJsonString(body, "as"); // "AS9009 M247 Europe SRL"
+                String asn = parseAsnNumber(asnRaw);
+
+                // 检测代理/VPN/移动网络
+                boolean isProxy = body.contains("\"proxy\":true") || body.contains("\"hosting\":true") || body.contains("\"mobile\":true");
                 String proxyType = null;
-                
+
                 if (body.contains("\"proxy\":true")) {
                     proxyType = "PROXY";
                 } else if (body.contains("\"hosting\":true")) {
                     proxyType = "VPN";
+                } else if (body.contains("\"mobile\":true")) {
+                    proxyType = "MOBILE";
                 }
-                
+
+                String asOrg = org != null ? org : (asname != null ? asname : isp);
                 if (ip != null && countryCode != null) {
-                    return new IpInfo(ip, countryCode, isProxy, proxyType);
+                    return new IpInfo(ip, countryCode, isProxy, proxyType, isp, asOrg, asn, timezone);
                 }
             }
         } catch (Exception ignored) {
@@ -856,7 +947,7 @@ public final class YiyiaddonWelcomeService {
                 String countryCode = countryMatcher.find() ? countryMatcher.group(1) : null;
                 
                 if (ip != null && countryCode != null) {
-                    return new IpInfo(ip, countryCode, false, null);
+                    return new IpInfo(ip, countryCode, false, null, null, null, null, null);
                 }
             }
         } catch (Exception ignored) {
@@ -879,6 +970,54 @@ public final class YiyiaddonWelcomeService {
         int secondLetter = countryCode.charAt(1) - 'A' + 0x1F1E6;
         
         return new String(Character.toChars(firstLetter)) + new String(Character.toChars(secondLetter));
+    }
+    
+    /**
+     * 将国家代码翻译成中文名称
+     */
+    private static String translateCountryCode(String code) {
+        if (code == null) return null;
+        String upper = code.toUpperCase();
+        
+        // 常见国家翻译表
+        switch (upper) {
+            case "CN": return "中国";
+            case "US": return "美国";
+            case "JP": return "日本";
+            case "KR": return "韩国";
+            case "TW": return "台湾";
+            case "HK": return "香港";
+            case "MO": return "澳门";
+            case "SG": return "新加坡";
+            case "GB": return "英国";
+            case "DE": return "德国";
+            case "FR": return "法国";
+            case "CA": return "加拿大";
+            case "AU": return "澳大利亚";
+            case "RU": return "俄罗斯";
+            case "IN": return "印度";
+            case "BR": return "巴西";
+            case "MX": return "墨西哥";
+            case "ES": return "西班牙";
+            case "IT": return "意大利";
+            case "NL": return "荷兰";
+            case "SE": return "瑞典";
+            case "CH": return "瑞士";
+            case "TH": return "泰国";
+            case "VN": return "越南";
+            case "MY": return "马来西亚";
+            case "ID": return "印度尼西亚";
+            case "PH": return "菲律宾";
+            case "PL": return "波兰";
+            case "TR": return "土耳其";
+            case "AR": return "阿根廷";
+            case "NZ": return "新西兰";
+            case "ZA": return "南非";
+            case "EG": return "埃及";
+            case "SA": return "沙特阿拉伯";
+            case "AE": return "阿联酋";
+            default: return upper; // 未翻译的返回原代码
+        }
     }
     
     /**
@@ -946,8 +1085,20 @@ public final class YiyiaddonWelcomeService {
 
     private static record ReleaseInfo(String version, String url, String body) {
     }
-    
-    private static record IpInfo(String ip, String countryCode, boolean isProxy, String proxyType) {
+
+    // 同包（YiyiaddonHeartbeatService）可访问，故不加 private
+    static record IpInfo(String ip, String countryCode, boolean isProxy, String proxyType,
+                         String isp, String asOrg, String asn, String timezone) {
+    }
+
+    // 供心跳每 15s 复用最后一次解析结果（注册时已填充）
+    public static IpInfo getCachedIpInfo() {
+        return cachedIpInfo;
+    }
+
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
     
     /**

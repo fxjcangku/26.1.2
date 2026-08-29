@@ -1,327 +1,246 @@
 package com.example.addon.mining;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.RandomSource;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static meteordevelopment.meteorclient.MeteorClient.mc;
+
 /**
- * 矿石位置预测器 - 种子挖矿核心引擎
+ * 矿石实测扫描器 - 种子挖矿核心引擎
  * 
- * 根据世界种子预测真实矿石生成位置，用于识别假矿
+ * 诚实说明（重要）：
+ * 客户端无法仅凭世界种子复刻服务器矿物分布——原版地物生成依赖
+ * 完整的装饰管线（每区块随机数 + 数据驱动 placed_feature 配置），
+ * 第三方服务端还有自定义 datapack，任何「种子 → 坐标」推算都是伪预测。
  * 
- * 原理：
- * Minecraft矿石生成是伪随机的，由种子决定
- * 同一个种子 + 同一个坐标 = 永远生成同样的矿石分布
+ * 因此本模块改为「实测扫描」：
+ * 直接读取服务器已下发区块的真实方块数据，缓存目标矿位置。
+ * 渲染的每一个框、寻路走的每一个点，都是服务器上真实存在的矿，
+ * 不存在「预测到空气/石头」的问题，也不再把任意数字误判成有效种子。
  * 
  * 使用方式：
- * 1. 填入世界种子
- * 2. 选择目标矿石类型
- * 3. 脚本预测周围真实矿石位置
- * 4. 渲染预测位置 + Baritone只挖预测位置的矿
- * 5. 假矿（手动放置/插件生成）不在预测列表里，直接无视
+ * 1. 选择目标矿石，启用种子挖矿（世界种子选填，仅作记录）
+ * 2. 玩家周围的已加载区块自动分帧扫描，渐进出结果
+ * 3. 渲染实测矿点 + 采集循环只挖实测矿位
+ * 4. 「检测假矿」对比两次快照，标记新出现的矿点（临时放置的诱饵矿）
  */
 public class OrePredictor {
 
-    private long worldSeed;
-    private Block targetOre;
-    
-    // 预测结果缓存：区块坐标 -> 该区块内的矿石位置列表
-    private final Map<ChunkPos, Set<BlockPos>> predictionCache = new ConcurrentHashMap<>();
-    
-    // 缓存是否有效
-    private boolean cacheValid = false;
+    /** 每帧最大扫描区块数（分帧扫描，避免主线程卡顿） */
+    public static final int SCAN_BUDGET_PER_FRAME = 4;
+
+    private long worldSeed;              // 世界种子（仅记录，不参与坐标计算）
+    private Block targetOre;             // 目标矿石锚点
+    private String targetBaseId;         // 去掉 deepslate_ 前缀的基础 ID（家族匹配）
+
+    // 已扫描区块缓存：区块长包（cx<<32|cz）-> 该区块实测矿位集合
+    private final Map<Long, Set<BlockPos>> chunkCache = new ConcurrentHashMap<>();
+    // 待扫描队列 + 去重集合
+    private final Deque<Long> pendingScans = new ArrayDeque<>();
+    private final Set<Long> queuedKeys = ConcurrentHashMap.newKeySet();
 
     /**
-     * 设置世界种子和目标矿石
-     * 改变配置会清空缓存
+     * 配置扫描目标。种子仅作记录用，改变目标或种子会清空缓存重扫。
      */
     public void configure(long seed, Block ore) {
         if (this.worldSeed != seed || this.targetOre != ore) {
-            this.worldSeed = seed;
-            this.targetOre = ore;
             invalidateCache();
         }
-        this.cacheValid = true;
+        this.worldSeed = seed;
+        this.targetOre = ore;
+        this.targetBaseId = (ore == null)
+            ? ""
+            : BuiltInRegistries.BLOCK.getKey(ore).getPath().replace("deepslate_", "");
     }
 
-    /**
-     * 清空预测缓存
-     */
+    /** 清空全部缓存与扫描队列 */
     public void invalidateCache() {
-        predictionCache.clear();
-        cacheValid = false;
+        chunkCache.clear();
+        pendingScans.clear();
+        queuedKeys.clear();
     }
 
-    /**
-     * 检查指定位置是否应该有目标矿石
-     * 
-     * @param pos 要检查的方块位置
-     * @return true表示此位置应该有矿石（真矿），false表示不应该有（假矿）
-     */
-    public boolean isPredictedOreAt(BlockPos pos) {
-        if (!cacheValid) return false;
-        
-        ChunkPos chunkPos = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
-        
-        // 如果该区块未预测过，先预测
-        if (!predictionCache.containsKey(chunkPos)) {
-            predictChunk(chunkPos);
+    /** 世界里的方块是否属于目标矿家族（含深层变种） */
+    public boolean isTargetFamily(Block block) {
+        if (block == null || targetOre == null) return false;
+        if (block == targetOre) return true;
+        if (targetBaseId.isEmpty()) return false;
+        return BuiltInRegistries.BLOCK.getKey(block).getPath()
+            .replace("deepslate_", "").equals(targetBaseId);
+    }
+
+    /** 区块是否已被扫描过（含扫过但为空的区块） */
+    public boolean isChunkScanned(int cx, int cz) {
+        return chunkCache.containsKey(packChunk(cx, cz));
+    }
+
+    /** 获取该区块的实测矿位缓存；未扫描过返回 null */
+    public Set<BlockPos> getCached(int cx, int cz) {
+        return chunkCache.get(packChunk(cx, cz));
+    }
+
+    /** 同步扫描单个已加载区块（新鲜快照），结果写入缓存并返回 */
+    public Set<BlockPos> scanChunkNow(int cx, int cz) {
+        Set<BlockPos> ores = scanChunk(cx, cz);
+        chunkCache.put(packChunk(cx, cz), ores);
+        return ores;
+    }
+
+    /** 每帧由模块 onTick 调用：处理最多 SCAN_BUDGET_PER_FRAME 个待扫区块 */
+    public void processScanQueue() {
+        int budget = SCAN_BUDGET_PER_FRAME;
+        while (budget-- > 0) {
+            Long key = pendingScans.poll();
+            if (key == null) break;
+            queuedKeys.remove(key);
+            long packed = key; // Long 无法直接强转 int，先拆箱
+            int cx = (int) (packed >> 32);
+            int cz = (int) packed;
+            chunkCache.put(key, scanChunk(cx, cz));
         }
-        
-        Set<BlockPos> ores = predictionCache.get(chunkPos);
-        return ores != null && ores.contains(pos);
+    }
+
+    /** 是否还有未完成的扫描任务（采集循环据此等待，避免误判无矿） */
+    public boolean hasPendingScans() {
+        return !pendingScans.isEmpty();
     }
 
     /**
-     * 获取指定范围内的所有预测矿石位置
-     * 
-     * @param center 中心位置
-     * @param radius 半径（格）
-     * @return 预测的矿石位置集合
+     * 获取范围内所有实测矿位。
+     * 未扫描的已加载区块会入队（每次调用最多入队 32 个），由 processScanQueue 分帧消化。
      */
     public Set<BlockPos> getPredictedOresInRange(BlockPos center, int radius) {
-        if (!cacheValid) return Collections.emptySet();
-        
         Set<BlockPos> result = new HashSet<>();
-        
+
         int minChunkX = (center.getX() - radius) >> 4;
         int maxChunkX = (center.getX() + radius) >> 4;
         int minChunkZ = (center.getZ() - radius) >> 4;
         int maxChunkZ = (center.getZ() + radius) >> 4;
-        
-        // 预测范围内所有区块
+
+        int enqueueBudget = 32;
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                ChunkPos chunkPos = new ChunkPos(cx, cz);
-                
-                if (!predictionCache.containsKey(chunkPos)) {
-                    predictChunk(chunkPos);
+                long key = packChunk(cx, cz);
+                Set<BlockPos> cached = chunkCache.get(key);
+                if (cached == null) {
+                    // 未扫描 → 已加载则入队（未加载区块玩家看不到，也没数据）
+                    if (enqueueBudget-- > 0 && isChunkLoaded(cx, cz)) {
+                        enqueue(key);
+                    }
+                    continue;
                 }
-                
-                Set<BlockPos> chunkOres = predictionCache.get(chunkPos);
-                if (chunkOres != null) {
-                    // 只返回在半径内的
-                    for (BlockPos pos : chunkOres) {
-                        if (pos.distSqr(center) <= radius * radius) {
-                            result.add(pos);
-                        }
+                for (BlockPos pos : cached) {
+                    if (pos.distSqr(center) <= radius * radius) {
+                        result.add(pos);
                     }
                 }
             }
         }
-        
         return result;
     }
 
     /**
-     * 获取所有已预测的矿石位置（用于种子挖矿的全局目标）
-     * 
-     * @return 所有预测的矿石位置集合
+     * 检查指定位置是否为目标矿（以最近一次实扫缓存为准，无缓存则隐式补扫该区块）。
+     * 用于「检测假矿」快照对比与兜底双检。
      */
+    public boolean isPredictedOreAt(BlockPos pos) {
+        if (targetOre == null) return false;
+        int cx = pos.getX() >> 4;
+        int cz = pos.getZ() >> 4;
+        long key = packChunk(cx, cz);
+
+        Set<BlockPos> cached = chunkCache.get(key);
+        if (cached == null) {
+            cached = scanChunkNow(cx, cz);
+        }
+        return cached.contains(pos);
+    }
+
+    /**
+     * 移除某位置的实测矿缓存（挖掉/预测失误/不可达后调用）。
+     * 采用 copy-on-write 替换整集合：渲染线程可能正持有旧集合引用遍历，
+     * 就地 remove 会抛 ConcurrentModificationException，旧引用替换后自然废弃。
+     */
+    public void forgetOre(BlockPos pos) {
+        int cx = pos.getX() >> 4;
+        int cz = pos.getZ() >> 4;
+        chunkCache.computeIfPresent(packChunk(cx, cz), (key, ores) -> {
+            if (!ores.contains(pos)) return ores;
+            Set<BlockPos> copy = new HashSet<>(ores);
+            copy.remove(pos);
+            return copy;
+        });
+    }
+
+    /** 获取所有已缓存的实测矿位（仅已扫描区块） */
     public Set<BlockPos> getAllPredictedOres() {
-        if (!cacheValid) return Collections.emptySet();
-        
         Set<BlockPos> result = new HashSet<>();
-        
-        // 遍历所有已缓存的区块
-        for (Set<BlockPos> chunkOres : predictionCache.values()) {
-            if (chunkOres != null) {
-                result.addAll(chunkOres);
-            }
+        for (Set<BlockPos> ores : chunkCache.values()) {
+            result.addAll(ores);
         }
-        
         return result;
     }
 
-    /**
-     * 预测单个区块内的矿石分布
-     * 
-     * 使用简化的噪声算法模拟Minecraft的矿石生成
-     * 实际Minecraft使用复杂的噪声函数，这里用简化版保证性能
-     */
-    private void predictChunk(ChunkPos chunkPos) {
-        Set<BlockPos> ores = new HashSet<>();
-        
-        // 为该区块创建随机数生成器
-        RandomSource random = RandomSource.create(
-            worldSeed ^ (((long)chunkPos.x << 32) | (chunkPos.z & 0xFFFFFFFFL))
-        );
-        
-        OreConfig config = getOreConfig(targetOre);
-        if (config == null) {
-            predictionCache.put(chunkPos, ores);
-            return;
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  内部实现
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static long packChunk(int cx, int cz) {
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
+    }
+
+    private void enqueue(long key) {
+        if (queuedKeys.add(key)) {
+            pendingScans.offer(key);
         }
-        
-        // 生成矿脉数量（每个区块）
-        int veinCount = config.veinsPerChunk + random.nextInt(config.veinCountVariation);
-        
-        for (int i = 0; i < veinCount; i++) {
-            // 矿脉起点（区块内随机位置）
-            int x = chunkPos.x * 16 + random.nextInt(16);
-            int z = chunkPos.z * 16 + random.nextInt(16);
-            int y = config.minY + random.nextInt(config.maxY - config.minY + 1);
-            
-            // 矿脉大小（随机）
-            int veinSize = config.minVeinSize + random.nextInt(config.maxVeinSize - config.minVeinSize + 1);
-            
-            // 生成矿脉（球形分布）
-            generateVein(ores, new BlockPos(x, y, z), veinSize, random);
-        }
-        
-        predictionCache.put(chunkPos, ores);
+    }
+
+    private boolean isChunkLoaded(int cx, int cz) {
+        return mc.level != null && mc.level.getChunk(cx, cz) instanceof LevelChunk;
     }
 
     /**
-     * 生成单个矿脉（球形分布）
+     * 扫描单个区块的真实方块数据（跳过全空气段，性能友好）。
+     * 区块未加载时返回空集合。
      */
-    private void generateVein(Set<BlockPos> ores, BlockPos center, int size, RandomSource random) {
-        // 椭球半径
-        float radiusX = size / 4.0f;
-        float radiusY = size / 8.0f;
-        float radiusZ = size / 4.0f;
-        
-        // 遍历椭球范围内的方块
-        int minX = (int) Math.floor(center.getX() - radiusX);
-        int maxX = (int) Math.ceil(center.getX() + radiusX);
-        int minY = (int) Math.floor(center.getY() - radiusY);
-        int maxY = (int) Math.ceil(center.getY() + radiusY);
-        int minZ = (int) Math.floor(center.getZ() - radiusZ);
-        int maxZ = (int) Math.ceil(center.getZ() + radiusZ);
-        
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    // 检查是否在椭球内
-                    float dx = (x - center.getX()) / radiusX;
-                    float dy = (y - center.getY()) / radiusY;
-                    float dz = (z - center.getZ()) / radiusZ;
-                    
-                    if (dx * dx + dy * dy + dz * dz <= 1.0f) {
-                        // 80%概率生成矿石（模拟不规则边缘）
-                        if (random.nextFloat() < 0.8f) {
-                            ores.add(new BlockPos(x, y, z));
+    private Set<BlockPos> scanChunk(int cx, int cz) {
+        Set<BlockPos> ores = new HashSet<>();
+        if (mc.level == null || targetOre == null) return ores;
+
+        ChunkAccess access = mc.level.getChunk(cx, cz);
+        if (!(access instanceof LevelChunk chunk)) return ores;
+
+        // Yarn 映射：getSections() 数组（索引0=最底部段）+ getSectionIndex(y) 线性换算，
+        // 与 Meteor TunnelESP 同款用法。用 y=0 的段索引反推出数组起始段坐标，
+        // 不依赖维度高度 getter（各版本映射名不一致，这里数学关系恒定）。
+        LevelChunkSection[] sections = chunk.getSections();
+        int zeroIndex = chunk.getSectionIndex(0);
+
+        for (int i = 0; i < sections.length; i++) {
+            LevelChunkSection section = sections[i];
+            if (section == null || section.hasOnlyAir()) continue;
+
+            int yBase = (i - zeroIndex) * 16;
+            for (int x = 0; x < 16; x++) {
+                for (int y = 0; y < 16; y++) {
+                    for (int z = 0; z < 16; z++) {
+                        BlockState state = section.getBlockState(x, y, z);
+                        if (state.isAir()) continue;
+                        if (isTargetFamily(state.getBlock())) {
+                            ores.add(new BlockPos((cx << 4) + x, yBase + y, (cz << 4) + z));
                         }
                     }
                 }
             }
         }
-    }
-
-    /**
-     * 获取矿石生成配置
-     * 根据不同矿石类型返回对应的生成参数
-     */
-    private OreConfig getOreConfig(Block ore) {
-        if (ore == null || ore == Blocks.AIR) return null;
-        
-        String id = ore.toString().toLowerCase();
-        
-        // 钻石矿（含深层变种）
-        if (id.contains("diamond")) {
-            return new OreConfig(0, 16, 1, 1, 4, 8);
-        }
-        
-        // 铁矿（含深层变种）
-        if (id.contains("iron")) {
-            return new OreConfig(0, 64, 2, 2, 6, 12);
-        }
-        
-        // 金矿（含深层变种）
-        if (id.contains("gold") && !id.contains("nether")) {
-            return new OreConfig(0, 32, 1, 1, 5, 9);
-        }
-        
-        // 煤矿（含深层变种）
-        if (id.contains("coal")) {
-            return new OreConfig(0, 256, 3, 3, 10, 16);
-        }
-        
-        // 青金石矿（含深层变种）
-        if (id.contains("lapis")) {
-            return new OreConfig(0, 64, 1, 1, 3, 6);
-        }
-        
-        // 红石矿（含深层变种）
-        if (id.contains("redstone")) {
-            return new OreConfig(0, 16, 1, 1, 5, 8);
-        }
-        
-        // 绿宝石矿
-        if (id.contains("emerald")) {
-            return new OreConfig(0, 256, 0, 1, 1, 1);
-        }
-        
-        // 铜矿（含深层变种）
-        if (id.contains("copper")) {
-            return new OreConfig(0, 96, 2, 2, 8, 14);
-        }
-        
-        // 下界金矿
-        if (id.contains("nether") && id.contains("gold")) {
-            return new OreConfig(10, 117, 2, 2, 6, 10);
-        }
-        
-        // 下界石英矿
-        if (id.contains("quartz")) {
-            return new OreConfig(10, 117, 2, 2, 8, 14);
-        }
-        
-        // 远古残骸
-        if (id.contains("ancient_debris")) {
-            return new OreConfig(8, 119, 0, 1, 1, 2);
-        }
-        
-        // 未知矿石，使用默认配置
-        return new OreConfig(0, 64, 1, 1, 4, 8);
-    }
-
-    /**
-     * 矿石生成配置
-     */
-    private static class OreConfig {
-        final int minY;                  // 最低生成高度
-        final int maxY;                  // 最高生成高度
-        final int veinsPerChunk;         // 每区块矿脉数量（基础）
-        final int veinCountVariation;    // 矿脉数量随机变化
-        final int minVeinSize;           // 单个矿脉最小方块数
-        final int maxVeinSize;           // 单个矿脉最大方块数
-        
-        OreConfig(int minY, int maxY, int veinsPerChunk, int veinCountVariation, int minVeinSize, int maxVeinSize) {
-            this.minY = minY;
-            this.maxY = maxY;
-            this.veinsPerChunk = veinsPerChunk;
-            this.veinCountVariation = veinCountVariation;
-            this.minVeinSize = minVeinSize;
-            this.maxVeinSize = maxVeinSize;
-        }
-    }
-
-    /**
-     * 区块坐标（用于缓存键）
-     */
-    private static class ChunkPos {
-        final int x;
-        final int z;
-        
-        ChunkPos(int x, int z) {
-            this.x = x;
-            this.z = z;
-        }
-        
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof ChunkPos other)) return false;
-            return this.x == other.x && this.z == other.z;
-        }
-        
-        @Override
-        public int hashCode() {
-            return x * 31 + z;
-        }
+        return ores;
     }
 }

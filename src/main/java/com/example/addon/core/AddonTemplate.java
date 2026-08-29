@@ -1,6 +1,7 @@
 package com.example.addon.core;
 
 import com.example.addon.commands.CommandExample;
+import com.example.addon.commands.CunminCommand;
 import com.example.addon.commands.NongChangCommand;
 import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
@@ -8,6 +9,7 @@ import com.example.addon.commands.ReplyAdminCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
+import com.example.addon.modules.AutoVillagerTradeModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.MeteorCommandGuideModule;
 import com.example.addon.modules.PinkThemeModule;
@@ -83,6 +85,10 @@ public class AddonTemplate extends MeteorAddon {
         AutoMinerModule autoMinerModule = new AutoMinerModule();
         Modules.get().add(autoMinerModule);
 
+        // 自动村民交易：真实打开交易界面发包（26.1.2 协议无静默交易），支持原地/寻路/多任务模式
+        AutoVillagerTradeModule autoVillagerTradeModule = new AutoVillagerTradeModule();
+        Modules.get().add(autoVillagerTradeModule);
+
         // ── 反作弊绕过模块 ──
         // FlightBypass：飞行绕过
         // AntiKickBypass：防踢绕过
@@ -93,6 +99,7 @@ public class AddonTemplate extends MeteorAddon {
 
         // ── 自定义指令 ──
         Commands.add(new CommandExample());
+        Commands.add(new CunminCommand());         // 村民交易管理指令
         Commands.add(new NongChangCommand());      // 农场管理指令
         Commands.add(new WKCommand());             // 挖矿管理指令
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令

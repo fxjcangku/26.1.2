@@ -77,7 +77,10 @@ public class ReplyAdminCommand extends Command {
                     if (response.statusCode() == 200) {
                         mc.player.sendSystemMessage(Component.literal("§a✅ 回复已发送给管理员！"));
                     } else {
-                        mc.player.sendSystemMessage(Component.literal("§c❌ 回复发送失败，请稍后重试"));
+                        String errMsg = response.body() != null && !response.body().isEmpty() 
+                            ? response.body().substring(0, Math.min(100, response.body().length()))
+                            : "状态码 " + response.statusCode();
+                        mc.player.sendSystemMessage(Component.literal("§c❌ 回复失败: " + errMsg));
                     }
                 });
 

@@ -75,6 +75,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final Setting<Integer> seedSafetyStock;
     private final Setting<Integer> bpt;
     private final Setting<Integer> reachDistance;
+    private final Setting<Integer> collectWait;
     private final Setting<Boolean> serpentinePatrol;
 
     // ─── 安全保护 ───
@@ -114,6 +115,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private int watchdogStrikes;
     private static final int MAX_WATCHDOG_STRIKES = 3;
 
+    /** 补货冷却：种子库掏空后 1 分钟内不再触发补货，防止降级模式下每轮都空跑一趟箱子 */
+    private int restockCooldownTicks = 0;
+    private static final int RESTOCK_COOLDOWN = 1200;
+
     private String lastNotifiedState = "";
 
     /** 本轮作业的收割目标快照，进入 NUKE_FARMING 时从扫描器拷一份 */
@@ -131,8 +136,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
      */
     private boolean harvestOnly;
 
-    /** 拾取等待的 tick 数，给服务端判定掉落物留出时间 */
-    private static final int COLLECT_WAIT_TICKS = 40;
+    /** 拾取等待的 tick 数改为可配置设置（collectWait），此常量已移除 */
 
     /** 上次发送开容器包的 stateTick，用于限制重试频率 */
     private int lastOpenAttempt = -100;
@@ -202,7 +206,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("背包白名单物品满多少组时触发卸货")
             .defaultValue(20)
             .min(1)
-            .sliderMax(36)
+            .max(36)
+            .noSlider()
             .build());
 
         seedSafetyStock = sgLogistics.add(new IntSetting.Builder()
@@ -210,7 +215,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("卸货时截留多少组种子留作补种")
             .defaultValue(3)
             .min(0)
-            .sliderMax(10)
+            .max(10)
+            .noSlider()
             .build());
 
         bpt = sgLogistics.add(new IntSetting.Builder()
@@ -218,7 +224,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("每 tick 最多发送多少个破坏/播种包，过高可能被服务端拦截")
             .defaultValue(10)
             .min(1)
-            .sliderMax(30)
+            .max(30)
+            .noSlider()
             .build());
 
         reachDistance = sgLogistics.add(new IntSetting.Builder()
@@ -226,7 +233,17 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("能操作多远的方块。原版上限约 4.5 格，调高属于超距，服务端可能拒绝或判违规")
             .defaultValue(4)
             .min(1)
-            .sliderRange(1, 8)
+            .max(8)
+            .noSlider()
+            .build());
+
+        collectWait = sgLogistics.add(new IntSetting.Builder()
+            .name("拾取等待(tick)")
+            .description("收割完站在原地/农田中心等多久让掉落物进背包（20tick=1秒）。大农田建议调大")
+            .defaultValue(200)
+            .min(20)
+            .max(600)
+            .noSlider()
             .build());
 
         serpentinePatrol = sgLogistics.add(new BoolSetting.Builder()
@@ -247,7 +264,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("剩余耐久低于此值时触发")
             .defaultValue(10)
             .min(1)
-            .sliderMax(100)
+            .max(100)
+            .noSlider()
             .visible(() -> fortuneLock.get())
             .build());
 
@@ -330,7 +348,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("最多渲染多少个水源，防止大农场渲染卡顿")
             .defaultValue(50)
             .min(1)
-            .sliderMax(200)
+            .max(200)
+            .noSlider()
             .visible(() -> renderWaterRange.get())
             .build());
 
@@ -601,6 +620,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 容器同步观测
         broker.tick();
 
+        // 补货冷却倒计时
+        if (restockCooldownTicks > 0) restockCooldownTicks--;
+
         // 状态机推进
         tickStateMachine();
 
@@ -729,10 +751,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             return;
         }
 
-        // 拷一份作业快照。扫描器的快照随时会被下一轮整体替换，
-        // 直接引用会导致作业进行到一半目标列表突然变形
-        workHarvest = harvest;
-        workPlant = plant;
+        // 拷一份作业快照。扫描器每轮扫完会整体替换快照，
+        // 直接引用会让作业进行到一半时目标列表指向的内容发生变化
+        workHarvest = List.copyOf(harvest);
+        workPlant = List.copyOf(plant);
         processedHarvest.clear();
         processedPlant.clear();
 
@@ -748,9 +770,16 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             ItemStack tool = mc.player.getMainHandItem();
             if (!tool.isEmpty()
                 && FarmPacketOps.getRemainingDurability(tool) < fortuneLockThreshold.get()) {
-                // 找热键栏第一个空格切过去，没空格就切到最后一格（通常是火把/食物）
-                int emptySlot = mc.player.getInventory().getFreeSlot();
-                if (emptySlot >= 0 && emptySlot < 9) {
+                // 找热键栏第一个空格切过去。getFreeSlot 通常返回背包区槽位(9-35)，
+            // swap 打不到热键栏，所以这里必须自己扫 0-8
+                int emptySlot = -1;
+                for (int i = 0; i < 9; i++) {
+                    if (mc.player.getInventory().getItem(i).isEmpty()) {
+                        emptySlot = i;
+                        break;
+                    }
+                }
+                if (emptySlot >= 0) {
                     InvUtils.swap(emptySlot, false);
                 } else {
                     mc.player.getInventory().setSelectedSlot(8);
@@ -778,10 +807,12 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 continue;
             }
 
+            // 发包成功与否都标记已处理：失败（服务端拒绝/方块已消失）时
+            // 若不加标记，同一个目标会每 tick 反复重试直到看门狗停机
             if (FarmPacketOps.breakBlock(pos, Direction.UP)) {
-                processedHarvest.add(pos);
                 breakBudget--;
             }
+            processedHarvest.add(pos);
         }
 
         // ── 补种 ──
@@ -805,16 +836,19 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                     break;
                 }
 
+                // 发包失败同样标记已处理，防止同一格每 tick 反复重试
                 if (FarmPacketOps.useOnBlock(hand, soil)) {
-                    processedPlant.add(soil);
                     plantBudget--;
                 }
+                processedPlant.add(soil);
             }
         }
 
-        // 当前位置够得到的全处理完了，才走下一个航点
-        int reachableHarvest = reachableCount(workHarvest);
-        int reachablePlant = reachableCount(workPlant);
+        // 当前位置够得到的全处理完了，才走下一个航点。
+        // 必须排除已处理的格子：否则 processed 的坐标永远被算作"够得着"，
+        // currentDone 恒为 false，蛇形巡逻黏在第一个航点上根本不会推进
+        int reachableHarvest = reachableCount(workHarvest, processedHarvest);
+        int reachablePlant = reachableCount(workPlant, processedPlant);
         boolean currentDone = reachableHarvest == 0 
             && (harvestOnly || reachablePlant == 0);
         
@@ -826,9 +860,17 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         // 全部目标处理完（包括够不着的也算）才收工
-        // 这样可以确保 Baritone 走完整条航线，不会遗漏任何作物
-        if (processedHarvest.size() >= workHarvest.size()
-            && (harvestOnly || processedPlant.size() >= workPlant.size())) {
+        // 巡逻模式：Baritone 会带玩家走完整条航线，够不着的格子迟早够得着
+        // 手动模式：玩家不挪窝，够不着的格子永远等不到，身边处理完就收工，否则只能耗到看门狗
+        boolean finished;
+        if (serpentinePatrol.get()) {
+            finished = processedHarvest.size() >= workHarvest.size()
+                && (harvestOnly || processedPlant.size() >= workPlant.size());
+        } else {
+            finished = reachableHarvest == 0
+                && (harvestOnly || reachablePlant == 0);
+        }
+        if (finished) {
             transitionTo(FarmState.COLLECTING);
         }
     }
@@ -892,19 +934,22 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     }
 
     private void tickCollecting() {
-        // 走到农田中心，增大拾取范围覆盖掉落物
-        if (stateTick == 0 && serpentinePatrol.get() && FarmNav.available() && scanner.bounded()) {
+        // 走向农田中心，让掉落物进入拾取范围；寻路中断自动重发（大农田有时间走到）
+        if (serpentinePatrol.get() && FarmNav.available() && scanner.bounded()) {
             BlockPos center = new BlockPos(
                 (scanner.min().getX() + scanner.max().getX()) / 2,
                 scanner.min().getY() + 1,
                 (scanner.min().getZ() + scanner.max().getZ()) / 2
             );
-            FarmNav.goTo(center, 2);
+            // 每 2 秒检查一次，找路失败马上重发而不是等看门狗
+            if (!FarmNav.pathing() && stateTick % 40 == 0) {
+                FarmNav.goTo(center, 2);
+            }
         }
 
         // 等待掉落物飞回来或被磁力吸引到
-        if (stateTick < COLLECT_WAIT_TICKS) return;
-        
+        if (stateTick < collectWait.get()) return;
+
         FarmNav.cancel();
         transitionTo(FarmState.JUDGMENT);
     }
@@ -929,7 +974,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
         // 只收不种降级状态下，种子不足才值得跑一趟补货箱
         if (harvestOnly || countSeeds() < seedSafetyStock.get() * 64) {
-            if (site(SiteType.SUPPLY) != null) {
+            if (site(SiteType.SUPPLY) != null && restockCooldownTicks <= 0) {
                 transitionTo(FarmState.RESTOCKING);
                 return;
             }
@@ -947,8 +992,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         // 走到箱子边上。Baritone 不可用时只能指望玩家自己就站在旁边
+        // 停靠半径 2 格（GoalNear rangeSq=4），与开箱交互距离 4.5 格兼容：
+        // 箱子贴墙/被围时 Baritone 停在对角或稍远处也能开箱，不会一直寻路到看门狗
         if (!mc.player.isWithinBlockInteractionRange(dump.pos(), 0.0)) {
-            if (!FarmNav.pathing()) FarmNav.goTo(dump.pos(), 2);
+            if (!FarmNav.pathing()) FarmNav.goTo(dump.pos(), 4);
             return;
         }
         FarmNav.cancel();
@@ -989,7 +1036,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         if (!mc.player.isWithinBlockInteractionRange(supply.pos(), 0.0)) {
-            if (!FarmNav.pathing()) FarmNav.goTo(supply.pos(), 2);
+            if (!FarmNav.pathing()) FarmNav.goTo(supply.pos(), 4);
             return;
         }
         FarmNav.cancel();
@@ -1016,12 +1063,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             ContainerBroker.closeContainer();
             broker.reset();
 
-            // 补到货就解除降级，补货箱也空了就维持只收不种继续跑
+            // 补到货就解除降级，补货箱也空了就维持只收不种继续跑，同时进入补货冷却
             if (countSeeds() > 0) {
                 if (harvestOnly) notify("§a种子已补充，恢复收割播种");
                 harvestOnly = false;
             } else {
                 harvestOnly = true;
+                restockCooldownTicks = RESTOCK_COOLDOWN;
             }
             transitionTo(FarmState.STANDBY);
         }
@@ -1066,8 +1114,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     /**
      * 把种子准备到手上，返回该用哪只手发包。
      *
-     * 优先用副手：副手播种不会打断主手工具的挖掘节奏，也不用来回 swap 热键栏。
-     * 副手没有就在热键栏找一格切过去，热键栏也没有才算真没种子。
+     * 优先副手：副手播种不会打断主手工具的挖掘节奏（时运镐全程不换位）。
+     * 副手没有就去热键栏找一格移到副手，主手始终拿工具；
+     * 副手原物品会被自动挤回热键栏，不影响播种。
+     * 副手和热键栏都没有才算真没种子。
      */
     private InteractionHand prepareSeed(Item seed) {
         if (seed == null) return null;
@@ -1077,8 +1127,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
         FindItemResult result = InvUtils.findInHotbar(seed);
         if (result.found() && result.isHotbar()) {
-            InvUtils.swap(result.slot(), false);
-            return InteractionHand.MAIN_HAND;
+            InvUtils.move().from(result.slot()).toOffhand();
+            return InteractionHand.OFF_HAND;
         }
         return null;
     }
@@ -1096,14 +1146,12 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     }
 
     /**
-     * 列表里有多少格是当前站位够得着的。
-     *
-     * 作业完成判定不能拿整个列表长度比，够不着的格子永远处理不掉，
-     * 会把状态机死死卡在 NUKE_FARMING 直到看门狗超时。
+     * 列表里有多少格是当前站位够得着且尚未处理的。
      */
-    private int reachableCount(List<BlockPos> list) {
+    private int reachableCount(List<BlockPos> list, Set<BlockPos> processed) {
         int count = 0;
         for (BlockPos pos : list) {
+            if (processed.contains(pos)) continue;
             if (inReach(pos)) count++;
         }
         return count;
@@ -1226,7 +1274,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 创建卡片容器（垂直布局）
         WTable card = theme.table();
         
-        // 获取当前绑定状态
+        // 绑定状态
         boolean isBound = com.example.addon.commands.NongChangCommand.hasBinding(key);
         com.example.addon.farm.SiteType siteType = switch (key) {
             case "dump" -> com.example.addon.farm.SiteType.DUMP;
@@ -1331,8 +1379,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 "  §8> §3.farm clear §8— §7清空所有绑定"
             ),
             new HelpScreen.HelpSection("作物类型",
-                "  §a▸ §f双作物 §8- §7小麦、胡萝卜、马铃薯、甜菜根",
-                "  §a▸ §f单作物 §8- §7下界疣",
+                "  §a▸ §f双作物 §8- §7小麦、甜菜 §7(种子与产物分离)",
+                "  §a▸ §f单作物 §8- §7土豆、胡萝卜、下界疣 §7(产物即种子)",
                 "  §a▸ §f柱状物 §8- §7甘蔗、竹子、仙人掌",
                 "  §a▸ §f蔓生物 §8- §7南瓜、西瓜",
                 "",

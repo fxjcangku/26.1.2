@@ -2,11 +2,7 @@ package com.example.addon.mining;
 
 import baritone.api.BaritoneAPI;
 import baritone.api.IBaritone;
-import baritone.api.pathing.goals.Goal;
-import baritone.api.pathing.goals.GoalComposite;
 import baritone.api.pathing.goals.GoalTwoBlocks;
-import baritone.api.process.PathingCommand;
-import baritone.api.process.PathingCommandType;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.translations.BaritoneChatTranslations;
 import net.minecraft.client.Minecraft;
@@ -17,17 +13,15 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Baritone 寻路中间件
  * 
  * 功能：
- * · 封装 BaritoneAPI 的 #mine 调用
+ * · 封装 BaritoneAPI 的 #mine 调用（普通模式）
+ * · 种子模式提供逐块寻路接口 pathToOre（由 MinerFSM 采集循环驱动）
  * · 寻路异常处理（找不到目标、原地滞留）
  * · 地形防卡死心跳（3分钟位移<5格判定卡死）
- * · 种子挖矿过滤（只挖预测位置的矿石）
  */
 public final class BaritoneExecutor {
 
@@ -48,7 +42,8 @@ public final class BaritoneExecutor {
     }
 
     /**
-     * 启动 Baritone 挖矿
+     * 启动 Baritone 挖矿（普通模式）。
+     * 种子模式不经过这里：由 MinerFSM 的种子采集循环逐块 pathToOre + 破坏。
      */
     public void startMining(Block target) {
         if (disabled) {
@@ -65,35 +60,8 @@ public final class BaritoneExecutor {
             }
 
             String blockId = BuiltInRegistries.BLOCK.getKey(target).toString();
-
-            // 种子挖矿模式：使用自定义Goal只挖预测位置
-            if (module.isSeedMiningEnabled()) {
-                Set<BlockPos> predictedOres = module.getOrePredictor().getAllPredictedOres();
-                
-                if (predictedOres.isEmpty()) {
-                    module.error("§c种子挖矿：未找到预测矿石位置");
-                    return;
-                }
-
-                // 创建Goal列表：每个预测位置创建一个GoalTwoBlocks
-                List<Goal> goals = predictedOres.stream()
-                    .map(GoalTwoBlocks::new)
-                    .collect(Collectors.toList());
-
-                // 使用GoalComposite：Baritone会自动选择最近的目标
-                Goal compositeGoal = new GoalComposite(goals.toArray(new Goal[0]));
-
-                // 直接设置自定义寻路任务
-                baritone.getCustomGoalProcess().setGoalAndPath(compositeGoal);
-
-                module.info("§e[种子挖矿] 已锁定 " + predictedOres.size() + " 个预测位置");
-                module.info("§aBaritone 已启动：" + BaritoneChatTranslations.translateBlockId(blockId));
-
-            } else {
-                // 普通挖矿模式：使用原生mine命令
-                baritone.getCommandManager().execute("mine " + blockId);
-                module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
-            }
+            baritone.getCommandManager().execute("mine " + blockId);
+            module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
 
             // 重置卡死检测
             if (mc.player != null) {
@@ -105,6 +73,46 @@ public final class BaritoneExecutor {
         } catch (Throwable e) {
             disabled = true;
             module.error("Baritone 调用失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 种子模式：寻路到指定预测矿位置（走到跟前，破坏由 MinerFSM 负责）
+     *
+     * @param pos 预测矿位置
+     * @return 是否成功发起寻路
+     */
+    public boolean pathToOre(BlockPos pos) {
+        if (disabled) return false;
+
+        try {
+            var baritone = getBaritone();
+            if (baritone == null) {
+                disabled = true;
+                return false;
+            }
+            baritone.getCustomGoalProcess().setGoalAndPath(new GoalTwoBlocks(pos));
+            return true;
+        } catch (Throwable e) {
+            disabled = true;
+            return false;
+        }
+    }
+
+    /**
+     * 采集引擎是否活跃：普通模式 mine 进程运行中，或种子模式寻路目标激活。
+     * 用于「进程意外退出才重启」的自愈判断，避免打断正常挖矿。
+     */
+    public boolean isMiningActive() {
+        if (disabled) return false;
+
+        try {
+            var baritone = getBaritone();
+            if (baritone == null) return false;
+            return baritone.getMineProcess().isActive() || baritone.getCustomGoalProcess().isActive();
+        } catch (Throwable e) {
+            disabled = true;
+            return false;
         }
     }
 
@@ -124,23 +132,6 @@ public final class BaritoneExecutor {
         } catch (Throwable e) {
             disabled = true;
         }
-    }
-
-    /**
-     * 检查玩家视线瞄准的方块是否在预测位置内
-     * 用于种子挖矿模式的运行时过滤
-     * 
-     * @param targetPos 玩家瞄准的方块位置
-     * @return true表示允许挖掘，false表示阻止挖掘
-     */
-    public boolean isAllowedToMine(BlockPos targetPos) {
-        // 非种子挖矿模式，全部允许
-        if (!module.isSeedMiningEnabled()) {
-            return true;
-        }
-
-        // 种子挖矿模式，只允许挖预测位置的矿石
-        return module.getOrePredictor().isPredictedOreAt(targetPos);
     }
 
     /**

@@ -40,7 +40,11 @@ public final class YiyiaddonIdentity {
         try {
             if (mc == null || mc.getUser() == null) return null;
             var xu = mc.getUser().getXuid();
-            if (xu.isPresent() && !xu.get().isEmpty()) return xu.get();
+            if (xu.isPresent() && !xu.get().isEmpty()) {
+                String v = xu.get().trim();
+                // 仅接受纯数字 XUID；authlib-injector 未注入时会返回 ${auth_xuid} 之类占位符，需过滤
+                if (v.matches("\\d{8,20}")) return v;
+            }
         } catch (Exception e) {
         }
         return null;
