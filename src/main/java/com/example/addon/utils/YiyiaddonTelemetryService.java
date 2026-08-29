@@ -84,6 +84,7 @@ public final class YiyiaddonTelemetryService {
 
     private static void reportCrash(Throwable t) {
         if (t == null) return;
+        if (!configEnabled("crash_report_enabled")) return;
         String message = t.getClass().getName() + ": " + (t.getMessage() == null ? "" : t.getMessage());
         long now = System.currentTimeMillis();
         Long last = LAST_CRASH_REPORT.get(message);
@@ -157,6 +158,7 @@ public final class YiyiaddonTelemetryService {
     }
 
     private static void reportAnomaly(String type, String severity, String message, String data) {
+        if (!configEnabled("anomaly_report_enabled")) return;
         long now = System.currentTimeMillis();
         Long last = LAST_ANOMALY_REPORT.get(type);
         if (last != null && now - last < THROTTLE_MS) return;

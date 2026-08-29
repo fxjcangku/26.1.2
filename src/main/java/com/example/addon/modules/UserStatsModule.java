@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,8 +44,8 @@ public final class UserStatsModule extends YiyiaddonModule {
     
     private final Setting<Integer> refreshInterval = sgGeneral.add(new IntSetting.Builder()
         .name("自动刷新间隔")
-        .description("界面数据每隔多少秒自动刷新一次（0 = 仅手动刷新）")
-        .defaultValue(30)
+        .description("界面数据每隔多少秒自动刷新一次（0 = 仅手动刷新；建议保持 3 秒）")
+        .defaultValue(3)
         .min(0)
         .max(300)
         .sliderMax(120)
@@ -72,6 +73,7 @@ public final class UserStatsModule extends YiyiaddonModule {
     private int totalUsers = 0;              // 总用户数
     private int totalUses = 0;
     private int activeUsers24h = 0;          // 24小时内活跃用户数
+    private int onlineUsers = 0;             // 当前在线用户数
     private List<RecentUser> recentUsers = new ArrayList<>();  // 最近活跃用户
     private long lastUpdateTime = 0;         // 上次更新时间戳
     private boolean isLoading = false;       // 是否正在加载
@@ -80,6 +82,7 @@ public final class UserStatsModule extends YiyiaddonModule {
     private String clientCountry = null;     // 客户端国家代码
     private boolean isUsingProxy = false;    // 是否使用代理/VPN
     private String proxyType = null;         // 代理类型（VPN/Proxy/TOR）
+    private long lastProfileLookupTime = 0;
     
     private int tickCounter = 0;             // Tick 计数器
     
@@ -128,8 +131,10 @@ public final class UserStatsModule extends YiyiaddonModule {
         
         new Thread(() -> {
             try {
-                // 先获取 IP 和国家信息（三重降级策略）
-                fetchIpAndCountry();
+                if (clientIp == null || System.currentTimeMillis() - lastProfileLookupTime >= 10 * 60 * 1000L) {
+                    fetchIpAndCountry();
+                    lastProfileLookupTime = System.currentTimeMillis();
+                }
                 
                 Exception lastFailure = null;
                 for (int attempt = 1; attempt <= 3; attempt++) {
@@ -192,25 +197,31 @@ public final class UserStatsModule extends YiyiaddonModule {
             // 解析 24h 活跃用户数
             Matcher activeMatcher = Pattern.compile("\"(?:active_24h|active_users_24h)\":(\\d+)").matcher(json);
             int parsedActiveUsers24h = activeMatcher.find() ? Integer.parseInt(activeMatcher.group(1)) : 0;
+
+            Matcher onlineMatcher = Pattern.compile("\"online_users\":(\\d+)").matcher(json);
+            int parsedOnlineUsers = onlineMatcher.find() ? Integer.parseInt(onlineMatcher.group(1)) : 0;
             
             // 解析最近活跃用户列表
             List<RecentUser> newRecentUsers = new ArrayList<>();
             Pattern userPattern = Pattern.compile(
-                "\\{\"name\":\"([^\"]+)\"[^}]*?\"last_seen\":(?:\"([^\"]+)\"|(\\d+))[^}]*}"
+                "\\{\"uuid\":\"[^\"]*\",\"name\":\"([^\"]+)\"[^}]*?\"server_name\":(null|\"([^\"]*)\")[^}]*?\"is_online\":(true|false|0|1)[^}]*?\"last_heartbeat\":(null|\\d+)[^}]*?\"last_seen\":(?:\"([^\"]+)\"|(\\d+))[^}]*}"
             );
             Matcher userMatcher = userPattern.matcher(json);
             
             while (userMatcher.find()) {
                 String name = userMatcher.group(1);
-                long lastSeen = userMatcher.group(3) != null
-                    ? normalizeTimestamp(Long.parseLong(userMatcher.group(3)))
-                    : Instant.parse(userMatcher.group(2)).getEpochSecond();
-                newRecentUsers.add(new RecentUser(name, lastSeen));
+                String serverName = userMatcher.group(3);
+                boolean isOnline = "true".equals(userMatcher.group(4)) || "1".equals(userMatcher.group(4));
+                long lastSeen = userMatcher.group(8) != null
+                    ? normalizeTimestamp(Long.parseLong(userMatcher.group(8)))
+                    : Instant.parse(userMatcher.group(7)).getEpochSecond();
+                newRecentUsers.add(new RecentUser(name, lastSeen, isOnline, serverName));
             }
             
             totalUsers = parsedTotalUsers;
             totalUses = parsedTotalUses;
             activeUsers24h = parsedActiveUsers24h;
+            onlineUsers = parsedOnlineUsers;
             recentUsers = newRecentUsers;
             errorMessage = null;
             
@@ -248,16 +259,16 @@ public final class UserStatsModule extends YiyiaddonModule {
         
         // 构建统计数据区
         List<String> statsSection = new ArrayList<>();
-        statsSection.add("§6§l▌ 实时统计");
-        statsSection.add("§f  · 累计使用用户：" + highlightText(String.valueOf(totalUsers)) + " §7人");
-        statsSection.add("§f  · 累计进入次数：" + highlightText(String.valueOf(totalUses)) + " §7次");
-        statsSection.add("§f  · 24h 活跃：" + highlightText(String.valueOf(activeUsers24h)) + " §7人");
-        statsSection.add("§f  · 最近活跃玩家数：" + highlightText(String.valueOf(recentUsers.size())) + " §7人");
+        statsSection.add("§6§l▌ 实时概览");
+        statsSection.add("§f  · 当前在线：" + highlightText(String.valueOf(onlineUsers)) + " §7人");
+        statsSection.add("§f  · 24 小时活跃：" + highlightText(String.valueOf(activeUsers24h)) + " §7人");
+        statsSection.add("§f  · 累计用户：" + highlightText(String.valueOf(totalUsers)) + " §7人");
+        statsSection.add("§f  · 累计启动：" + highlightText(String.valueOf(totalUses)) + " §7次");
         
         // 显示客户端 IP 和国家信息（带国旗和代理检测）
          if (clientIp != null) {
              String flag = countryCodeToFlag(clientCountry);
-             String countryDisplay = clientCountry != null ? flag + " §e§l" + clientCountry : "§7未知";
+             String countryDisplay = isValidCountryCode(clientCountry) ? flag + " §e§l" + translateCountryCode(clientCountry) : "§7未知国家";
              
              // 显示代理状态
              String proxyStatus = "";
@@ -269,23 +280,24 @@ public final class UserStatsModule extends YiyiaddonModule {
          }
         
         statsSection.add(formatUpdateTime());
-        statsSection.add(formatStatus());
+        statsSection.add("§f  · 数据刷新：§a每 3 秒 §8| " + formatStatus());
         sections.add(statsSection.toArray(new String[0]));
         
         // 添加最近活跃用户列表（工整对齐）
         if (!recentUsers.isEmpty()) {
             List<String> usersSection = new ArrayList<>();
-            usersSection.add("§b§l▌ 最近活跃用户");
+            usersSection.add("§b§l▌ 在线与最近活跃");
             
             int displayCount = Math.min(maxDisplayUsers.get(), recentUsers.size());
             for (int i = 0; i < displayCount; i++) {
                 RecentUser user = recentUsers.get(i);
                 long hoursAgo = (System.currentTimeMillis() / 1000 - user.lastSeen) / 3600;
-                String timeDesc = hoursAgo == 0 ? "§a刚刚在线" : "§7" + hoursAgo + "h 前";
+                String timeDesc = user.isOnline ? "§a在线" : (hoursAgo == 0 ? "§e刚刚离线" : "§7" + hoursAgo + "h 前");
                 
                 // 格式：序号. 玩家名 - 时间描述
-                String line = String.format("§f  %2d. §e%s §7- %s", 
-                    i + 1, user.name, timeDesc);
+                String server = user.serverName == null || user.serverName.isBlank() ? " §8| §7未连接服务器" : " §8| §7" + user.serverName;
+                String line = String.format("§f  %2d. §e%s §8· %s%s",
+                    i + 1, user.name, timeDesc, server);
                 usersSection.add(line);
             }
             
@@ -299,9 +311,9 @@ public final class UserStatsModule extends YiyiaddonModule {
         // 添加使用说明
         sections.add(new String[]{
             "§e§l▌ 使用说明",
-            "§f  · " + highlightText("进入世界") + "：本模块打开后自动请求最新统计",
-            "§f  · " + highlightText("查看详情") + "：打开本模块查看完整列表",
-            "§f  · " + highlightText("自动刷新") + "：根据设定间隔定时更新数据",
+            "§f  · " + highlightText("实时更新") + "：后台和本模块均按 3 秒刷新",
+            "§f  · " + highlightText("在线判定") + "：3 秒心跳，12 秒无心跳自动离线",
+            "§f  · " + highlightText("自动刷新") + "：默认每 3 秒更新一次",
             "§f  · " + highlightText("手动刷新") + "：点击绿色按钮立即获取最新数据",
             "§f  · " + highlightText("聊天栏") + "：不再发送统计公屏消息"
         });
@@ -309,8 +321,8 @@ public final class UserStatsModule extends YiyiaddonModule {
         // 添加当前在线标识
         sections.add(new String[]{
             "§d§l▌ 当前使用该扩展的玩家",
-            "§f  你就是其中之一！共有 " + highlightText(String.valueOf(totalUsers)) + " §f位玩家使用",
-            "§f  最近 24h 内有 " + highlightText(String.valueOf(activeUsers24h)) + " §f位玩家活跃"
+            "§f  当前有 " + highlightText(String.valueOf(onlineUsers)) + " §f位玩家在线",
+            "§f  累计有 " + highlightText(String.valueOf(totalUsers)) + " §f位玩家使用过扩展"
         });
         
         return sections.toArray(new String[0][]);
@@ -558,7 +570,7 @@ public final class UserStatsModule extends YiyiaddonModule {
      * CN -> 🇨🇳, US -> 🇺🇸, AU -> 🇦🇺 等
      */
     private static String countryCodeToFlag(String countryCode) {
-        if (countryCode == null || countryCode.length() != 2) {
+        if (!isValidCountryCode(countryCode)) {
             return "🌐";
         }
         
@@ -568,12 +580,21 @@ public final class UserStatsModule extends YiyiaddonModule {
         
         return new String(Character.toChars(firstLetter)) + new String(Character.toChars(secondLetter));
     }
+
+    private static boolean isValidCountryCode(String countryCode) {
+        return countryCode != null && countryCode.matches("[A-Za-z]{2}");
+    }
+
+    private static String translateCountryCode(String countryCode) {
+        String countryName = Locale.of("", countryCode.toUpperCase()).getDisplayCountry(Locale.SIMPLIFIED_CHINESE);
+        return countryName == null || countryName.isBlank() ? "未知国家" : countryName;
+    }
     
     // ══════════════════════════════════════════════════════════════
     //  数据类
     // ══════════════════════════════════════════════════════════════
     
-    private record RecentUser(String name, long lastSeen) {
+    private record RecentUser(String name, long lastSeen, boolean isOnline, String serverName) {
     }
     
     private record IpResult(String ip, String country, boolean isProxy, String proxyType) {

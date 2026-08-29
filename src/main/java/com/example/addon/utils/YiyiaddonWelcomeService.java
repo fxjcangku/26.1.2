@@ -23,6 +23,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,11 +46,11 @@ public final class YiyiaddonWelcomeService {
     private static final Path SKIP_VERSION_FILE = Paths.get(FabricLoader.getInstance().getConfigDir().toString(), "yiyiaddon-skip-version.txt");
     
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
+        .connectTimeout(Duration.ofSeconds(3))
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build();
 
-    // 缓存最近一次 IP 信息，供心跳（每15s）复用，避免重复请求多个 IP 服务
+    // 缓存最近一次 IP 信息，供心跳复用，避免每次心跳重复请求多个 IP 服务
     private static volatile IpInfo cachedIpInfo = null;
 
     public static void register() {
@@ -75,8 +77,10 @@ public final class YiyiaddonWelcomeService {
         // 把欢迎消息和统计消息全部放在一起发送，避免顺序错乱
         registerUserAndShowRank(versionDisplay);
         
-        // 启动消息轮询（每30秒检查一次）
-        startMessagePolling();
+        // 启动消息轮询（每3秒检查一次）
+        if (YiyiaddonTelemetryService.configEnabled("message_poll_enabled")) {
+            startMessagePolling();
+        }
 
         // 检查是否需要更新检查（频率控制 + 远程开关热更新）
         if (!YiyiaddonTelemetryService.configEnabled("update_notice_enabled") || !shouldCheckUpdate()) {
@@ -711,58 +715,47 @@ public final class YiyiaddonWelcomeService {
     }
     
     /**
-     * 获取客户端 IP 地址和国家代码（带代理检测和网络测试）
-     * 三重降级策略：ipapi.co -> ip-api.com -> cloudflare
-     * 
-     * @return IP 信息对象，失败返回备用信息
+     * 并行查询 IP 地理信息和代理特征，避免多个接口串行等待导致进服卡顿。
+     * 国内网络可直接访问任一可用服务时立即采用结果；失败时仍保留本机时区，
+     * 后台会使用请求入口的 Cloudflare 地理信息继续补全国家、城市和运营商。
      */
     private static IpInfo fetchIpAndCountryWithProxyDetection() {
-        // 收集多个来源的 IP 进行对比（检测代理）
-        IpInfo result1 = tryFetchFromIpApiCoWithProxy();
-        IpInfo result2 = tryFetchFromIpApiWithProxy();
-        IpInfo result3 = tryFetchFromCloudflareSimple();
-
-        // 判断是否使用代理
-        boolean isUsingProxy = false;
-        String proxyType = null;
-
-        // 策略 1: API 返回的代理标记
-        if (result1 != null && result1.isProxy) {
-            isUsingProxy = true;
-            proxyType = result1.proxyType;
-        } else if (result2 != null && result2.isProxy) {
-            isUsingProxy = true;
-            proxyType = result2.proxyType;
+        CompletableFuture<IpInfo> ipApiCo = CompletableFuture.supplyAsync(YiyiaddonWelcomeService::tryFetchFromIpApiCoWithProxy);
+        CompletableFuture<IpInfo> ipApi = CompletableFuture.supplyAsync(YiyiaddonWelcomeService::tryFetchFromIpApiWithProxy);
+        CompletableFuture<IpInfo> cloudflare = CompletableFuture.supplyAsync(YiyiaddonWelcomeService::tryFetchFromCloudflareSimple);
+        try {
+            CompletableFuture.allOf(ipApiCo, ipApi, cloudflare).get(2500, TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {
         }
 
-        // 策略 2: IP 不一致检测（多个 API 返回不同 IP）
-        if (result1 != null && result2 != null && result1.ip != null && !result1.ip.equals(result2.ip)) {
+        IpInfo result1 = ipApiCo.getNow(null);
+        IpInfo result2 = ipApi.getNow(null);
+        IpInfo result3 = cloudflare.getNow(null);
+        boolean isUsingProxy = (result1 != null && result1.isProxy) || (result2 != null && result2.isProxy);
+        String proxyType = result1 != null && result1.isProxy ? result1.proxyType : (result2 != null ? result2.proxyType : null);
+
+        // 多来源出口地址不一致只作为疑似代理提示，不阻止正版玩家使用功能。
+        if (result1 != null && result2 != null && result1.ip != null && result2.ip != null
+            && !result1.ip.equals(result2.ip)) {
             isUsingProxy = true;
             if (proxyType == null) proxyType = "VPN";
         }
 
-        // 选择最可靠的结果
         IpInfo selected = result1 != null ? result1 : (result2 != null ? result2 : result3);
-
-        if (selected != null) {
-            // 策略 3: 出口 IP 的 AS 组织命中数据中心/VPN 关键字，视为疑似梯子
-            if (!isUsingProxy && looksLikeVpn(selected.asOrg, selected.asn)) {
-                isUsingProxy = true;
-                proxyType = "VPN";
-            }
-            String tz = selected.timezone != null ? selected.timezone : TimeZone.getDefault().getID();
-            IpInfo info = new IpInfo(selected.ip, selected.countryCode, isUsingProxy, proxyType,
-                selected.isp, selected.asOrg, selected.asn, tz);
-            cachedIpInfo = info;
-            return info;
+        if (selected == null) {
+            IpInfo fallback = new IpInfo(null, null, false, null, null, null, null, TimeZone.getDefault().getID());
+            cachedIpInfo = fallback;
+            return fallback;
         }
-
-        // 完全失败，进行端口连通性测试
-        if (!testNetworkConnectivity()) {
-            return new IpInfo("Network Offline", "??", false, null, null, null, null, TimeZone.getDefault().getID());
-        } else {
-            return new IpInfo("Unknown", "??", false, null, null, null, null, TimeZone.getDefault().getID());
+        if (!isUsingProxy && looksLikeVpn(selected.asOrg, selected.asn)) {
+            isUsingProxy = true;
+            proxyType = "VPN";
         }
+        IpInfo info = new IpInfo(selected.ip, selected.countryCode, isUsingProxy, proxyType,
+            selected.isp, selected.asOrg, selected.asn,
+            selected.timezone != null ? selected.timezone : TimeZone.getDefault().getID());
+        cachedIpInfo = info;
+        return info;
     }
 
     // 数据中心/VPN 出口的 AS 组织关键字（与后台 isVpnSuspected 保持一致）
@@ -1191,7 +1184,7 @@ public final class YiyiaddonWelcomeService {
     
     /**
      * 启动消息轮询线程
-     * 每30秒从服务器获取一次新消息并显示在聊天栏
+     * 每3秒从服务器获取一次新消息并显示在聊天栏
      */
     private static void startMessagePolling() {
         if (pollingRunning) {
@@ -1203,7 +1196,7 @@ public final class YiyiaddonWelcomeService {
             while (pollingRunning) {
                 try {
                     pollMessages();
-                    Thread.sleep(30000); // 30秒轮询一次
+                    Thread.sleep(3000);
                 } catch (InterruptedException e) {
                     break;
                 } catch (Exception e) {
@@ -1260,24 +1253,21 @@ public final class YiyiaddonWelcomeService {
                                 // 解析单条消息
                                 Matcher textMatcher = Pattern.compile("\"message\":\"([^\"]+)\"").matcher(messageObj);
                                 Matcher senderMatcher = Pattern.compile("\"sender\":\"([^\"]+)\"").matcher(messageObj);
+                                Matcher adminMatcher = Pattern.compile("\"from_admin\":(\\d+)").matcher(messageObj);
+                                Matcher premiumMatcher = Pattern.compile("\"is_premium\":(\\d+|true|false|null)").matcher(messageObj);
                                 
                                 if (textMatcher.find() && senderMatcher.find()) {
                                     String messageText = textMatcher.group(1);
                                     String sender = senderMatcher.group(1);
+                                    boolean fromAdmin = adminMatcher.find() && "1".equals(adminMatcher.group(1));
+                                    boolean premium = premiumMatcher.find() && ("1".equals(premiumMatcher.group(1)) || "true".equals(premiumMatcher.group(1)));
                                     
                                     // 在主线程显示消息
                                     mc.execute(() -> {
                                         if (mc.player != null) {
-                                            // 显示华丽的管理员消息
-                                            mc.player.sendSystemMessage(Component.literal(""));
-                                            mc.player.sendSystemMessage(Component.literal("§8§m                                                  "));
-                                            mc.player.sendSystemMessage(Component.literal("  §6§l✉ §e管理员消息"));
-                                            mc.player.sendSystemMessage(Component.literal(""));
-                                            mc.player.sendSystemMessage(Component.literal("  §7来自: §b§l" + sender));
-                                            mc.player.sendSystemMessage(Component.literal("  §7内容: §f" + messageText));
-                                            mc.player.sendSystemMessage(Component.literal(""));
-                                            mc.player.sendSystemMessage(Component.literal("  §a§l提示: §7输入 §e.回复 <消息> §7或 §e.reply <message> §7回复管理员"));
-                                            mc.player.sendSystemMessage(Component.literal("§8§m                                                  "));
+                                            String prefix = fromAdmin ? "§b[管理员] §f" : "§d[聊天] " + (premium ? "§a[正版] " : "§7[离线] ") + "§e" + sender + "§8：§f";
+                                            String hint = fromAdmin ? " §8(使用 .回复 <内容> 回复)" : "";
+                                            mc.player.sendSystemMessage(Component.literal(prefix + messageText + hint));
                                         }
                                     });
                                 }

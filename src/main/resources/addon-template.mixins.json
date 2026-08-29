@@ -31,7 +31,8 @@
     "MeteorCommandNamesMixin",
     "MeteorCommandRegistrationMixin",
     "ClientLevelPredictionAccessor",
-    "ResourcePackPushMixin"
+    "ResourcePackPushMixin",
+    "ClientCommandSourceMixin"
   ],
   "injectors": {
     "defaultRequire": 1
