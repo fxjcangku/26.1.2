@@ -102,8 +102,22 @@ tasks {
         injars(inputJar)
         outjars(outputJar)
         libraryjars(configurations.runtimeClasspath.get())
-        // 当前 JDK 25 安装缺少 jmods，使用本机 JDK 17 的基础类库供 ProGuard 建立完整层次
-        libraryjars("C:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot/jmods/java.base.jmod")
+        // 自动定位当前电脑的 JDK 25，避免写死某台电脑的安装路径
+        val jdkVersion = libs.versions.jdk.get()
+        val configuredJdk = providers.gradleProperty("proguardJdkHome").orNull
+            ?: providers.environmentVariable("JAVA_HOME").orNull
+        val jdkCandidates = buildList {
+            configuredJdk?.let { add(file(it)) }
+            addAll(listOf("C:/Program Files/Java", "C:/Program Files/Eclipse Adoptium").flatMap { root ->
+                file(root).listFiles()?.filter { it.isDirectory && it.name.startsWith("jdk-$jdkVersion") } ?: emptyList()
+            })
+        }
+        val jmods = jdkCandidates.asSequence()
+            .map { it.resolve("jmods") }
+            .firstOrNull { it.isDirectory && it.resolve("java.base.jmod").isFile }
+            ?: error("未找到完整 JDK $jdkVersion。请安装 JDK $jdkVersion，或使用 -PproguardJdkHome=JDK目录 指定路径。")
+        // 使用完整 JDK 的所有模块，为 ProGuard 建立与编译环境一致的完整类层次
+        libraryjars(jmods)
 
         // 只保留运行时必需的注解属性，删掉调试和类型信息：
         //   保留：运行时注解（Mixin/Fabric 需要）
