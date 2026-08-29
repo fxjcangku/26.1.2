@@ -1,5 +1,6 @@
 package com.example.addon.mining;
 
+import com.example.addon.farm.FarmPacketOps;
 import com.example.addon.modules.AutoMinerModule;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import net.minecraft.client.Minecraft;
@@ -12,14 +13,13 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.Container;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -49,6 +49,7 @@ public final class ContainerHelper {
     private int openingCooldown = 0;
     private int actionCooldown = 0;
     private int foodCountBeforeWithdraw = -1;
+    private int eatMoveCooldown = 0;
     private static final int MAX_OPEN_ATTEMPTS = 5;
 
     public ContainerHelper(AutoMinerModule module) {
@@ -68,6 +69,7 @@ public final class ContainerHelper {
         openingCooldown = 0;
         foodCountBeforeWithdraw = -1;
         actionCooldown = 0;
+        eatMoveCooldown = 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -116,9 +118,11 @@ public final class ContainerHelper {
         try {
             ItemStack stack = mc.player.getInventory().getItem(slot);
             if (stack.isEmpty()) return;
-            
-            // 调用 InvUtils.drop() 正确丢弃物品
-            InvUtils.drop().slot(slot);
+            // 玩家背包(containerId=0)的 InventoryMenu 槽位映射：快捷栏 0-8 → 36-44，主背包 9-35 → 9-35。
+            // 之前直接传 inventory 下标导致快捷栏丢到错误的槽位（0-8 对应合成/盔甲区），快捷栏垃圾永远丢不掉。
+            int menuSlot = slot < 9 ? 36 + slot : slot;
+            // button=1 + THROW = 丢弃整组（等价 Ctrl+Q），与 Meteor InvUtils.drop() 同语义
+            mc.gameMode.handleContainerInput(0, menuSlot, 1, ContainerInput.THROW, mc.player);
         } catch (Exception e) {
             // 静默失败
         }
@@ -151,6 +155,10 @@ public final class ContainerHelper {
 
         openAttempts++;
         if (openAttempts > MAX_OPEN_ATTEMPTS) {
+            // 打开失败多次后加长冷却再重试，而不是永久放弃（挂后台/网络抖动时可能连续失败，
+            // 永久放弃会导致玩家站在箱子前傻等，切回窗口才能继续）。
+            openingCooldown = 30;
+            openAttempts = 0;
             return;
         }
         BlockEntity blockEntity = mc.level.getBlockEntity(pos);
@@ -161,14 +169,9 @@ public final class ContainerHelper {
         openingPos = pos;
         openingCooldown = 10;
 
-        // 构造命中结果
-        Vec3 hitVec = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-        BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, pos, false);
-
-        // 发送交互包
-        if (mc.gameMode != null) {
-            mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
-        }
+        // 直接发包开箱（带 sequence 预测处理），不依赖 mc.gameMode.useItemOn：
+        // 鼠标切出窗口/窗口失焦时 useItemOn 的交互会被吞，导致箱子打不开。
+        FarmPacketOps.interactBlock(InteractionHand.MAIN_HAND, pos, Direction.UP);
     }
 
     /**
@@ -187,6 +190,17 @@ public final class ContainerHelper {
         currentMenu = null;
         menuStateId = -1;
         stableStateTicks = 0;
+    }
+
+    /**
+     * 发送 Shift 快速移动包。
+     * 26.1.2 已把旧 clickSlot + SlotActionType 换成
+     * MultiPlayerGameMode#handleContainerInput(containerId, slot, button, ContainerInput, player)。
+     * Meteor 的 InvUtils.shiftClick 仍走旧 API，在 26.1.2 下发包无效（物品不被移动）。
+     */
+    private void quickMove(AbstractContainerMenu menu, int slotIndex) {
+        if (mc.player == null || mc.gameMode == null) return;
+        mc.gameMode.handleContainerInput(menu.containerId, slotIndex, 0, ContainerInput.QUICK_MOVE, mc.player);
     }
 
     /**
@@ -217,7 +231,11 @@ public final class ContainerHelper {
         }
 
         stableStateTicks++;
-        return stableStateTicks >= STABLE_REQUIRED;
+        if (stableStateTicks >= STABLE_REQUIRED) {
+            openAttempts = 0; // 容器成功稳定打开，重置开箱尝试计数
+            return true;
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -246,7 +264,9 @@ public final class ContainerHelper {
 
         Inventory inventory = mc.player.getInventory();
 
-        // 扫描背包侧槽位，找到矿物后 Shift 点击（每5tick一格，直到全部目标矿转移完）
+        // 一次性把所有目标矿 Shift 点进箱子（不再一格一格等冷却），服务端按序处理即可
+        int moved = 0;
+        StringBuilder 未匹配 = new StringBuilder();
         for (Slot slot : menu.slots) {
             if (slot.container != inventory) continue;
 
@@ -254,13 +274,36 @@ public final class ContainerHelper {
             if (stack.isEmpty()) continue;
 
             if (isAllowedOre(stack)) {
-                InvUtils.shiftClick().slot(slot.index);
-                actionCooldown = 5;
-                return true;
+                module.debugEvent("C", "卸货放入", "槽位=" + slot.index + " 物品=" + itemIdOf(stack) + " 目标=" + targetItemId());
+                quickMove(menu, slot.index);
+                moved++;
+            } else if (未匹配.length() < 240) {
+                // 采集「玩家背包里但被判定非目标矿」的物品，用于定位「打开箱却不放矿」的根因
+                未匹配.append(itemIdOf(stack)).append(',');
             }
         }
 
+        if (未匹配.length() > 0) {
+            module.debugEvent("C", "卸货未匹配", "目标=" + targetItemId() + " 背包=" + 未匹配);
+        }
+
+        if (moved > 0) {
+            actionCooldown = 1; // 下一 tick 再补扫一次，防止有遗漏
+            return true;
+        }
         return false;
+    }
+
+    /** 物品完整 ID（含 minecraft: 前缀），埋点用 */
+    private String itemIdOf(ItemStack stack) {
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+    }
+
+    /** 目标矿物对应掉落物 ID，埋点用 */
+    private String targetItemId() {
+        Block target = module.getTargetBlock();
+        if (target == null) return "无";
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(target.asItem()).toString();
     }
 
     private boolean isAllowedOre(ItemStack stack) {
@@ -338,7 +381,7 @@ public final class ContainerHelper {
             var foodComp = stack.get(DataComponents.FOOD);
             if (foodComp != null && whitelist.contains(stack.getItem())) {
                 foodCountBeforeWithdraw = currentFoodCount;
-                InvUtils.shiftClick().slot(slot.index);
+                quickMove(menu, slot.index);
                 actionCooldown = 5;
                 return false;
             }
@@ -358,77 +401,67 @@ public final class ContainerHelper {
     }
 
     /**
-     * 自动进食直到饥饿值回满
-     * 改进：
-     * 1. 只吃白名单里的食物
-     * 2. 先检查热键栏有没有白名单食物，没有就从背包拿
-     * 3. 持续按住右键吃东西，不会被Baritone打断
+     * 自动进食直到饥饿值回满。
+     *
+     * 修正要点：
+     * 1. 从背包拿食物到热键栏这一步「只移动、不进食」，等物品到账后再吃，避免空手按住右键一直放方块。
+     * 2. 用 gameMode.useItem 直接触发进食，不依赖 keyUse 按键状态（窗口失焦/开 GUI 时按键会被吞）。
+     * 3. keyUse.setDown(true) 仅用于防止游戏循环主动 releaseUsingItem，保持持续进食。
      */
     public void autoEat() {
         if (mc.player == null) return;
 
         FoodData foodData = mc.player.getFoodData();
-        
-        // 已经饱了就不吃
         if (foodData.getFoodLevel() >= 20) {
             mc.options.keyUse.setDown(false);
             return;
         }
 
-        // 获取食物白名单
-        var foodWhitelist = module.getFoodWhitelist();
+        // 正在等待「背包→热键栏」的移动到账，期间不发重复包，也不按住右键
+        if (eatMoveCooldown > 0) {
+            eatMoveCooldown--;
+            mc.options.keyUse.setDown(false);
+            return;
+        }
 
+        var foodWhitelist = module.getFoodWhitelist();
         Inventory inventory = mc.player.getInventory();
+
+        // 第一步：热键栏找白名单中营养值最高的食物
         int bestHotbarSlot = -1;
         int bestHotbarNutrition = 0;
-
-        // 第一步：在热键栏（0-8）找白名单中营养值最高的食物
         for (int i = 0; i < 9; i++) {
             ItemStack stack = inventory.getItem(i);
-            if (stack.isEmpty()) continue;
-
-            // 只吃白名单里的食物
-            if (!foodWhitelist.contains(stack.getItem())) continue;
-
-            var foodComp = stack.get(net.minecraft.core.component.DataComponents.FOOD);
+            if (stack.isEmpty() || !foodWhitelist.contains(stack.getItem())) continue;
+            var foodComp = stack.get(DataComponents.FOOD);
             if (foodComp == null) continue;
-
-            int nutrition = foodComp.nutrition();
-            if (nutrition > bestHotbarNutrition) {
-                bestHotbarNutrition = nutrition;
+            if (foodComp.nutrition() > bestHotbarNutrition) {
+                bestHotbarNutrition = foodComp.nutrition();
                 bestHotbarSlot = i;
             }
         }
 
-        // 第二步：如果热键栏没白名单食物，从背包（9-35）找并移动到热键栏
+        // 第二步：热键栏没有，从背包拿一个到热键栏（只移动，不进食）
         if (bestHotbarSlot == -1) {
             int bestBackpackSlot = -1;
             int bestBackpackNutrition = 0;
-
             for (int i = 9; i < 36; i++) {
                 ItemStack stack = inventory.getItem(i);
-                if (stack.isEmpty()) continue;
-
-                // 只吃白名单里的食物
-                if (!foodWhitelist.contains(stack.getItem())) continue;
-
-                var foodComp = stack.get(net.minecraft.core.component.DataComponents.FOOD);
+                if (stack.isEmpty() || !foodWhitelist.contains(stack.getItem())) continue;
+                var foodComp = stack.get(DataComponents.FOOD);
                 if (foodComp == null) continue;
-
-                int nutrition = foodComp.nutrition();
-                if (nutrition > bestBackpackNutrition) {
-                    bestBackpackNutrition = nutrition;
+                if (foodComp.nutrition() > bestBackpackNutrition) {
+                    bestBackpackNutrition = foodComp.nutrition();
                     bestBackpackSlot = i;
                 }
             }
 
-            // 背包也没白名单食物，放弃
             if (bestBackpackSlot == -1) {
                 mc.options.keyUse.setDown(false);
                 return;
             }
 
-            // 找一个空的热键栏槽位（优先8号位）
+            // 找一个空热键栏槽位（优先8号位）
             int emptyHotbarSlot = -1;
             for (int i = 8; i >= 0; i--) {
                 if (inventory.getItem(i).isEmpty()) {
@@ -436,21 +469,20 @@ public final class ContainerHelper {
                     break;
                 }
             }
+            if (emptyHotbarSlot == -1) emptyHotbarSlot = 8;
 
-            // 如果热键栏没空位，用8号位
-            if (emptyHotbarSlot == -1) {
-                emptyHotbarSlot = 8;
-            }
-
-            // 从背包移动食物到热键栏
             InvUtils.move().from(bestBackpackSlot).to(emptyHotbarSlot);
-            bestHotbarSlot = emptyHotbarSlot;
+            eatMoveCooldown = 5; // 等 5 tick 到账
+            mc.options.keyUse.setDown(false);
+            return;
         }
 
-        // 第三步：切换到食物槽
+        // 第三步：切到食物槽，直接触发进食
         InvUtils.swap(bestHotbarSlot, false);
-        
-        // 持续按住右键吃东西（需要按住32 tick才能吃完）
         mc.options.keyUse.setDown(true);
+        if (!mc.player.isUsingItem()) {
+            // 直接 useItem 触发进食（食物使用与准星/方块无关，窗口失焦也能吃到）
+            if (mc.gameMode != null) mc.gameMode.useItem(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
     }
 }

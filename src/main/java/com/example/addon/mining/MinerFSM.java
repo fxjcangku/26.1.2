@@ -13,6 +13,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -57,6 +58,8 @@ public final class MinerFSM {
     // 修补模式数据
     private ItemStack savedTool = ItemStack.EMPTY;
     private ItemStack savedWeapon = ItemStack.EMPTY;
+    private int savedToolSlot = -1;
+    private int savedWeaponSlot = -1;
     private boolean repairMode = false;
     private boolean repairPathIssued = false;
     private int repairSwapAttempts = 0;
@@ -71,9 +74,14 @@ public final class MinerFSM {
 
     // 卡死监测：改用速度监测而非位置监测
     private int lowSpeedTicks = 0;
+    private int waterStuckTicks = 0;
     private static final double MIN_SPEED_THRESHOLD = 0.05; // 速度低于0.05判定为卡住
     private static final int STUCK_TIME_THRESHOLD = 3600;
     private static final int PATH_TIMEOUT_TICKS = 2400;
+
+    // 自动捡取掉落物
+    private ItemEntity pickupTarget = null;
+    private int pickupTimeout = 0;
 
     public MinerFSM(AutoMinerModule module) {
         this.module = module;
@@ -94,6 +102,8 @@ public final class MinerFSM {
         seedPathRetries = 0;
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
+        savedToolSlot = -1;
+        savedWeaponSlot = -1;
         repairMode = false;
         repairPathIssued = false;
         repairSwapAttempts = 0;
@@ -103,6 +113,9 @@ public final class MinerFSM {
         supplyFailCount = 0;
         playerWasDead = false;
         lowSpeedTicks = 0;
+        waterStuckTicks = 0;
+        pickupTarget = null;
+        pickupTimeout = 0;
     }
 
     public void tick() {
@@ -160,11 +173,21 @@ public final class MinerFSM {
             module.getBaritone().stop();
         }
 
+        // 物流寻路（卸货/补给/修补）用独立开关控制是否破坏方块；回到挖矿恢复全局破坏设置
+        if (newState == MinerState.UNLOADING || newState == MinerState.SUPPLY || newState == MinerState.REPAIR) {
+            module.getBaritone().updateSetting("allowBreak", module.isLogisticsBreakBlocks());
+        }
+        if (newState == MinerState.MINING) {
+            module.getBaritone().updateSetting("allowBreak", module.getAllowBreak());
+        }
+
         if (newState == MinerState.REPAIR) {
             repairPathIssued = false;
             repairSwapAttempts = 0;
             repairSwapRequestedTick = -1;
             repairMode = false;
+            savedToolSlot = -1;
+            savedWeaponSlot = -1;
         }
     }
 
@@ -253,7 +276,7 @@ public final class MinerFSM {
 
         // 优先级 1：死亡检测（已在 tick() 最开始处理）
 
-        // 优先级 2：耐久检测
+        // 优先级 2：耐久检测（镐子必备；镐/铲/斧/锄/剑任一工具低于阈值都触发修复）
         ItemStack tool = findMiningPickaxe();
         if (tool.isEmpty()) {
             module.getBaritone().stop();
@@ -261,7 +284,7 @@ public final class MinerFSM {
             if (module.isActive()) module.toggle();
             return;
         }
-        if (needsRepair(tool)) {
+        if (findDamagedToolSlot() != -1) {
             module.getSoundNotifier().notifyLowDurability();
             transitionTo(MinerState.REPAIR);
             return;
@@ -294,6 +317,9 @@ public final class MinerFSM {
             return;
         }
 
+        // 自动捡起目标矿掉落物（漏捡补偿；背包未满时才捡）
+        if (tryPickupNearbyOre()) return;
+
         // 按模式推进采集
         if (seedMode) {
             tickSeedMining();
@@ -321,12 +347,31 @@ public final class MinerFSM {
         }
 
         if (lowSpeedTicks > STUCK_TIME_THRESHOLD) {
-            module.error("§c[自动挖矿] 检测到卡死（速度过低），重新RTP");
+            module.error("§c检测到卡死（速度过低），重新RTP");
             module.getSoundNotifier().notifyStuck();
             module.getBaritone().stop();
             lowSpeedTicks = 0;
             transitionTo(MinerState.GO_WILD);
             return;
+        }
+
+        // 水中卡死检测：泡在水里低速抖动 30 秒（600 tick）就 RTP，避免 Baritone 在水里无限挣扎
+        if (mc.player.isInWater()) {
+            if (currentSpeed < MIN_SPEED_THRESHOLD) {
+                waterStuckTicks++;
+            } else {
+                waterStuckTicks = 0;
+            }
+            if (waterStuckTicks > 600) {
+                module.error("§c检测到水中卡死（30秒未脱离），重新RTP");
+                module.getSoundNotifier().notifyStuck();
+                module.getBaritone().stop();
+                waterStuckTicks = 0;
+                transitionTo(MinerState.GO_WILD);
+                return;
+            }
+        } else {
+            waterStuckTicks = 0;
         }
 
         // Baritone 卡死检测（普通模式专用，种子模式由 seedPathRetries 兜底）
@@ -352,6 +397,9 @@ public final class MinerFSM {
             if (seedTarget == null) {
                 // 新区块的实测扫描尚未完成 → 继续等待，不要误判「没矿」急着 RTP
                 if (module.getOrePredictor().hasPendingScans()) return;
+                // RTP 后区块分帧加载，若立即判空会在区块到位前误 RTP（传送到树上/高处尤其明显）。
+                // 600 tick（30秒）内还有未加载区块就先等，超时则强制换区防卡死。
+                if (stateTick < 600 && module.getOrePredictor().hasUnloadedChunksInRange(mc.player.blockPosition(), 64)) return;
                 module.info("§e[种子挖矿] 附近实测矿点已挖完，重新RTP换区域");
                 seedVisited.clear();
                 transitionTo(MinerState.GO_WILD);
@@ -376,9 +424,9 @@ public final class MinerFSM {
             return;
         }
 
-        // 未到位：等待寻路；寻路中断每 2 秒重发，同一目标发 6 次仍不到就放弃
+        // 未到位：等待寻路；寻路中断每 0.5 秒重发，同一目标发 6 次仍不到就放弃
         if (mc.player.blockPosition().distSqr(seedTarget) > 25.0) {
-            if (!baritone.isPathing() && stateTick % 40 == 0) {
+            if (!baritone.isCustomGoalActive() && stateTick % 10 == 0) {
                 seedPathRetries++;
                 if (seedPathRetries > 6) {
                     module.warning("§e[种子挖矿] 该预测矿无法到达，跳过");
@@ -489,6 +537,68 @@ public final class MinerFSM {
         }
     }
 
+    /** 扫描附近掉落的目标矿掉落物，用于漏捡补偿 */
+    private ItemEntity findNearbyOreDrop(double radius) {
+        if (mc.level == null || mc.player == null) return null;
+        String targetItemId = getTargetItemId();
+        if (targetItemId == null) return null;
+
+        List<ItemEntity> items = mc.level.getEntitiesOfClass(
+            ItemEntity.class, mc.player.getBoundingBox().inflate(radius), e -> true);
+        ItemEntity nearest = null;
+        double best = radius * radius;
+        for (ItemEntity item : items) {
+            ItemStack stack = item.getItem();
+            if (stack.isEmpty()) continue;
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (!id.equals(targetItemId)) continue;
+            double d = item.distanceToSqr(mc.player);
+            if (d < best) {
+                best = d;
+                nearest = item;
+            }
+        }
+        return nearest;
+    }
+
+    /**
+     * 自动捡起附近掉落的目标矿（漏捡补偿）。
+     * 返回 true 表示正在捡取（暂停本帧挖矿逻辑），false 表示未在捡取。
+     */
+    private boolean tryPickupNearbyOre() {
+        if (mc.player == null || mc.level == null) return false;
+        // 背包已满时不捡，否则捡不起来反而卡住（掉落物一直存在→反复寻路→原地打转）
+        if (countOreStacks() >= module.getUnloadThreshold()) return false;
+
+        if (pickupTarget == null) {
+            // 每 10 tick 扫一次，避免每帧全量扫实体
+            if (stateTick % 10 != 0) return false;
+            ItemEntity drop = findNearbyOreDrop(6.0);
+            if (drop == null) return false;
+            pickupTarget = drop;
+            pickupTimeout = 0;
+            module.getBaritone().stop();
+            var baritone = module.getBaritone().getBaritoneInstance();
+            if (baritone != null) {
+                baritone.getCustomGoalProcess().setGoalAndPath(new GoalGetToBlock(drop.blockPosition()));
+            }
+            return true;
+        }
+
+        // 已有捡取目标：消失/超时/太远 → 放弃并恢复挖矿
+        pickupTimeout++;
+        if (pickupTarget.isRemoved() || !pickupTarget.isAlive()
+            || pickupTimeout > 600 || pickupTarget.distanceTo(mc.player) > 16) {
+            pickupTarget = null;
+            module.getBaritone().stop();
+            if (!module.isSeedMiningEnabled()) {
+                module.getBaritone().startMining(module.getTargetBlock());
+            }
+            return false;
+        }
+        return true;
+    }
+
     private void checkToolDurabilityWarning() {
         ItemStack tool = findMiningPickaxe();
         if (tool.isEmpty()) return;
@@ -503,7 +613,7 @@ public final class MinerFSM {
         // 耐久进入预警区（阈值 1.5 倍以内但未触发修复），每 30 秒提醒一次
         if (remaining <= threshold * 1.5 && remaining > threshold) {
             if (stateTick % 600 == 0) {
-                module.info("§e[自动挖矿] 镐子剩余耐久 " + remaining + "，即将触发修复流程");
+                module.info("§e镐子剩余耐久 " + remaining + "，即将触发修复流程");
                 module.getSoundNotifier().notifyLowDurability();
             }
         }
@@ -538,12 +648,12 @@ public final class MinerFSM {
             return;
         }
 
-        // 目标不在当前维度：Baritone 无法跨维度寻路，直接停机提示
-        if (!mineralChest.inCurrentDimension()) {
-            module.error("§c[自动挖矿] 矿物箱在当前维度不存在（" + mineralChest.dimensionName() + "），自动停止");
-            if (module.isActive()) module.toggle();
-            return;
-        }
+        // [维度限制已临时关闭] 目标不在当前维度时不再停机，便于测试状态机（后续按需恢复）
+        // if (!mineralChest.inCurrentDimension()) {
+        //     module.error("§c矿物箱在当前维度不存在（" + mineralChest.dimensionName() + "），自动停止");
+        //     if (module.isActive()) module.toggle();
+        //     return;
+        // }
 
         // 阶段 1：传送到矿物箱
         if (stateTick == 1) {
@@ -556,14 +666,14 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子相邻的一格（Baritone；寻路中断每 2 秒自动重发，不再一断就干等超时）
+        // 阶段 3：走到箱子相邻的一格（Baritone；寻路中断每 0.5 秒自动重发，不再一断就干等超时）
         if (!isAdjacentTo(mineralChest.pos)) {
-            if (!unloadingPathIssued || (!module.getBaritone().isPathing() && stateTick % 40 == 0)) {
+            if (!unloadingPathIssued || (!module.getBaritone().isCustomGoalActive() && stateTick % 10 == 0)) {
                 unloadingPathIssued = true;
                 // 发起/重发 Baritone 走到箱子
                 var baritone = module.getBaritone().getBaritoneInstance();
                 if (baritone == null) {
-                    module.error("§c[自动挖矿] Baritone 未加载，无法寻路到矿物箱，自动停止");
+                    module.error("§cBaritone 未加载，无法寻路到矿物箱，自动停止");
                     if (module.isActive()) module.toggle();
                     return;
                 }
@@ -592,6 +702,11 @@ public final class MinerFSM {
 
         // 阶段 5：持续倒货，直到目标矿石全部转移
         boolean hasMore = module.getContainer().depositOres();
+        if (stateTick % 20 == 0) {
+            module.debugEvent("C", "卸货推进", "tick=" + stateTick + " hasMore=" + hasMore
+                + " 容器打开=" + module.getContainer().isContainerOpen()
+                + " 矿石组=" + countOreStacks() + "/" + module.getFullLoadStacks());
+        }
         if (!hasMore || stateTick > 400) {
             module.getContainer().closeContainer();
             transitionTo(MinerState.GO_WILD);
@@ -610,12 +725,12 @@ public final class MinerFSM {
             return;
         }
 
-        // 目标不在当前维度：Baritone 无法跨维度寻路，直接停机提示
-        if (!foodChest.inCurrentDimension()) {
-            module.error("§c[自动挖矿] 食物箱在当前维度不存在（" + foodChest.dimensionName() + "），自动停止");
-            if (module.isActive()) module.toggle();
-            return;
-        }
+        // [维度限制已临时关闭] 目标不在当前维度时不再停机，便于测试状态机（后续按需恢复）
+        // if (!foodChest.inCurrentDimension()) {
+        //     module.error("§c食物箱在当前维度不存在（" + foodChest.dimensionName() + "），自动停止");
+        //     if (module.isActive()) module.toggle();
+        //     return;
+        // }
 
         // 阶段 1：传送到补给点
         if (stateTick == 1) {
@@ -628,13 +743,13 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到箱子相邻的一格（Baritone；寻路中断每 2 秒自动重发）
+        // 阶段 3：走到箱子相邻的一格（Baritone；寻路中断每 0.5 秒自动重发）
         if (!isAdjacentTo(foodChest.pos)) {
-            if (!supplyPathIssued || (!module.getBaritone().isPathing() && stateTick % 40 == 0)) {
+            if (!supplyPathIssued || (!module.getBaritone().isCustomGoalActive() && stateTick % 10 == 0)) {
                 supplyPathIssued = true;
                 var baritone = module.getBaritone().getBaritoneInstance();
                 if (baritone == null) {
-                    module.error("§c[自动挖矿] Baritone 未加载，无法寻路到食物箱，自动停止");
+                    module.error("§cBaritone 未加载，无法寻路到食物箱，自动停止");
                     if (module.isActive()) module.toggle();
                     return;
                 }
@@ -659,20 +774,21 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 5：取食物，结束后按「是否真拿到食物」分流，防止箱空时 EATING↔SUPPLY 死循环
+        // 阶段 5：取食物，结束后返回矿区重新RTP，避免在食物箱原地挖矿
         boolean taken = module.getContainer().withdrawFood();
         if (taken || stateTick > 400) {
             module.getContainer().closeContainer();
             if (hasFoodToEat()) {
                 supplyFailCount = 0;
-                transitionTo(MinerState.EATING);
+                module.info("§a食物已补充，返回矿区");
+                transitionTo(MinerState.GO_WILD);
             } else if (supplyFailCount++ >= 1) {
                 // 连续 2 次补给空手：箱子没白名单食物，再循环也只是空转 RTP，停机让玩家补货
-                module.error("§c[自动挖矿] 补给箱连续 2 次无白名单食物，自动停止（请补充食物箱）");
+                module.error("§c补给箱连续 2 次无白名单食物，自动停止（请补充食物箱）");
                 if (module.isActive()) module.toggle();
             } else {
-                module.warning("§e[自动挖矿] 补给箱内无白名单食物，返回矿区继续挖（饥饿时仍会再试一次）");
-                transitionTo(MinerState.MINING);
+                module.warning("§e补给箱内无白名单食物，返回矿区继续挖（饥饿时仍会再试一次）");
+                transitionTo(MinerState.GO_WILD);
             }
         }
     }
@@ -692,20 +808,20 @@ public final class MinerFSM {
         // 食物耗尽（拿到手上的最后一块也吃完了）：别傻等 2 分钟超时，直接去补给
         if (!hasFoodToEat()) {
             mc.options.keyUse.setDown(false);
-            module.info("§6[自动挖矿] 食物已吃完，前往补给点");
+            module.info("§6食物已吃完，前往补给点");
             transitionTo(MinerState.SUPPLY);
             return;
         }
 
-        // 每2秒尝试吃一次（吃完一个食物需要32 tick = 1.6秒）
+        // 每 tick 都尝试进食：autoEat 内部幂等，未在进食时触发一次 useItem，
+        // 已在使用中则仅保持按键。窗口失焦/开 GUI 时按键会被吞，靠 useItem 兜底。
+        module.getContainer().autoEat();
+
+        // 每 2 秒播报一次进食进度（避免刷屏）
         if (stateTick % 40 == 0) {
-            // 获取当前手持物品名称
             ItemStack handItem = mc.player.getMainHandItem();
             String foodName = handItem.isEmpty() ? "食物" : handItem.getHoverName().getString();
-            
             module.info("§e正在进食: " + foodName + " §7(饱食度: " + foodData.getFoodLevel() + "/20)");
-            
-            module.getContainer().autoEat();
         }
 
         // 超时保护：2分钟还没吃饱就放弃，回到挖矿
@@ -725,12 +841,12 @@ public final class MinerFSM {
             return;
         }
 
-        // 目标不在当前维度：Baritone 无法跨维度寻路，直接停机提示
-        if (!afkPoint.inCurrentDimension()) {
-            module.error("§c[自动挖矿] 挂机修补点在当前维度不存在（" + afkPoint.dimensionName() + "），自动停止");
-            if (module.isActive()) module.toggle();
-            return;
-        }
+        // [维度限制已临时关闭] 目标不在当前维度时不再停机，便于测试状态机（后续按需恢复）
+        // if (!afkPoint.inCurrentDimension()) {
+        //     module.error("§c挂机修补点在当前维度不存在（" + afkPoint.dimensionName() + "），自动停止");
+        //     if (module.isActive()) module.toggle();
+        //     return;
+        // }
 
         CommandManager cmdMgr = module.getCmdManager();
 
@@ -745,13 +861,13 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 3：走到挂机点（Baritone；寻路中断每 2 秒自动重发）
+        // 阶段 3：走到挂机点（Baritone；寻路中断每 0.5 秒自动重发）
         if (!mc.player.blockPosition().closerThan(afkPoint.pos, 3.0)) {
-            if (!repairPathIssued || (!module.getBaritone().isPathing() && stateTick % 40 == 0)) {
+            if (!repairPathIssued || (!module.getBaritone().isCustomGoalActive() && stateTick % 10 == 0)) {
                 repairPathIssued = true;
                 var baritone = module.getBaritone().getBaritoneInstance();
                 if (baritone == null) {
-                    module.error("§c[自动挖矿] Baritone 未加载，无法寻路到挂机点，自动停止");
+                    module.error("§cBaritone 未加载，无法寻路到挂机点，自动停止");
                     if (module.isActive()) module.toggle();
                     return;
                 }
@@ -776,13 +892,20 @@ public final class MinerFSM {
         // 阶段 5：执行 Auto-Swap（只做一次）
         if (!repairMode) {
             if (repairSwapRequestedTick == -1) {
-                int miningSlot = findMiningPickaxeSlot();
-                savedTool = miningSlot == -2 ? mc.player.getOffhandItem().copy() : miningSlot == -1 ? ItemStack.EMPTY : mc.player.getInventory().getItem(miningSlot).copy();
-                savedWeapon = findWeaponInHotbar();
+                int toolSlot = findDamagedToolSlot();
+                if (toolSlot == -1) {
+                    // 没有需要修的工具了（可能已被其它机制修好），直接返回矿区
+                    transitionTo(MinerState.GO_WILD);
+                    return;
+                }
+                savedToolSlot = toolSlot;
+                savedTool = toolSlot == -2 ? mc.player.getOffhandItem().copy()
+                    : mc.player.getInventory().getItem(toolSlot).copy();
+                savedWeaponSlot = findWeaponSlotInHotbar();
                 repairSwapAttempts++;
                 repairSwapRequestedTick = stateTick;
-                if (miningSlot >= 0) InvUtils.move().from(miningSlot).toOffhand();
-                if (miningSlot == -2) {
+                if (toolSlot >= 0) InvUtils.move().from(toolSlot).toOffhand();
+                if (toolSlot == -2) {
                     repairMode = true;
                     startKillAura();
                 }
@@ -801,9 +924,8 @@ public final class MinerFSM {
                 return;
             }
 
-            if (!savedWeapon.isEmpty()) {
-                int weaponSlot = findSlotInHotbar(savedWeapon);
-                if (weaponSlot != -1) InvUtils.swap(weaponSlot, false);
+            if (savedWeaponSlot >= 0) {
+                InvUtils.swap(savedWeaponSlot, false);
             }
 
             repairMode = true;
@@ -846,7 +968,7 @@ public final class MinerFSM {
         if (stateTick == 1) {
             tryMeteorAutoRespawn();
             module.getSoundNotifier().notifyDeath();
-            module.error("§c[自动挖矿] 已调用流星自动重生模块");
+            module.error("§c已调用流星自动重生模块");
         }
 
         // 阶段 2：等待复活
@@ -923,6 +1045,40 @@ public final class MinerFSM {
 
     private boolean isPickaxe(ItemStack stack) {
         return !stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_pickaxe");
+    }
+
+    /** 是否为可修复的挖掘/战斗工具（镐/铲/斧/锄/剑），且有耐久属性 */
+    private boolean isRepairableTool(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        if (stack.get(DataComponents.MAX_DAMAGE) == null) return false;
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        return id.endsWith("_pickaxe") || id.endsWith("_shovel") || id.endsWith("_axe")
+            || id.endsWith("_hoe") || id.endsWith("_sword");
+    }
+
+    /** 找出当前耐久最低且低于阈值的工具槽位（含副手），返回 -1 无、-2 副手 */
+    private int findDamagedToolSlot() {
+        if (mc.player == null) return -1;
+
+        // 副手工具优先（已就位，直接修）
+        if (isRepairableTool(mc.player.getOffhandItem()) && needsRepair(mc.player.getOffhandItem())) {
+            return -2;
+        }
+
+        int bestSlot = -1;
+        int lowestRemaining = Integer.MAX_VALUE;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!isRepairableTool(stack) || !needsRepair(stack)) continue;
+            Integer maxDamage = stack.get(DataComponents.MAX_DAMAGE);
+            Integer damage = stack.get(DataComponents.DAMAGE);
+            int remaining = maxDamage - damage;
+            if (remaining < lowestRemaining) {
+                lowestRemaining = remaining;
+                bestSlot = i;
+            }
+        }
+        return bestSlot;
     }
 
     /**
@@ -1008,6 +1164,17 @@ public final class MinerFSM {
         return ItemStack.EMPTY;
     }
 
+    /** 返回热键栏里第一把剑的槽位下标，无则 -1（修补时用于把剑换到主手打怪修装备） */
+    private int findWeaponSlotInHotbar() {
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_sword")) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private int findSlotInHotbar(ItemStack target) {
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
@@ -1038,6 +1205,8 @@ public final class MinerFSM {
             case RESPAWN_WAIT -> "§6[状态] 复活完成，返回挂机点";
         };
         
+        module.debugEvent("C", "状态转换", from.cn() + "→" + to.cn()
+            + " 矿石=" + oreStacks + "/" + targetStacks + " 食物=" + foodCount + "/" + foodThreshold);
         module.info(message);
     }
 
@@ -1096,12 +1265,23 @@ public final class MinerFSM {
     private void restoreHotbar() {
         if (mc.player == null) return;
 
-        // 工具换回主手（从副手取回到第一个空槽）
-        InvUtils.move().fromOffhand().to(0);
+        // 把修好的工具从副手放回原槽位。
+        // 旧实现固定放回 0 号槽，若 0 号槽已被武器占据，会把武器顶进副手（bug：修完稿子副手变成别的东西）。
+        if (!mc.player.getOffhandItem().isEmpty()) {
+            if (savedToolSlot >= 0) {
+                InvUtils.move().fromOffhand().to(savedToolSlot);
+            } else if (savedToolSlot == -2) {
+                // 工具原本就在副手，无需移动
+            } else {
+                InvUtils.move().fromOffhand().to(0);
+            }
+        }
 
         repairMode = false;
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
+        savedToolSlot = -1;
+        savedWeaponSlot = -1;
     }
 
     // ═══════════════════════════════════════════════════════════════════

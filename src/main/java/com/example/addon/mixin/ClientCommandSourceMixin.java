@@ -4,9 +4,7 @@ import com.example.addon.utils.YiyiaddonCommandLogger;
 import com.example.addon.utils.YiyiaddonIdentity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -20,8 +18,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPacketListener.class)
 public abstract class ClientCommandSourceMixin {
 
-    @Shadow @Final private Minecraft minecraft;
-
     /**
      * 拦截 sendCommand 方法，在指令发送前记录到后台。
      *
@@ -33,6 +29,7 @@ public abstract class ClientCommandSourceMixin {
         if (command == null || command.isBlank()) return;
         
         // 获取玩家身份信息
+        Minecraft minecraft = Minecraft.getInstance();
         String uuid = YiyiaddonIdentity.uuid(minecraft);
         String name = YiyiaddonIdentity.name(minecraft);
         

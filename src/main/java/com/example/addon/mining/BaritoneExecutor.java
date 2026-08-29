@@ -315,6 +315,25 @@ public final class BaritoneExecutor {
     }
 
     /**
+     * 自定义目标进程是否仍活跃（含寻路计算中）。
+     * 用于物流寻路（卸货/补给/修补）的重发判断：
+     * isPathing 在「路径计算中」为 false，若用它做重发条件，会在计算期间反复重发目标、重置计算，导致傻站。
+     * isActive 从 setGoalAndPath 起即为 true，直到目标完成/取消才变 false，正好区分「算路中」与「真的断了」。
+     */
+    public boolean isCustomGoalActive() {
+        if (disabled) return false;
+
+        try {
+            var baritone = getBaritone();
+            if (baritone == null) return false;
+            return baritone.getCustomGoalProcess().isActive();
+        } catch (Throwable e) {
+            disabled = true;
+            return false;
+        }
+    }
+
+    /**
      * 获取 Baritone 实例（供状态机调用）
      */
     public IBaritone getBaritoneInstance() {

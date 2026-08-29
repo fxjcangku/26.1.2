@@ -29,8 +29,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.Set;
 
@@ -110,6 +115,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Boolean> mobAvoidance;
     private final Setting<Integer> mobAvoidanceRadius;
     private final Setting<Boolean> allowBreak;
+    private final Setting<Boolean> logisticsBreakBlocks;
     private final Setting<Boolean> allowPlace;
     private final Setting<Integer> maxFallHeight;
     private final Setting<Boolean> pauseMiningForFallingBlocks;
@@ -252,10 +258,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         durabilityThreshold = sgThreshold.add(new IntSetting.Builder()
             .name("耐久阈值")
-            .description("工具剩余耐久低于此值时前往挂机点修补")
+            .description("工具剩余耐久低于此值时前往挂机点修补（下界合金镐耐久 2031，上限已放宽）")
             .defaultValue(100)
             .min(1)
-            .max(500)
+            .max(3000)
             .noSlider()
             .build());
 
@@ -276,7 +282,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 Blocks.DIORITE,
                 Blocks.GRANITE,
                 Blocks.ANDESITE,
-                Blocks.TUFF
+                Blocks.TUFF,
+                Blocks.DRIPSTONE_BLOCK,
+                Blocks.POINTED_DRIPSTONE,
+                Blocks.CALCITE,
+                Blocks.SMOOTH_BASALT,
+                Blocks.NETHERRACK,
+                Blocks.BLACKSTONE,
+                Blocks.BASALT
             )))
             .build());
 
@@ -293,13 +306,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
             .name("搭路方块白名单")
-            .description("Baritone搭桥/填坑时使用这些方块（点击选择添加，推荐：圆石、深层圆石、泥土、石头等）")
+            .description("Baritone搭桥/填坑时使用这些方块（点击选择添加，默认圆石即可）")
             .defaultValue(new ArrayList<>(List.of(
-                Blocks.COBBLESTONE,
-                Blocks.COBBLED_DEEPSLATE,
-                Blocks.DIRT,
-                Blocks.STONE,
-                Blocks.NETHERRACK
+                Blocks.COBBLESTONE
             )))
             .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
             .build());
@@ -319,6 +328,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 } else {
                     orePredictor.invalidateCache();
                 }
+                // 切换模式时停掉 Baritone 全部进程，避免普通 mine 与种子 customGoal 抢控制权（寻路线狂闪）
+                baritone.stop();
             })
             .build());
 
@@ -327,7 +338,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("选填·仅记录用。客户端无法凭种子复刻服务器矿物分布，挖矿采用实测扫描，该字段不参与坐标计算")
             .defaultValue("")
             .visible(seedMiningEnabled::get)
-            .onChanged(s -> updateOrePredictor())
             .build());
 
         renderRange = sgBaritone.add(new IntSetting.Builder()
@@ -359,9 +369,15 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // ────────────── 开关类设置 ──────────────
         allowBreak = sgBaritone.add(new BoolSetting.Builder()
             .name("破坏阻挡方块")
-            .description("允许破坏阻挡路径的方块（石头、泥土等）")
+            .description("挖掘时允许破坏阻挡路径的方块（石头、泥土等）")
             .defaultValue(true)
             .onChanged(value -> baritone.updateSetting("allowBreak", value))
+            .build());
+
+        logisticsBreakBlocks = sgBaritone.add(new BoolSetting.Builder()
+            .name("寻路物流破坏方块")
+            .description("前往矿物箱/食物箱/挂机点寻路时，是否允许破坏阻挡方块抄近路（关闭后旁边有路就绕行，不再挖墙）")
+            .defaultValue(false)
             .build());
 
         allowPlace = sgBaritone.add(new BoolSetting.Builder()
@@ -640,6 +656,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
         cmdManager.reset();
 
         reportStartupInfo();
+
+        debugEvent("A", "模块启动", "目标=" + getTargetBlock() + " 种子模式=" + seedMiningEnabled.get()
+            + " 满载=" + unloadThreshold.get() + " 食物阈值=" + hungerThreshold.get());
     }
 
     /**
@@ -663,33 +682,33 @@ public final class AutoMinerModule extends YiyiaddonModule {
             BuiltInRegistries.BLOCK.getKey(target).toString());
         notify("§f目标矿物：" + highlightText(targetName));
 
-        // 维度匹配检查（末地什么矿都没有，主世界矿/下界矿要对应维度）
-        if (mc.level != null) {
-            ResourceKey<Level> dim = mc.level.dimension();
-            Block overworld = overworldOreTarget.get();
-            Block nether = netherOreTarget.get();
-            boolean isOverworldOre = overworld != null && !overworld.equals(Blocks.AIR);
-            boolean isNetherOre = nether != null && !nether.equals(Blocks.AIR);
-
-            // 末地没有任何矿石
-            if (isDimension(dim, "minecraft:the_end")) {
-                notifyError("§c§l末地没有任何矿石，换个维度再启动！");
-                toggle();  // 直接停止模块
-                return;
-            }
-            // 选了主世界矿但在下界
-            else if (isOverworldOre && isDimension(dim, "minecraft:the_nether")) {
-                notifyError("§c§l选了主世界矿但在下界，传送到主世界再启动！");
-                toggle();  // 直接停止模块
-                return;
-            }
-            // 选了下界矿但在主世界
-            else if (isNetherOre && isDimension(dim, "minecraft:overworld")) {
-                notifyError("§c§l选了下界矿但在主世界，传送到下界再启动！");
-                toggle();  // 直接停止模块
-                return;
-            }
-        }
+        // [维度限制已临时关闭] 启动时不再按维度拦截，便于测试状态机（后续按需恢复）
+        // if (mc.level != null) {
+        //     ResourceKey<Level> dim = mc.level.dimension();
+        //     Block overworld = overworldOreTarget.get();
+        //     Block nether = netherOreTarget.get();
+        //     boolean isOverworldOre = overworld != null && !overworld.equals(Blocks.AIR);
+        //     boolean isNetherOre = nether != null && !nether.equals(Blocks.AIR);
+        //
+        //     // 末地没有任何矿石
+        //     if (isDimension(dim, "minecraft:the_end")) {
+        //         notifyError("§c§l末地没有任何矿石，换个维度再启动！");
+        //         toggle();  // 直接停止模块
+        //         return;
+        //     }
+        //     // 选了主世界矿但在下界
+        //     else if (isOverworldOre && isDimension(dim, "minecraft:the_nether")) {
+        //         notifyError("§c§l选了主世界矿但在下界，传送到主世界再启动！");
+        //         toggle();  // 直接停止模块
+        //         return;
+        //     }
+        //     // 选了下界矿但在主世界
+        //     else if (isNetherOre && isDimension(dim, "minecraft:overworld")) {
+        //         notifyError("§c§l选了下界矿但在主世界，传送到下界再启动！");
+        //         toggle();  // 直接停止模块
+        //         return;
+        //     }
+        // }
 
         // 挖矿模式
         if (seedMiningEnabled.get()) {
@@ -941,6 +960,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public int getDurabilityThreshold() { return durabilityThreshold.get(); }
     public int getTeleportDelay() { return teleportDelay.get(); }
     public int getMineGoalUpdateInterval() { return mineGoalUpdateInterval.get(); }
+    public boolean getAllowBreak() { return allowBreak.get(); }
+    public boolean isLogisticsBreakBlocks() { return logisticsBreakBlocks.get(); }
     
     public List<Item> getFoodWhitelist() { return foodWhitelist.get(); }
 
@@ -956,6 +977,50 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // 公开消息方法供子组件调用
     public void info(String msg) { notify(msg); }
     public void error(String msg) { notifyError(msg); }
+
+    // #region debug-point 自动挖矿-卸货补货寻路
+    private static final String 调试地址 = "http://127.0.0.1:7777/event";
+    private static final String 调试会话 = "2026-08-29-自动挖矿-卸货补货寻路";
+    private final AtomicLong 调试序号 = new AtomicLong();
+
+    /** 运行时埋点：只传假设编号、埋点位置、数据，异步 POST 到本地监听服务。异常全部吞掉，不影响游戏线程。 */
+    public void debugEvent(String 假设编号, String 埋点, String 数据) {
+        long 序号 = 调试序号.incrementAndGet();
+        long 时刻 = System.currentTimeMillis();
+        String json = "{\"sessionId\":\"" + 转义(调试会话) + "\",\"displayName\":\""
+            + 转义(调试会话) + "\",\"runId\":\"probe-1\",\"hypothesisId\":\""
+            + 转义(假设编号) + "\",\"location\":\"" + 转义("自动挖矿/" + 埋点)
+            + "\",\"ts\":" + 时刻 + ",\"data\":{\"sequence\":" + 序号
+            + ",\"detail\":\"" + 转义(数据) + "\"}}";
+
+        Thread 上报线程 = new Thread(() -> {
+            HttpURLConnection 连接 = null;
+            try {
+                连接 = (HttpURLConnection) URI.create(调试地址).toURL().openConnection();
+                连接.setRequestMethod("POST");
+                连接.setConnectTimeout(500);
+                连接.setReadTimeout(500);
+                连接.setDoOutput(true);
+                连接.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                try (OutputStream 输出 = 连接.getOutputStream()) {
+                    输出.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+                连接.getResponseCode();
+            } catch (Exception ignored) {
+                // 调试服务不可用时绝不影响游戏线程。
+            } finally {
+                if (连接 != null) 连接.disconnect();
+            }
+        }, "yiyiaddon-挖矿诊断-" + 序号);
+        上报线程.setDaemon(true);
+        上报线程.start();
+    }
+
+    private static String 转义(String 文本) {
+        return 文本 == null ? "" : 文本.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    }
+    // #endregion
 
     // ═══════════════════════════════════════════════════════════════════
     //  假矿检测

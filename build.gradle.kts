@@ -108,8 +108,14 @@ tasks {
             ?: providers.environmentVariable("JAVA_HOME").orNull
         val jdkCandidates = buildList {
             configuredJdk?.let { add(file(it)) }
-            addAll(listOf("C:/Program Files/Java", "C:/Program Files/Eclipse Adoptium").flatMap { root ->
-                file(root).listFiles()?.filter { it.isDirectory && it.name.startsWith("jdk-$jdkVersion") } ?: emptyList()
+            addAll(listOf(
+                "C:/Program Files/Java",
+                "C:/Program Files/Eclipse Adoptium",
+                "C:/Program Files/BellSoft"
+            ).flatMap { root ->
+                file(root).listFiles()?.filter {
+                    it.isDirectory && (it.name.startsWith("jdk-$jdkVersion") || it.name.contains("JDK-$jdkVersion", ignoreCase = true))
+                } ?: emptyList()
             })
         }
         val jmods = jdkCandidates.asSequence()
@@ -139,9 +145,15 @@ tasks {
         // fabric.mod.json 里声明的 entrypoint 找不到类，游戏直接起不来。
         keep("public class com.example.addon.core.AddonTemplate { public void onInitialize(); public void onRegisterCategories(); public String getPackage(); }")
         
-        // Mixin 必须保留类名和方法名（Fabric 需要），但字段和局部变量会混淆
-        keep("@org.spongepowered.asm.mixin.Mixin class * { *; }")
-        keep("@org.spongepowered.asm.mixin.Accessor class * { *; }")
+        // Mixin 类名由 mixins.json 按名称加载，必须保留；实现方法允许混淆。
+        keepnames("@org.spongepowered.asm.mixin.Mixin class *")
+        keepnames("@org.spongepowered.asm.mixin.Mixin interface *")
+
+        // 仅保留 Mixin 与目标类绑定所必需的成员名称，避免把整个 Mixin 实现暴露出来。
+        keepclassmembers("class * { @org.spongepowered.asm.mixin.Shadow <fields>; }")
+        keepclassmembers("class * { @org.spongepowered.asm.mixin.Shadow <methods>; }")
+        keepclassmembers("class * { @org.spongepowered.asm.mixin.gen.Accessor <methods>; }")
+        keepclassmembers("class * { @org.spongepowered.asm.mixin.gen.Invoker <methods>; }")
         
         // 保留基类的公共 API，但实现细节会混淆
         keep("public class com.example.addon.core.YiyiaddonModule { public <methods>; }")
@@ -156,12 +168,12 @@ tasks {
         // 混淆强度主要靠改名：repackageclasses + overloadaggressively + 易混字典。
         dontoptimize()
 
-        // 只混淆类名，不把不同继承树强行压入同一个默认包，避免 ProGuard 7.8.1 类型合并异常
-        // repackageclasses("")
-        // 保留访问边界，避免第三方官方映射类型触发深度控制流分析问题
+        // 将普通实现类集中到无语义包，隐藏 modules、villager、navigation、utils 等原始结构。
+        // Fabric 入口由 keep 保留，Mixin 类由 keepnames 保留，因此其配置路径不会改变。
+        repackageclasses("com.example.addon.x")
+        overloadaggressively()
+        // 保留访问边界，避免改变 Mixin 与第三方类之间的可见性语义。
         // allowaccessmodification()
-        // 注意：不要调 useuniqueclassmembernames()，那是「强制成员名唯一」，
-        // 会削弱 overloadaggressively 的效果。默认允许重名才是我们想要的。
         
         // 映射文件直接写进 Obfuscation/映射存档/，不要留在 build/ 里。
         // build/ 在 .gitignore 内，且 gradlew clean 会整个删掉——映射一旦丢失，

@@ -145,13 +145,13 @@ public final class CommandManager {
 
         // 超时保护（使用动态设置的等待时长）
         if (executeTick > maxWaitTicks) {
-            module.error("§c[自动挖矿] 传送等待超时");
+            module.error("§c传送等待超时");
             executing = false;
             return false;
         }
 
-        // 前20 tick等待服务器响应
-        if (executeTick < 20) {
+        // 前 10 tick 等待服务器响应
+        if (executeTick < 10) {
             return true;
         }
 
@@ -257,9 +257,9 @@ public final class CommandManager {
             return false; // 还在移动，继续等
         }
 
-        // 位置静止超过5 tick，且玩家在地面
+        // 位置静止超过 3 tick，且玩家在地面
         stationaryTicks++;
-        return stationaryTicks >= 5 && player.onGround();
+        return stationaryTicks >= 3 && player.onGround();
     }
 
     // ═══════════════════════════════════════════════════════════════════

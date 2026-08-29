@@ -114,6 +114,24 @@ public class OrePredictor {
     }
 
     /**
+     * 范围内是否仍有未加载的区块。
+     * RTP 传送后服务端分帧下发区块，若立即判「挖完」会在区块加载完成前误 RTP。
+     * 采集循环用此方法等待区块到位再判空。
+     */
+    public boolean hasUnloadedChunksInRange(BlockPos center, int radius) {
+        int minChunkX = (center.getX() - radius) >> 4;
+        int maxChunkX = (center.getX() + radius) >> 4;
+        int minChunkZ = (center.getZ() - radius) >> 4;
+        int maxChunkZ = (center.getZ() + radius) >> 4;
+        for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                if (!isChunkLoaded(cx, cz)) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 获取范围内所有实测矿位。
      * 未扫描的已加载区块会入队（每次调用最多入队 32 个），由 processScanQueue 分帧消化。
      */

@@ -32,7 +32,9 @@
     "MeteorCommandRegistrationMixin",
     "ClientLevelPredictionAccessor",
     "ResourcePackPushMixin",
-    "ClientCommandSourceMixin"
+    "ClientCommandSourceMixin",
+    "WIntEditRealtimeMixin",
+    "WDoubleEditRealtimeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
