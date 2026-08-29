@@ -41,7 +41,7 @@ public class AddonTemplate extends MeteorAddon {
     
     // ── 后端 API 配置 ──
     // 用户统计服务（部署在 Cloudflare Workers）
-    public static final String STATS_API_URL = "https://yiyiaddonadmin.fxjggyx.workers.dev";
+    public static final String STATS_API_URL = "https://yiyiaddon.asia";
     
     // ── 模块分类 ──
     // 三个分类：工具、自动化、绕过

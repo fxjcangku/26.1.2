@@ -332,7 +332,7 @@ nav.topbar .icon-btn:active { transform: scale(.92); }
 <div class="sheet" id="sheet"></div>
 
 <script>
-var API_BASE = 'https://yiyiaddonadmin.fxjggyx.workers.dev';
+var API_BASE = 'https://yiyiaddon.asia';
 var state = {
   token: localStorage.getItem('admin_token') || null,
   tab: 'overview',
