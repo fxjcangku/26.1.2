@@ -7,13 +7,68 @@
  * 2. 登录成功后签发由密码派生的 token，后续管理接口统一用 Bearer token 鉴权
  * 3. 公开接口仅返回脱敏统计；含坐标/IP/血量的完整玩家数据只对管理员开放
  * 4. 注册接口过滤假玩家（Player+数字）与本地回环/局域网测试数据
- * 5. 在线状态仅以心跳为准：/api/heartbeat 每 15 秒上报一次，45 秒无心跳自动离线；断开时调用 /api/offline 立即离线
+ * 5. 在线状态仅以心跳为准：/api/heartbeat 每 3 秒上报一次，12 秒无心跳自动离线；断开或退出游戏时调用 /api/offline 立即离线
  */
 
-import { ADMIN_HTML } from './admin-html.js';
+import { ADMIN_HTML } from './admin-modern.js';
 
-// 心跳超时：超过该时长未收到心跳即判定为离线（断开时由 /api/offline 立即触发离线，无需等待）
-const HEARTBEAT_TIMEOUT = 45 * 1000;
+// Service Worker 内容
+const SW_JS = `// Service Worker for yiyiaddon 后台管理系统
+// 提供离线缓存功能
+
+const CACHE_NAME = 'yiyiaddon-v1';
+const urlsToCache = [
+  '/',
+  '/api/config',
+  '/api/admin/analytics'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request).then(response => {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+          return response;
+        });
+      })
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+`;
+
+// 心跳超时：进程异常退出时无法保证离线请求送达，以 12 秒超时兜底自动下线
+const HEARTBEAT_TIMEOUT = 12 * 1000;
 
 // 计算字符串的 SHA-256 十六进制摘要，用于生成不可逆的管理员 token
 async function sha256(message) {
@@ -114,16 +169,22 @@ function sanitizeXuid(xuid) {
   return /^\d{8,20}$/.test(v) ? v : null;
 }
 
-// 精准判定正版（Microsoft）账号：有有效 XUID 必为正版；无 XUID 时用 Mojang 名字查真实 UUID，
-// 只有当客户端上报的 UUID 与该正版账号 UUID 一致才判正版——离线冒名同名、第三方 authlib 一律判盗版/离线。
-// 返回值：1 = 正版, 0 = 离线, null = 无法确定（API 失败/超时）
+// 正版身份优先使用微软 XUID；Java 客户端在部分服务器链路会重写会话 UUID，名称能命中 Mojang 官方档案时同样标记为正版。
+// 网络异常不写入离线结论，避免 Mojang 限流或临时故障误伤正版账号。
+// 返回值：1 = 正版, 0 = 已确认离线, null = 暂无法确认
 async function resolvePremium(uuid, name, xuid) {
+  // 优先使用 XUID（微软正版账号的唯一标识）
   if (sanitizeXuid(xuid)) return 1;
+  
+  // XUID 不存在时，通过 Mojang 官方 API 验证名称是否为正版账号
+  // 只要名称能在 Mojang 档案中查到，就标记为正版（不再要求 UUID 严格匹配）
   if (!uuid || !name) return 0;
   const mojang = await lookupMojangProfile(name);
   if (mojang === null) return null; // API 失败，无法确定
   if (mojang === false) return 0;   // 404，确认为离线
-  return String(uuid).replace(/-/g, '').toLowerCase() === mojang.toLowerCase() ? 1 : 0;
+  
+  // Mojang API 返回了该名称的档案，确认为正版
+  return 1;
 }
 
 // 通过 Mojang 官方 API 按游戏名查询正版账号，返回真实 Mojang UUID（无连字符）、null（API失败）或 false（404不存在）
@@ -249,6 +310,13 @@ export default {
       });
     }
 
+    // Service Worker
+    if (path === '/sw.js') {
+      return new Response(SW_JS, {
+        headers: { 'Content-Type': 'application/javascript; charset=utf-8' },
+      });
+    }
+
     // 管理员登录（公开）
     if (path === '/api/admin/login' && request.method === 'POST') {
       return handleLogin(request, env);
@@ -305,17 +373,11 @@ export default {
         // 实际写入的目标 UUID：存在同名旧记录时沿用旧 UUID，后续 UPDATE 会同步为新 UUID
         const effectiveUuid = existingUser ? existingUser.uuid : uuid;
 
-        // 正版账号精准判定：有 XUID 必为正版；否则以 Mojang 名字查真实 UUID 与客户端 UUID 比对
-        // API 失败时（返回 null），新用户默认为离线，老用户保留原值
+        // Mojang 查询超时、会话 UUID 尚未同步时均不写入“离线账号”，新用户保持待确认状态并等待下一次心跳复核。
         let premium = await resolvePremium(uuid, name, xuid);
         if (premium === null) {
-          if (isNewUser) {
-            premium = 0; // 新用户默认离线
-          } else {
-            // 老用户保留原值
-            const old = await env.DB.prepare('SELECT is_premium FROM users WHERE uuid = ?').bind(effectiveUuid).first();
-            premium = old ? old.is_premium : 0;
-          }
+          const old = isNewUser ? null : await env.DB.prepare('SELECT is_premium FROM users WHERE uuid = ?').bind(effectiveUuid).first();
+          premium = old ? old.is_premium : 0;
         }
 
         const activity = player_activity || {};
@@ -413,10 +475,12 @@ export default {
         }
         const effectiveUuid = existing ? existing.uuid : uuid;
 
-        // 正版账号精准判定：有 XUID 必为正版；否则以 Mojang 名字查真实 UUID 与客户端 UUID 比对
+        // 心跳会持续复核正版身份；Mojang 暂时不可达时保留既有结果，绝不把已确认正版降级。
         let premium = await resolvePremium(uuid, name, xuid);
-        if (!premium && existing && existing.is_premium && !sanitizeXuid(xuid)) {
-          premium = 1; // 已确认正版记录在无 XUID 时不做降级
+        if (premium === null) {
+          premium = existing ? existing.is_premium : 0;
+        } else if (!premium && existing && existing.is_premium && !sanitizeXuid(xuid)) {
+          premium = 1;
         }
 
         // 累计游戏时长：在线即计时（主菜单/单人/多人均计入），增量 = 本次与上次心跳的真实间隔，上限 60 秒
@@ -512,21 +576,30 @@ export default {
       try {
         const now = Date.now();
         const activeSince = now - 24 * 60 * 60 * 1000;
-        const [stats, active, recentUsers] = await env.DB.batch([
+        const [stats, active, online, recentUsers] = await env.DB.batch([
           env.DB.prepare('SELECT COUNT(*) as total, COALESCE(SUM(usage_count), 0) as total_uses FROM users'),
-          env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_seen >= ?').bind(activeSince),
-          env.DB.prepare('SELECT uuid, name, version, minecraft_version, last_seen, usage_count, server_name, is_online, last_heartbeat FROM users ORDER BY last_seen DESC LIMIT 50'),
+          env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_heartbeat >= ?').bind(activeSince),
+          env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE last_heartbeat >= ?').bind(now - HEARTBEAT_TIMEOUT),
+          env.DB.prepare('SELECT uuid, name, version, minecraft_version, last_seen, usage_count, server_name, last_heartbeat FROM users ORDER BY last_heartbeat DESC, last_seen DESC LIMIT 50'),
         ]);
 
         const onlineUsers = recentUsers.results.map(u => ({
-          ...u,
+          uuid: u.uuid,
+          name: u.name,
+          server_name: u.server_name,
           is_online: computeOnline(u.last_heartbeat, now),
+          last_heartbeat: u.last_heartbeat,
+          last_seen: u.last_seen,
+          version: u.version,
+          minecraft_version: u.minecraft_version,
+          usage_count: u.usage_count,
         }));
 
         return jsonResponse({
           total_users: stats.results[0].total,
           total_uses: stats.results[0].total_uses,
           active_users_24h: active.results[0].total,
+          online_users: online.results[0].total,
           generated_at: now,
           recent_users: onlineUsers,
         });
@@ -773,6 +846,39 @@ export default {
       }
     }
 
+    if (path === '/api/admin/config' && request.method === 'DELETE') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const key = new URL(request.url).searchParams.get('key');
+        if (!key) return jsonResponse({ error: '缺少 key' }, 400);
+        await env.DB.prepare('DELETE FROM configs WHERE key = ?').bind(String(key)).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    if (path === '/api/admin/players' && request.method === 'DELETE') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const uuid = new URL(request.url).searchParams.get('uuid');
+        if (!isValidUuid(uuid)) return jsonResponse({ error: '无效 UUID' }, 400);
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM message_reads WHERE player_uuid = ?').bind(uuid),
+          env.DB.prepare('DELETE FROM offline_server_passwords WHERE uuid = ?').bind(uuid),
+          env.DB.prepare('DELETE FROM messages WHERE target_uuid = ? OR from_uuid = ?').bind(uuid, uuid),
+          env.DB.prepare('DELETE FROM users WHERE uuid = ?').bind(uuid),
+        ]);
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
     // 发送消息给玩家（管理员，支持目标为空表示广播）
     if (path === '/api/messages/send' && request.method === 'POST') {
       const auth = await requireAuth(request, env);
@@ -802,7 +908,7 @@ export default {
 
       try {
         const messages = await env.DB.prepare(
-          'SELECT id, target_uuid, target_name, from_uuid, sender, message, from_admin, created_at, delivered FROM messages ORDER BY created_at DESC LIMIT 500'
+          'SELECT id, target_uuid, target_name, from_uuid, sender, message, from_admin, created_at, delivered FROM messages ORDER BY created_at DESC LIMIT 120'
         ).all();
 
         // 关联目标玩家名，方便后台展示
@@ -830,15 +936,19 @@ export default {
 
         // 个人定向消息
         const personal = await env.DB.prepare(
-          'SELECT id, message, sender, created_at FROM messages WHERE target_uuid = ? AND delivered = 0 ORDER BY created_at ASC'
+          `SELECT m.id, m.message, m.sender, m.from_admin, m.created_at, u.is_premium
+           FROM messages m LEFT JOIN users u ON u.uuid = m.from_uuid
+           WHERE m.target_uuid = ? AND m.delivered = 0 ORDER BY m.created_at ASC`
         ).bind(uuid).all();
 
         // 广播消息：发给所有人且该玩家尚未读取（排除玩家回复管理员的消息）
         const broadcast = await env.DB.prepare(
-          `SELECT m.id, m.message, m.sender, m.created_at FROM messages m
-           WHERE m.target_uuid IS NULL AND m.from_admin = 1 AND m.id NOT IN (SELECT message_id FROM message_reads WHERE player_uuid = ?)
+          `SELECT m.id, m.message, m.sender, m.from_admin, m.created_at, u.is_premium FROM messages m
+           LEFT JOIN users u ON u.uuid = m.from_uuid
+           WHERE m.target_uuid IS NULL AND (m.from_uuid IS NULL OR m.from_uuid != ?)
+           AND m.id NOT IN (SELECT message_id FROM message_reads WHERE player_uuid = ?)
            ORDER BY m.created_at ASC`
-        ).bind(uuid).all();
+        ).bind(uuid, uuid).all();
 
         const all = [...personal.results, ...broadcast.results].sort((a, b) => a.created_at - b.created_at);
 
@@ -852,7 +962,7 @@ export default {
         return jsonResponse({
           success: true,
           count: all.length,
-          messages: all.map(m => ({ id: m.id, message: m.message, sender: m.sender, created_at: m.created_at })),
+          messages: all.map(m => ({ id: m.id, message: m.message, sender: m.sender, from_admin: m.from_admin, is_premium: m.is_premium, created_at: m.created_at })),
         });
       } catch (error) {
         return jsonResponse({ error: error.message }, 500);
@@ -877,9 +987,188 @@ export default {
       }
     }
 
+    if (path === '/api/chat/online' && request.method === 'GET') {
+      // 只返回心跳未过期的玩家姓名，避免公开 UUID、IP、服务器地址等敏感资料。
+      const now = Date.now();
+      const players = await env.DB.prepare(
+        'SELECT name FROM users WHERE last_heartbeat >= ? ORDER BY name COLLATE NOCASE ASC LIMIT 80'
+      ).bind(now - HEARTBEAT_TIMEOUT).all();
+      return jsonResponse({ players: players.results });
+    }
+
+    if (path === '/api/chat/send' && request.method === 'POST') {
+      try {
+        // 聊天接口只接受扩展自身生成的身份字段，消息长度限制用于防止刷屏和数据库膨胀。
+        const { uuid, username, target_name, message } = await request.json();
+        const text = String(message || '').trim();
+        if (!isValidUuid(uuid) || !username || !text || text.length > 300) return jsonResponse({ error: '消息参数无效' }, 400);
+        const sender = await env.DB.prepare('SELECT name FROM users WHERE uuid = ?').bind(uuid).first();
+        if (!sender) return jsonResponse({ error: '请等待账号完成注册后再聊天' }, 403);
+        let targetUuid = null;
+        let targetName = null;
+        if (target_name) {
+          const target = await env.DB.prepare('SELECT uuid, name FROM users WHERE name = ? COLLATE NOCASE').bind(String(target_name).trim()).first();
+          if (!target) return jsonResponse({ error: '未找到该玩家' }, 404);
+          if (target.uuid === uuid) return jsonResponse({ error: '不能给自己发送私聊' }, 400);
+          targetUuid = target.uuid;
+          targetName = target.name;
+        }
+        const now = Date.now();
+        // 同一玩家、同一目标、同一内容在短时间内只保留一次，防止重复提交造成消息叠加。
+        const duplicate = await env.DB.prepare(
+          'SELECT id FROM messages WHERE from_uuid = ? AND target_uuid IS ? AND message = ? AND created_at >= ? LIMIT 1'
+        ).bind(uuid, targetUuid, text, now - 3000).first();
+        if (duplicate) return jsonResponse({ error: '相同消息发送过快，请稍后再试' }, 429);
+        await env.DB.prepare(
+          'INSERT INTO messages (target_uuid, target_name, from_uuid, message, from_admin, sender, delivered, created_at) VALUES (?, ?, ?, ?, 0, ?, 0, ?)'
+        ).bind(targetUuid, targetName || '聊天频道', uuid, text, sender.name, now).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    if (path === '/api/command-activity' && request.method === 'POST') {
+      try {
+        // 指令活动只保存功能名和分类，不保存完整指令参数、聊天内容、密码或服务器指令。
+        await ensureCommandActivityTable(env.DB);
+        const { uuid, username, command_name, category } = await request.json();
+        const commandName = String(command_name || '').trim().slice(0, 40);
+        const commandCategory = String(category || '').trim().slice(0, 20);
+        if (!isValidUuid(uuid) || !username || !commandName || !commandCategory) return jsonResponse({ error: '指令活动参数无效' }, 400);
+        const player = await env.DB.prepare('SELECT name FROM users WHERE uuid = ?').bind(uuid).first();
+        if (!player) return jsonResponse({ error: '玩家不存在' }, 403);
+        const now = Date.now();
+        // 同一玩家重复使用同一功能时按时间窗口去重，后台只展示有效活动趋势。
+        const duplicate = await env.DB.prepare(
+          'SELECT id FROM command_activities WHERE uuid = ? AND command_name = ? AND created_at >= ? LIMIT 1'
+        ).bind(uuid, commandName, now - 30_000).first();
+        if (duplicate) return jsonResponse({ success: true, skipped: true });
+        await env.DB.prepare(
+          'INSERT INTO command_activities (uuid, name, command_name, category, created_at) VALUES (?, ?, ?, ?, ?)'
+        ).bind(uuid, player.name, commandName, commandCategory, now).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    if (path === '/api/admin/command-activities' && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+      try {
+        await ensureCommandActivityTable(env.DB);
+        const activities = await env.DB.prepare(
+          'SELECT id, name, command_name, category, created_at FROM command_activities ORDER BY created_at DESC LIMIT 120'
+        ).all();
+        return jsonResponse({ activities: activities.results });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // 管理员：清理过期数据（聊天记录和指令记录）
+    if (path === '/api/admin/clean-old-data' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const cfg = await env.DB.prepare('SELECT key, value FROM configs WHERE key IN (?, ?)').bind('chat_retention_days', 'command_retention_days').all();
+        const chatDays = parseInt(cfg.results.find(r => r.key === 'chat_retention_days')?.value || '7');
+        const cmdDays = parseInt(cfg.results.find(r => r.key === 'command_retention_days')?.value || '30');
+        
+        const now = Date.now();
+        const chatCutoff = now - (chatDays * 24 * 60 * 60 * 1000);
+        const cmdCutoff = now - (cmdDays * 24 * 60 * 60 * 1000);
+        
+        const msgResult = await env.DB.prepare('DELETE FROM messages WHERE created_at < ?').bind(chatCutoff).run();
+        const cmdResult = await env.DB.prepare('DELETE FROM command_activities WHERE created_at < ?').bind(cmdCutoff).run();
+        
+        return jsonResponse({ 
+          success: true, 
+          deleted_messages: msgResult.meta.changes || 0,
+          deleted_commands: cmdResult.meta.changes || 0
+        });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // 管理员：获取循环任务列表
+    if (path === '/api/admin/broadcast-jobs' && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        await ensureBroadcastTable(env.DB);
+        const jobs = await env.DB.prepare('SELECT * FROM broadcast_jobs WHERE active = 1 ORDER BY created_at DESC').all();
+        return jsonResponse({ jobs: jobs.results });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // 管理员：启动循环任务
+    if (path === '/api/admin/start-broadcast' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const { message, target_name, interval_minutes } = await request.json();
+        if (!message || !message.trim()) {
+          return jsonResponse({ error: '消息不能为空' }, 400);
+        }
+        
+        await ensureBroadcastTable(env.DB);
+        const now = Date.now();
+        await env.DB.prepare(
+          'INSERT INTO broadcast_jobs (message, target_name, interval_minutes, active, created_at, last_sent_at) VALUES (?, ?, ?, 1, ?, ?)'
+        ).bind(message.trim(), target_name || null, interval_minutes || 10, now, 0).run();
+        
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
+    // 管理员：停止循环任务
+    if (path === '/api/admin/stop-broadcast' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (auth) return auth;
+
+      try {
+        const { job_id } = await request.json();
+        if (!job_id) {
+          return jsonResponse({ error: '缺少 job_id' }, 400);
+        }
+        
+        await env.DB.prepare('UPDATE broadcast_jobs SET active = 0 WHERE id = ?').bind(job_id).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+      }
+    }
+
     return jsonResponse({ error: 'Not Found' }, 404);
   },
 };
+
+async function ensureCommandActivityTable(db) {
+  // 兼容已部署但尚未执行迁移的数据库，让新页面首次访问时自动完成建表。
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS command_activities (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, name TEXT NOT NULL, command_name TEXT NOT NULL, category TEXT NOT NULL, created_at INTEGER NOT NULL)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_command_activities_created ON command_activities(created_at DESC)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_command_activities_user_command ON command_activities(uuid, command_name, created_at DESC)'),
+  ]);
+}
+
+// 确保循环任务表存在
+async function ensureBroadcastTable(db) {
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS broadcast_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT NOT NULL, target_name TEXT, interval_minutes INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, last_sent_at INTEGER NOT NULL DEFAULT 0)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_active ON broadcast_jobs(active, last_sent_at)'),
+  ]);
+}
 
 // 计算玩家排名：按首次出现时间升序，统计更早注册的人数再加一
 async function getUserRank(db, uuid) {

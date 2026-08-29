@@ -276,13 +276,16 @@ nav.topbar .icon-btn:active { transform: scale(.92); }
 .sheet .kv:last-child { border-bottom: none; }
 .sheet .kv .k { color: var(--text2); flex-shrink: 0; }
 .sheet .kv .val { font-weight: 600; text-align: right; word-break: break-all; }
+.sheet-actions { display: flex; gap: 8px; margin: 14px 0; }
+.sheet-action { flex: 1; min-height: 40px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--fill); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.sheet-action.danger { color: #fff; background: var(--red); border-color: var(--red); }
 
 /* ── 消息 ── */
-.chat { max-height: 460px; overflow-y: auto; }
-.chat .msg { margin: 0 0 10px; padding: 10px 14px; border-radius: 18px; background: var(--fill); max-width: 82%; }
-.chat .msg.admin { background: rgba(0,122,255,0.18); margin-left: auto; }
-.chat .msg .meta { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
-.chat .msg .txt { font-size: 15px; }
+.chat { max-height: 520px; overflow-y: auto; padding: 8px; border-radius: 22px; background: rgba(120,120,128,0.08); }
+.chat .msg { margin: 0 0 10px; padding: 12px 14px; border-radius: 20px 20px 20px 6px; background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: 0 4px 14px rgba(0,0,0,0.08); max-width: 78%; backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); }
+.chat .msg.admin { background: linear-gradient(135deg, rgba(10,132,255,0.42), rgba(88,86,214,0.32)); border-radius: 20px 20px 6px 20px; margin-left: auto; }
+.chat .msg .meta { font-size: 12px; color: var(--text2); margin-bottom: 5px; }
+.chat .msg .txt { font-size: 15px; line-height: 1.5; word-break: break-word; }
 .composer { display: flex; gap: 8px; margin-top: 12px; }
 .composer input { flex: 1; height: 46px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--fill); color: var(--text); padding: 0 14px; font-size: 15px; outline: none; }
 .composer button { min-width: 46px; height: 46px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-size: 18px; cursor: pointer; }
@@ -335,9 +338,11 @@ nav.topbar .icon-btn:active { transform: scale(.92); }
 var API_BASE = 'https://yiyiaddon.asia';
 var state = {
   token: localStorage.getItem('admin_token') || null,
-  tab: 'overview',
+  tab: 'dashboard',
   players: [],
   analytics: {},
+  cache: {}, // 新增：数据缓存
+  lastFetch: {}, // 新增：上次请求时间
   timer: null,
   isMobile: window.matchMedia('(max-width: 720px)').matches,
   playerFilter: '',
@@ -345,13 +350,11 @@ var state = {
 };
 
 var TABS = [
-  { id: 'overview', e: '📊', label: '概览' },
-  { id: 'players', e: '👥', label: '玩家' },
-  { id: 'premium', e: '🔑', label: '正版账号' },
-  { id: 'passwords', e: '🔐', label: '离线密码' },
-  { id: 'chat', e: '💬', label: '消息' },
-  { id: 'issues', e: '⚠️', label: '异常' },
-  { id: 'settings', e: '⚙️', label: '设置' }
+  { id: 'dashboard', e: '📊', label: '仪表盘' },
+  { id: 'players', e: '👥', label: '玩家管理' },
+  { id: 'chat', e: '💬', label: '聊天系统' },
+  { id: 'security', e: '🔐', label: '安全监控' },
+  { id: 'settings', e: '⚙️', label: '系统设置' }
 ];
 
 // ── 工具函数 ──
@@ -453,13 +456,14 @@ function fmtTimezone(tz) {
   if (!tz) return '';
   var seg = String(tz).split('/');
   var region = TZ_REGION_ZH[seg[0]] || seg[0] || '';
+  var city = seg.length > 1 ? seg.slice(1).join('/').replace(/_/g, ' ') : '';
   var off = '';
   try {
     var parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date());
     var g = parts.find(function(p){ return p.type === 'timeZoneName'; });
     if (g && g.value) off = String(g.value).replace('GMT', 'UTC');
   } catch (e) {}
-  var base = region || tz;
+  var base = region + (city ? ' · ' + fmtCity(city) : '');
   return off ? base + '（' + off + '）' : base;
 }
 // 皮肤头像：统一走 mc-heads.net 原始皮肤（按游戏名解析，正版名自动命中 Mojang），
@@ -634,7 +638,7 @@ function showApp() {
   buildNav();
   switchTab('overview');
   if (state.timer) clearInterval(state.timer);
-  state.timer = setInterval(refreshIfNeeded, 15000);
+  state.timer = setInterval(refreshIfNeeded, 3000);
 }
 function buildSegmented() {
   var seg = $('segmented'); seg.innerHTML = '';
@@ -661,66 +665,100 @@ function buildNav() { buildSegmented(); buildTabbar(); }
 function switchTab(id) {
   state.tab = id;
   buildSegmented(); buildTabbar();
-  if (id === 'overview') loadOverview();
+  if (id === 'dashboard') loadDashboard();
   else if (id === 'players') loadPlayers();
-  else if (id === 'premium') loadPremium();
-  else if (id === 'passwords') loadPasswords();
   else if (id === 'chat') loadChat();
-  else if (id === 'issues') loadIssues();
+  else if (id === 'security') loadSecurity();
   else if (id === 'settings') loadSettings();
 }
 function refreshIfNeeded() {
+  if (state.tab === 'dashboard') loadDashboard();
   if (state.tab === 'players') loadPlayers();
-  if (state.tab === 'overview') loadOverview();
-  if (state.tab === 'premium') loadPremium();
   if (state.tab === 'chat') loadChat();
+  if (state.tab === 'security') loadSecurity();
 }
 
-// ── 概览 ──
-function loadOverview() {
-  api('/api/admin/analytics').then(function(a) {
-    if (a._status === 401 || a._status === 403) { return logout(); }
+// ── 工具函数：带缓存的 API 请求（减少重复请求） ──
+function apiCached(url, ttl = 3000) {
+  const now = Date.now();
+  if (state.cache[url] && state.lastFetch[url] && (now - state.lastFetch[url]) < ttl) {
+    return Promise.resolve(state.cache[url]);
+  }
+  return api(url).then(function(res) {
+    state.cache[url] = res;
+    state.lastFetch[url] = now;
+    return res;
+  });
+}
+
+// ── 工具函数：批量请求（并行加载） ──
+function apiBatch(urls) {
+  return Promise.all(urls.map(function(url){ return api(url); }));
+}
+
+// ── 1. 仪表盘（整合：概览 + 实时监控） ──
+function loadDashboard() {
+  // 并行请求所有数据，优化加载速度
+  apiBatch([
+    '/api/admin/analytics',
+    '/api/admin/players'
+  ]).then(function(results) {
+    var a = results[0], pr = results[1];
+    if (a._status === 401 || a._status === 403) return logout();
+    
     state.analytics = a;
+    state.players = pr.users || [];
+    
     var html = '';
+    
+    // KPI 卡片
     html += '<div class="kpi-grid">';
     html += kpi('🌍', a.total_users, '总玩家');
     html += kpi('🟢', a.online_count, '当前在线');
     html += kpi('🔒', a.vpn_suspected, '疑似VPN');
-    html += kpi('✅', (a.premium && a.premium.premium) || 0, '正版账户');
+    html += kpi('🔑', a.premium_count, '正版账号');
+    html += kpi('📊', a.active_24h, '24h活跃');
+    html += kpi('🚀', a.total_launches, '累计启动');
     html += '</div>';
-
-    html += '<div class="card"><div class="sec-title">最近 14 天活跃</div>';
-    html += '<div class="bars">';
-    var max = 1;
-    (a.daily_active || []).forEach(function(d){ if (d.active > max) max = d.active; });
-    (a.daily_active || []).forEach(function(d){
-      var h = Math.max(2, Math.round(d.active / max * 96));
-      var dd = new Date(d.date + 'T00:00:00');
-      var label = (dd.getMonth() + 1) + '月' + dd.getDate() + '日';
-      html += '<div class="bar-wrap"><span class="v">' + d.active + '</span><div class="bar" style="height:' + h + 'px"></div><span class="d">' + label + '</span></div>';
-    });
+    
+    // 实时在线玩家（只显示在线的，折叠其他）
+    var onlinePlayers = state.players.filter(function(p){ return p.is_online; });
+    html += '<div class="card"><div class="sec-title">🟢 在线玩家（' + onlinePlayers.length + '）</div>';
+    if (!onlinePlayers.length) {
+      html += '<div class="row">暂无在线玩家</div>';
+    } else {
+      onlinePlayers.slice(0, 10).forEach(function(p){
+        var identity = p.is_premium ? '🔑正版' : '🔓离线';
+        var location = p.country_code ? flagEmoji(p.country_code) + ' ' + countryName(p.country_code) : '未知';
+        html += '<div class="row" onclick="showPlayerDetail(&quot;' + esc(p.uuid) + '&quot;)"><div style="font-size:22px;">👤</div>';
+        html += '<div class="info"><div class="name">' + identity + ' ' + esc(p.name) + '</div>';
+        html += '<div class="sub">' + location + ' · 延迟 ' + (p.ping || 0) + 'ms · ' + fmtTime(p.last_seen) + '</div></div>';
+        html += '<div class="right">⚡</div></div>';
+      });
+      if (onlinePlayers.length > 10) {
+        html += '<div class="row" style="text-align:center;color:var(--text2);" onclick="switchTab(&quot;players&quot;)">查看全部 ' + onlinePlayers.length + ' 人 →</div>';
+      }
+    }
+    html += '</div>';
+    
+    // 快捷操作
+    html += '<div class="card pad"><div class="sec-title" style="padding:0 0 12px;">⚡ 快捷操作</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">';
+    html += '<button onclick="switchTab(&quot;chat&quot;)">💬 发送消息</button>';
+    html += '<button onclick="refreshPremium()">🔄 刷新正版</button>';
+    html += '<button onclick="switchTab(&quot;security&quot;)">🔐 安全监控</button>';
+    html += '<button onclick="switchTab(&quot;settings&quot;)">⚙️ 系统设置</button>';
     html += '</div></div>';
-
-    html += '<div class="card"><div class="sec-title">国家分布</div>';
-    (a.country_distribution || []).slice(0, 12).forEach(function(c){
-      html += '<div class="row"><div style="font-size:24px;flex-shrink:0;">' + flagEmoji(c.client_country) + '</div><div class="info"><div class="name">' + countryName(c.client_country) + '</div></div><div class="right">' + c.c + ' 人</div></div>';
-    });
-    html += '</div>';
-
-    html += '<div class="card"><div class="sec-title">版本分布</div>';
-    (a.version_distribution || []).slice(0, 10).forEach(function(c){
-      html += '<div class="row"><div class="info"><div class="name">' + esc(c.version) + '</div></div><div class="right">' + c.c + ' 人</div></div>';
-    });
-    html += '</div>';
-
+    
     $('view').innerHTML = html;
   });
 }
+
 function kpi(icon, num, label) {
-  return '<div class="kpi"><div class="icon">' + icon + '</div><div class="num">' + (num || 0) + '</div><div class="lbl">' + label + '</div></div>';
+  return '<div class="kpi"><div class="kpi-icon">' + icon + '</div><div class="kpi-num">' + (num || 0) + '</div><div class="kpi-label">' + label + '</div></div>';
 }
 
-// ── 玩家（带搜索 + 筛选） ──
+// ── 2. 玩家管理（整合：玩家列表 + 正版 + 密码，带标签页切换） ──
 function loadPlayers() {
   api('/api/admin/players').then(function(res) {
     if (res._status === 401 || res._status === 403) { return logout(); }
@@ -893,12 +931,13 @@ function openSheet(i) {
   var html = '<div class="sheet-head"><div class="grab"></div><button class="sheet-close" onclick="closeSheet()" aria-label="关闭">✕</button></div>';
   html += '<h2>' + skin(p, 96) + '<span>' + flagEmoji(p.client_country) + ' ' + esc(p.name) + '</span></h2>';
   html += '<div style="font-size:13px;color:var(--text2);margin:6px 0 4px;">' + (p.is_online ? '<span class="dot on"></span> 在线' : '⚪ 离线') + ' · ' + fmtTime(p.last_seen) + '</div>';
-  html += '<div style="margin:12px 0;">';
+  html += '<div class="sheet-actions">';
   if (p.is_premium) {
-    html += '<button onclick="togglePremium(&quot;' + p.uuid + '&quot;, 0)" style="padding:6px 12px;border:1px solid #ccc;background:#fff;cursor:pointer;border-radius:4px;">标记为离线</button>';
+    html += '<button class="sheet-action" onclick="togglePremium(&quot;' + p.uuid + '&quot;, 0)">标记为离线</button>';
   } else {
-    html += '<button onclick="togglePremium(&quot;' + p.uuid + '&quot;, 1)" style="padding:6px 12px;border:1px solid #4CAF50;background:#4CAF50;color:#fff;cursor:pointer;border-radius:4px;">标记为正版</button>';
+    html += '<button class="sheet-action" onclick="togglePremium(&quot;' + p.uuid + '&quot;, 1)">标记为正版</button>';
   }
+  html += '<button class="sheet-action danger" onclick="deletePlayer(&quot;' + p.uuid + '&quot;, &quot;' + esc(p.name).replace(/&quot;/g, '&amp;quot;') + '&quot;)">删除玩家</button>';
   html += '</div>';
   html += kv('UUID', p.uuid);
   html += kv('正版账户', p.is_premium ? '✅ 是' + (p.gamertag ? '（' + p.gamertag + '）' : '') : '⚪ 离线');
@@ -965,21 +1004,60 @@ function togglePremium(uuid, isPremium) {
     }
   });
 }
+function deletePlayer(uuid, name) {
+  if (!confirm('确定永久删除玩家「' + name + '」及其关联消息、密码记录吗？此操作无法恢复。')) return;
+  api('/api/admin/players?uuid=' + encodeURIComponent(uuid), { method: 'DELETE' }).then(function(res) {
+    if (res.success) {
+      closeSheet();
+      loadPlayers();
+    } else {
+      alert(res.error || '删除失败');
+    }
+  });
+}
 
-// ── 消息 ──
-function loadChat() {
+// ── 玩家聊天（玩家互相发送的消息，不包括管理员发送的） ──
+function loadPlayerChat() {
+  api('/api/messages/history').then(function(res) {
+    if (res._status === 401 || res._status === 403) { return logout(); }
+    var msgs = Array.isArray(res) ? res : (res.messages || []);
+    // 只显示玩家互相发送的消息（from_admin !== 1）
+    var playerMsgs = msgs.filter(function(m){ return m.from_admin !== 1; });
+    var html = '<div class="sec-title" style="padding:2px 4px 4px;">💬 玩家聊天（' + playerMsgs.length + '）</div>';
+    html += '<div class="card pad"><div class="sub">仅显示玩家之间的私聊和频道消息，不包含管理员发送的消息。</div></div>';
+    html += '<div class="card pad"><div class="chat">';
+    if (!playerMsgs.length) {
+      html += '<div style="text-align:center;color:var(--text2);padding:20px;">暂无聊天记录</div>';
+    } else {
+      playerMsgs.forEach(function(m){
+        var identity = m.is_premium ? '正版玩家' : '离线账号';
+        html += '<div class="msg"><div class="meta">' + esc(identity) + ' · ' + esc(m.sender || '未知') + ' → ' + esc(m.target_name || '所有人') + ' · ' + fmtTime(m.created_at) + '</div><div class="txt">' + esc(m.message) + '</div></div>';
+      });
+    }
+    html += '</div></div>';
+    $('view').innerHTML = html;
+  });
+}
+
+// ── 管理消息（管理员发送给玩家的消息） ──
+function loadAdminChat() {
   // 同时拉取聊天历史与玩家列表，用于「选择收件人」下拉框
   Promise.all([api('/api/messages/history'), api('/api/admin/players')]).then(function(results) {
     var res = results[0], pr = results[1];
     if (res._status === 401 || res._status === 403) { return logout(); }
     state.players = pr.users || [];
-    var msgs = Array.isArray(res) ? res : [];
-    var html = '<div class="sec-title" style="padding:2px 4px 4px;">聊天历史（' + msgs.length + '）</div>';
+    var msgs = Array.isArray(res) ? res : (res.messages || []);
+    // 只显示管理员发送的消息（from_admin === 1）
+    var adminMsgs = msgs.filter(function(m){ return m.from_admin === 1; });
+    var html = '<div class="sec-title" style="padding:2px 4px 4px;">📢 管理消息（' + adminMsgs.length + '）</div>';
     html += '<div class="card pad"><div class="chat">';
-    msgs.forEach(function(m){
-      var admin = m.from_admin === 1;
-      html += '<div class="msg' + (admin ? ' admin' : '') + '"><div class="meta">' + esc(m.sender || 'Admin') + ' → ' + esc(m.target_name || '所有人') + ' · ' + fmtTime(m.created_at) + '</div><div class="txt">' + esc(m.message) + '</div></div>';
-    });
+    if (!adminMsgs.length) {
+      html += '<div style="text-align:center;color:var(--text2);padding:20px;">暂无管理消息</div>';
+    } else {
+      adminMsgs.forEach(function(m){
+        html += '<div class="msg admin"><div class="meta">管理员 → ' + esc(m.target_name || '所有人') + ' · ' + fmtTime(m.created_at) + '</div><div class="txt">' + esc(m.message) + '</div></div>';
+      });
+    }
     html += '</div></div>';
     html += '<div class="card pad"><div class="sec-title" style="padding:0 0 10px;">发送消息（选择收件人）</div>';
     html += '<div class="field"><select id="msg-target" class="select">';
@@ -993,6 +1071,12 @@ function loadChat() {
     $('msg-send').onclick = sendMsg;
   });
 }
+
+// ── 消息（旧版兼容，已拆分为 player-chat 和 admin-chat） ──
+function loadChat() {
+  // 聊天系统入口直接加载玩家聊天页面，避免跳转到未注册的子标签导致按钮无响应。
+  loadPlayerChat();
+}
 function sendMsg() {
   var target = $('msg-target').value.trim();
   var text = $('msg-text').value.trim();
@@ -1003,8 +1087,160 @@ function sendMsg() {
     if (found) body.target_uuid = found.uuid;
   }
   api('/api/messages/send', { method: 'POST', body: body }).then(function(res) {
-    if (res.success) { $('msg-text').value = ''; loadChat(); }
+    if (res.success) { $('msg-text').value = ''; loadAdminChat(); }
     else { alert(res.error || '发送失败'); }
+  });
+}
+
+// 保存清理规则
+function saveChatRetention() {
+  var chatDays = parseInt($('chat-retention').value) || 7;
+  var cmdDays = parseInt($('cmd-retention').value) || 30;
+  
+  Promise.all([
+    api('/api/admin/config', { method: 'POST', body: { key: 'chat_retention_days', value: String(chatDays) } }),
+    api('/api/admin/config', { method: 'POST', body: { key: 'command_retention_days', value: String(cmdDays) } })
+  ]).then(function() {
+    alert('✅ 清理规则已保存');
+    loadChatSettings();
+  });
+}
+
+// 立即清理
+function cleanNow() {
+  if (!confirm('确定要立即清理过期数据吗？此操作不可撤销。')) return;
+  api('/api/admin/clean-old-data', { method: 'POST' }).then(function(res) {
+    if (res.success) {
+      alert('✅ 已清理：聊天记录 ' + (res.deleted_messages || 0) + ' 条，指令记录 ' + (res.deleted_commands || 0) + ' 条');
+      loadChatSettings();
+    } else {
+      alert('❌ 清理失败：' + (res.error || '未知错误'));
+    }
+  });
+}
+
+// 启动循环发送
+function startBroadcast() {
+  var msg = $('loop-msg').value.trim();
+  var target = $('loop-target').value.trim();
+  var interval = parseInt($('loop-interval').value) || 10;
+  
+  if (!msg) {
+    alert('请输入消息内容');
+    return;
+  }
+  
+  var body = {
+    message: msg,
+    target_name: target || null,
+    interval_minutes: interval
+  };
+  
+  api('/api/admin/start-broadcast', { method: 'POST', body: body }).then(function(res) {
+    if (res.success) {
+      alert('✅ 循环任务已启动');
+      $('loop-msg').value = '';
+      loadChatSettings();
+    } else {
+      alert('❌ 启动失败：' + (res.error || '未知错误'));
+    }
+  });
+}
+
+// 停止循环发送
+function stopBroadcast(jobId) {
+  if (!confirm('确定要停止这个循环任务吗？')) return;
+  api('/api/admin/stop-broadcast', { method: 'POST', body: { job_id: jobId } }).then(function(res) {
+    if (res.success) {
+      alert('✅ 循环任务已停止');
+      loadChatSettings();
+    } else {
+      alert('❌ 停止失败：' + (res.error || '未知错误'));
+    }
+  });
+}
+
+function loadCommandActivities() {
+  api('/api/admin/command-activities').then(function(res) {
+    if (res._status === 401 || res._status === 403) return logout();
+    var items = res.activities || [];
+    var html = '<div class="card pad"><div class="sec-title" style="padding:0 0 8px;">⌨️ 指令活动（最近 ' + items.length + ' 条）</div>';
+    html += '<div class="sub">仅记录玩家发送的 / 开头的指令名称，不记录参数、密码或坐标；相同玩家相同指令 30 秒内自动去重。</div></div>';
+    html += '<div class="card">';
+    if (!items.length) html += '<div class="row">暂无指令活动</div>';
+    items.forEach(function(item) {
+      html += '<div class="row" style="cursor:default;"><div style="font-size:22px;">⌨️</div><div class="info"><div class="name">' + esc(item.name) + ' · ' + esc(item.command_name) + '</div><div class="sub">分类：' + esc(item.category) + '</div></div><div class="right">' + fmtTime(item.created_at) + '</div></div>';
+    });
+    html += '</div>';
+    $('view').innerHTML = html;
+  });
+}
+
+// ── 聊天设置（自动清理 + 循环发消息） ──
+function loadChatSettings() {
+  // 获取当前清理配置和循环任务
+  Promise.all([
+    api('/api/config'),
+    api('/api/admin/broadcast-jobs')
+  ]).then(function(results) {
+    var cfg = results[0].config || {};
+    var jobs = results[1].jobs || [];
+    
+    var html = '';
+    
+    // 自动清理设置
+    html += '<div class="card pad"><div class="sec-title" style="padding:0 0 10px;">🗑️ 自动清理设置</div>';
+    html += '<div class="sub" style="margin-bottom:16px;">定期自动删除过期的聊天记录和指令活动，防止数据库膨胀。</div>';
+    
+    html += '<div style="margin-bottom:12px;"><b>聊天记录保留天数</b></div>';
+    html += '<div class="field"><input id="chat-retention" type="number" value="' + (cfg.chat_retention_days || 7) + '" min="1" max="365" placeholder="默认 7 天"></div>';
+    
+    html += '<div style="margin-bottom:12px;margin-top:16px;"><b>指令记录保留天数</b></div>';
+    html += '<div class="field"><input id="cmd-retention" type="number" value="' + (cfg.command_retention_days || 30) + '" min="1" max="365" placeholder="默认 30 天"></div>';
+    
+    html += '<button class="primary" style="margin-top:16px;" onclick="saveChatRetention()">💾 保存清理规则</button>';
+    html += '<button style="margin-top:8px;" onclick="cleanNow()">🗑️ 立即清理</button>';
+    html += '</div>';
+    
+    // 循环发消息
+    html += '<div class="card pad"><div class="sec-title" style="padding:0 0 10px;">🔄 循环发消息</div>';
+    html += '<div class="sub" style="margin-bottom:16px;">定时向指定玩家或全体在线玩家发送消息，可用于公告、提醒等场景。</div>';
+    
+    html += '<div style="margin-bottom:12px;"><b>消息内容</b></div>';
+    html += '<div class="field"><input id="loop-msg" type="text" placeholder="例如：服务器将在 10 分钟后重启" maxlength="300"></div>';
+    
+    html += '<div style="margin-bottom:12px;margin-top:16px;"><b>目标玩家</b></div>';
+    html += '<div class="field"><select id="loop-target" class="select">';
+    html += '<option value="">所有在线玩家</option>';
+    // 这里需要先加载玩家列表
+    if (state.players && state.players.length) {
+      state.players.forEach(function(p){
+        html += '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>';
+      });
+    }
+    html += '</select></div>';
+    
+    html += '<div style="margin-bottom:12px;margin-top:16px;"><b>发送间隔（分钟）</b></div>';
+    html += '<div class="field"><input id="loop-interval" type="number" value="10" min="1" max="1440" placeholder="默认 10 分钟"></div>';
+    
+    html += '<button class="primary" style="margin-top:16px;" onclick="startBroadcast()">▶️ 启动循环发送</button>';
+    html += '</div>';
+    
+    // 当前任务列表
+    html += '<div class="card"><div class="sec-title">📋 当前循环任务</div>';
+    if (!jobs.length) {
+      html += '<div class="row">暂无循环任务</div>';
+    } else {
+      jobs.forEach(function(job) {
+        html += '<div class="row"><div style="font-size:22px;">🔄</div>';
+        html += '<div class="info"><div class="name">' + esc(job.message).slice(0, 50) + '</div>';
+        html += '<div class="sub">目标：' + (job.target_name || '所有人') + ' · 间隔：' + job.interval_minutes + ' 分钟 · 创建于：' + fmtTime(job.created_at) + '</div></div>';
+        html += '<button onclick="stopBroadcast(' + job.id + ')">⏹️ 停止</button></div>';
+      });
+    }
+    html += '</div>';
+    
+    $('view').innerHTML = html;
   });
 }
 
@@ -1040,7 +1276,11 @@ function loadSettings() {
     html += '· 在下方「添加配置」输入 key 与 value 后点「添加」；同名 key 会覆盖旧值。<br>';
     html += '· 支持的 key（value 填 true / false）：<br>';
     html += '&nbsp;&nbsp;<b>update_notice_enabled</b> —— 进服时检测新版本并提示玩家；<br>';
-    html += '&nbsp;&nbsp;<b>stats_report_enabled</b> —— 玩家数据（坐标/IP/模块等）是否上报到后台。';
+    html += '&nbsp;&nbsp;<b>stats_report_enabled</b> —— 玩家注册数据是否上报；<br>';
+    html += '&nbsp;&nbsp;<b>heartbeat_report_enabled</b> —— 在线状态、延迟、模块和活动数据是否上报；<br>';
+    html += '&nbsp;&nbsp;<b>anomaly_report_enabled</b> —— 高速移动和瞬移异常是否上报；<br>';
+    html += '&nbsp;&nbsp;<b>crash_report_enabled</b> —— 崩溃信息是否上报；<br>';
+    html += '&nbsp;&nbsp;<b>message_poll_enabled</b> —— 是否接收后台发送的游戏内消息。';
     html += '</div></div>';
 
     html += '<div class="card"><div class="sec-title">⚙️ 当前配置（addon 每分钟自动读取）</div>';
@@ -1048,12 +1288,17 @@ function loadSettings() {
     // 配置项中文备注：帮助理解每个开关的作用
     var CFG_DESC = {
       'update_notice_enabled': '更新提醒：进服时检测新版本并提示（true/false）',
-      'stats_report_enabled': '统计上报：控制玩家数据是否上报到后台（true/false）'
+      'stats_report_enabled': '注册统计：控制玩家基础数据、坐标和网络信息是否上报（true/false）',
+      'heartbeat_report_enabled': '在线心跳：控制在线状态、延迟、模块和活动数据上报（true/false）',
+      'anomaly_report_enabled': '异常检测：控制高速移动和瞬移异常上报（true/false）',
+      'crash_report_enabled': '崩溃上报：控制客户端崩溃信息上报（true/false）',
+      'message_poll_enabled': '消息接收：控制客户端是否接收后台消息（true/false）'
     };
     keys.forEach(function(k){
       html += '<div class="row"><div class="info"><div class="name">' + esc(k) + '</div>' +
         '<div class="sub">' + (CFG_DESC[k] || '自定义配置项（addon 读取）') + '</div>' +
-        '<div class="sub" style="color:var(--text);">当前值：' + esc(cfg[k]) + '</div></div><div class="right">生效中</div></div>';
+        '<div class="sub" style="color:var(--text);">当前值：' + esc(cfg[k]) + '</div></div>' +
+        '<div class="right"><button class="icon-btn" data-config-delete="' + esc(k) + '" title="删除配置">删除</button></div></div>';
     });
     html += '</div>';
     html += '<div class="card pad"><div class="sec-title" style="padding:0 0 10px;">添加配置</div>';
@@ -1068,18 +1313,25 @@ function loadSettings() {
         if (r.success) loadSettings(); else alert(r.error || '失败');
       });
     };
+    document.querySelectorAll('[data-config-delete]').forEach(function(button) {
+      button.onclick = function() {
+        var key = button.getAttribute('data-config-delete');
+        if (!window.confirm('确定删除配置「' + key + '」吗？删除后客户端恢复默认行为。')) return;
+        api('/api/admin/config?key=' + encodeURIComponent(key), { method: 'DELETE' }).then(function(r) {
+          if (r.success) loadSettings(); else alert(r.error || '删除失败');
+        });
+      };
+    });
   });
 }
 
 // ── 事件绑定 ──
-document.addEventListener('DOMContentLoaded', function() {
-  $('lg-btn').onclick = tryLogin;
-  document.addEventListener('keydown', function(e){ if (e.key === 'Enter' && $('login').style.display !== 'none') tryLogin(); });
-  $('logout-btn').onclick = logout;
-  $('theme-btn').onclick = toggleTheme;
-  $('sheet-overlay').onclick = closeSheet;
-  $('backtop').onclick = function() { window.scrollTo({ top: 0, behavior: 'smooth' }); };
-});
+$('lg-btn').onclick = tryLogin;
+document.addEventListener('keydown', function(e){ if (e.key === 'Enter' && $('login').style.display !== 'none') tryLogin(); });
+$('logout-btn').onclick = logout;
+$('theme-btn').onclick = toggleTheme;
+$('sheet-overlay').onclick = closeSheet;
+$('backtop').onclick = function() { window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
 // 筛选 chip 事件（冒泡委托）
 document.addEventListener('click', function(e) {
@@ -1101,10 +1353,25 @@ window.addEventListener('scroll', function() {
 });
 
 // 启动
-document.addEventListener('DOMContentLoaded', function() {
-  initTheme();
-  if (state.token) { showApp(); } else { $('app').style.display = 'none'; $('login').style.display = 'flex'; }
-});
+initTheme();
+if (state.token) { showApp(); } else { $('app').style.display = 'none'; $('login').style.display = 'flex'; }
+</script>
+<script>
+(function () {
+  var login = document.getElementById('login');
+  var app = document.getElementById('app');
+  var button = document.getElementById('lg-btn');
+  function restoreApp() {
+    if (!localStorage.getItem('admin_token')) return;
+    if (login) login.style.display = 'none';
+    if (app) app.style.display = 'block';
+    if (typeof showApp === 'function') showApp();
+  }
+  restoreApp();
+  if (button) button.addEventListener('click', function () {
+    window.setTimeout(restoreApp, 800);
+  });
+}());
 </script>
 </body>
 </html>`;
