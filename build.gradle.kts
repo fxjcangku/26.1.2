@@ -102,8 +102,8 @@ tasks {
         injars(inputJar)
         outjars(outputJar)
         libraryjars(configurations.runtimeClasspath.get())
-        // 显式添加 baritone jar（避免 META-INF/jars 内嵌导致类层次分析失败）
-        libraryjars(files("libs/baritone-fabric-26.1.2.jar"))
+        // 当前 JDK 25 安装缺少 jmods，使用本机 JDK 17 的基础类库供 ProGuard 建立完整层次
+        libraryjars("C:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot/jmods/java.base.jmod")
 
         // 只保留运行时必需的注解属性，删掉调试和类型信息：
         //   保留：运行时注解（Mixin/Fabric 需要）
@@ -142,11 +142,10 @@ tasks {
         // 混淆强度主要靠改名：repackageclasses + overloadaggressively + 易混字典。
         dontoptimize()
 
-        // 混淆配置：短名字 + 重载混淆
-        repackageclasses("")
-        flattenpackagehierarchy("")
-        allowaccessmodification()
-        overloadaggressively()
+        // 只混淆类名，不把不同继承树强行压入同一个默认包，避免 ProGuard 7.8.1 类型合并异常
+        // repackageclasses("")
+        // 保留访问边界，避免第三方官方映射类型触发深度控制流分析问题
+        // allowaccessmodification()
         // 注意：不要调 useuniqueclassmembernames()，那是「强制成员名唯一」，
         // 会削弱 overloadaggressively 的效果。默认允许重名才是我们想要的。
         
@@ -167,13 +166,6 @@ tasks {
         
         dontwarn("**")
         dontnote("**")
-        
-        // 忽略类层次警告（村民交易/挖矿模块引入复杂枚举类型导致 ProGuard 分析失败）
-        // 临时方案：写入配置文件再加载
-        val tempConfig = layout.buildDirectory.file("tmp/proguard-extra.pro").get().asFile
-        tempConfig.parentFile.mkdirs()
-        tempConfig.writeText("-ignorewarnings\n")
-        configuration(tempConfig)
     }
 
     register("buildOfficial") {
