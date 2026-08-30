@@ -12,10 +12,11 @@ import com.example.addon.villager.navigation.VillagerNavigationService;
 import com.example.addon.villager.trade.TradeEngine;
 import com.example.addon.villager.trade.TradeMatcher;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
@@ -36,7 +37,7 @@ import java.util.function.Consumer;
  * 村民交易有限状态机（26.1.2）
  *
  * 三种模式的核心差异：
- * · LOCAL（原地交易）：不移动、不碰箱子，只与身边目标村民交易
+ * · LOCAL（原地交易）：不寻路工作站，只与身边目标村民交易，绿宝石不足/背包满自动补给/卸货
  * · SINGLE_PATH（寻路单点）：寻路到村民工作站，交易过程中自动补给/卸货
  * · PIPELINE（多任务）：任务队列顺序执行，每个任务等价一次 SINGLE_PATH
  *
@@ -67,7 +68,7 @@ public final class VillagerTradeFSM {
     private VillagerProfession targetProfession;
     private List<VillagerTradeTarget> targets = new ArrayList<>();
     private int maxPrice = 64;
-    private int sendCooldownTicks = 10;   // 发包节流（delayMs / 50）
+    private int sendCooldownTicks = 10;   // 交易发包节流（固定 10 tick = 500ms）
     private int emeraldThreshold = 32;    // 低于该值触发补给
     private int supplyStacks = 1;         // 每次补给追加组数（1组=64个），补给目标=阈值+组数×64
     private boolean drainMode = false;    // 榨干模式：忽略购买总量，买到目标交易全部售罄为止
@@ -117,8 +118,8 @@ public final class VillagerTradeFSM {
     private static final int OPEN_TIMEOUT = 100;         // 5 秒
     private static final int CLOSE_TIMEOUT = 60;         // 3 秒
     private static final int TRADE_IDLE_TIMEOUT = 200;   // 10 秒无进展换村民
-    private static final int CONFIRM_TICKS = 7;          // 交易确认等待
-    private static final int MAX_CONFIRM_FAILS = 3;      // 同一 offer 连败次数
+    private static final int CONFIRM_TICKS = 20;         // 交易确认等待（1 秒，避免同步延迟误判重发导致重复购买）
+    private static final int MAX_CONFIRM_FAILS = 2;      // 同一 offer 连败次数（最多重发 1 次）
     private static final double INTERACT_RANGE = 3.2;    // 生存实体交互距离 3.0 + 容差
 
     public VillagerTradeFSM() {
@@ -143,11 +144,10 @@ public final class VillagerTradeFSM {
     }
 
     public void configure(VillagerProfession profession, List<VillagerTradeTarget> targets,
-                          int maxPrice, int packetDelayMs, int emeraldThreshold, int targetQuantity) {
+                          int maxPrice, int emeraldThreshold, int targetQuantity) {
         this.targetProfession = profession;
         this.targets = new ArrayList<>(targets);
         this.maxPrice = maxPrice;
-        this.sendCooldownTicks = Math.max(1, packetDelayMs / 50);
         this.emeraldThreshold = emeraldThreshold;
         this.targetQuantity = Math.max(1, targetQuantity);
     }
@@ -352,11 +352,15 @@ public final class VillagerTradeFSM {
 
     private boolean isValidTarget(Villager villager) {
         if (villager == null || !villager.isAlive()) return false;
+        // 幼年村民无法交易，直接排除
+        if (villager.isBaby()) return false;
         if (exhaustedVillagers.contains(villager)) return false;
 
-        // 职业匹配
+        // 职业匹配（26.1.2：VillagerProfession 是 Record，常量是 ResourceKey，
+        // 用注册表 Identifier 比较，value().equals() 不可靠，会把傻子/失业村民误匹配进来）
         try {
-            if (!villager.getVillagerData().profession().value().equals(targetProfession)) {
+            Identifier targetId = BuiltInRegistries.VILLAGER_PROFESSION.getKey(targetProfession);
+            if (targetId == null || !villager.getVillagerData().profession().is(targetId)) {
                 return false;
             }
         } catch (Exception e) {
@@ -460,9 +464,6 @@ public final class VillagerTradeFSM {
             return;
         }
 
-        // 视角自动转向村民：原地模式玩家走到位即可，无需自己瞄准
-        faceVillager(player, currentVillager);
-
         if (stateTicks > OPEN_TIMEOUT || player.distanceTo(currentVillager) > INTERACT_RANGE) {
             // 寻路模式优先回到工作站重新找位，村民可能离开工作站了
             if (mode != Mode.LOCAL && currentWorkstation != null && openRetries == 0) {
@@ -487,6 +488,8 @@ public final class VillagerTradeFSM {
                 return;
             }
             if (mc.gameMode != null) {
+                // 只在交互发包瞬间转视角，避免每 tick 覆盖玩家视角（不抢鼠标/视角）
+                faceVillager(player, currentVillager);
                 mc.gameMode.interact(player, currentVillager,
                     new EntityHitResult(currentVillager), InteractionHand.MAIN_HAND);
             }
@@ -572,18 +575,21 @@ public final class VillagerTradeFSM {
         // 退出条件 1：购买总量达成（榨干模式忽略总量，只认售罄）
         if (!drainMode && purchasedCount >= targetQuantity) {
             log("§a✓ 购买目标达成 §8▸ " + purchasedCount + " 件");
-            closeMenuAndRoute(mode == Mode.LOCAL ? Route.FINISH : Route.UNLOAD);
+            closeMenuAndRoute(Route.UNLOAD);
             return;
         }
         // 退出条件 2：背包满
         if (!TradeEngine.hasSpace()) {
             log("§e⚠ 背包已满 §8▸ 前往卸货");
-            closeMenuAndRoute(mode == Mode.LOCAL ? Route.FINISH : Route.UNLOAD);
+            closeMenuAndRoute(Route.UNLOAD);
             return;
         }
 
+        // 客户端报价列表必须来自交易界面 MerchantMenu，Villager.getOffers() 客户端会抛异常
+        var offers = ((MerchantMenu) player.containerMenu).getOffers();
+
         // 单次遍历取最便宜的可交易项，选择与成本判断严格一致
-        int index = TradeEngine.findBestOfferIndex(currentVillager, targets, maxPrice, skipOfferIndexes);
+        int index = TradeEngine.findBestOfferIndex(offers, targets, maxPrice, skipOfferIndexes);
         // 退出条件 3：所有匹配交易售罄/无效
         if (index < 0) {
             log("§e⚠ 目标交易已全部售罄或无效");
@@ -592,12 +598,11 @@ public final class VillagerTradeFSM {
             return;
         }
 
-        var offers = currentVillager.getOffers();
         int cost = TradeMatcher.getEmeraldCost(offers.get(index));
         // 退出条件 4：绿宝石不够买这一单
         if (TradeEngine.countEmeralds() < cost) {
             log("§e⚠ 绿宝石不足 §8▸ 前往补给");
-            closeMenuAndRoute(mode == Mode.LOCAL ? Route.FINISH : Route.SUPPLY);
+            closeMenuAndRoute(Route.SUPPLY);
             return;
         }
 
@@ -616,8 +621,8 @@ public final class VillagerTradeFSM {
     private void tickTradeConfirm() {
         confirmTicks++;
 
-        var offers = currentVillager.getOffers();
-        int usesNow = (offers != null && offerIndex < offers.size()) ? offers.get(offerIndex).getUses() : -1;
+        var offers = ((MerchantMenu) mc.player.containerMenu).getOffers();
+        int usesNow = (offerIndex < offers.size()) ? offers.get(offerIndex).getUses() : -1;
         int emeraldNow = TradeEngine.countEmeralds();
 
         // 成功信号：服务端刷新了 offer 用量，或绿宝石被扣除
@@ -626,7 +631,7 @@ public final class VillagerTradeFSM {
         if (success) {
             tradeCount++;
             lastProgressAt = stateTicks;
-            int gained = TradeEngine.safeResultCount(currentVillager, offerIndex);
+            int gained = TradeEngine.safeResultCount(offers, offerIndex);
             purchasedCount += gained;
             failStreak = 0;
             tradePhase = TradePhase.SELECT;
@@ -676,8 +681,9 @@ public final class VillagerTradeFSM {
             return;
         }
 
-        boolean containerOpen = player.containerMenu != player.inventoryMenu
-            || mc.screen instanceof AbstractContainerScreen<?>;
+        // 静默模式下没有 Screen，containerMenu 是唯一权威判断：
+        // 不等于 inventoryMenu 说明村民界面或箱子界面仍开着
+        boolean containerOpen = player.containerMenu != player.inventoryMenu;
 
         if (containerOpen) {
             if (stateTicks % 5 == 0) {
@@ -763,7 +769,7 @@ public final class VillagerTradeFSM {
             fail("无法打开绿宝石箱");
             return;
         }
-        if (mc.screen instanceof AbstractContainerScreen<?>) {
+        if (mc.player != null && mc.player.containerMenu != null && mc.player.containerMenu.containerId != 0) {
             enterState(State.SUPPLY_TAKE);
             return;
         }
@@ -829,7 +835,7 @@ public final class VillagerTradeFSM {
             fail("无法打开成品箱");
             return;
         }
-        if (mc.screen instanceof AbstractContainerScreen<?>) {
+        if (mc.player != null && mc.player.containerMenu != null && mc.player.containerMenu.containerId != 0) {
             enterState(State.UNLOAD_TAKE);
             return;
         }

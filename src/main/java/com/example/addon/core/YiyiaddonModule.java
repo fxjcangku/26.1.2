@@ -249,7 +249,9 @@ public abstract class YiyiaddonModule extends Module {
     protected void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
         WButton button = theme.button(title);
         button.action = action;
-        table.add(button).minWidth(BUTTON_MIN_WIDTH).expandWidgetX();
+        // group("uniform") 让同一面板内所有按钮列等宽：WTable 会取该组最大宽度统一分配，
+        // 避免 3 字按钮与 4 字按钮因文字长度不同而出现列宽不一。
+        table.add(button).minWidth(BUTTON_MIN_WIDTH).expandWidgetX().group("uniform");
     }
 
     /**

@@ -12,24 +12,32 @@ import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.Set;
@@ -48,6 +56,26 @@ import java.util.Set;
  * 界面说明：点击"查看使用说明"按钮查看详细配置教程
  */
 public final class AutoMinerModule extends YiyiaddonModule {
+
+    /**
+     * 采集模式：决定矿物按「原矿方块」还是「掉落物」计数判定。
+     * 下界残骸（ancient_debris）掉落物就是自身方块，两模式天然共用，无需特判。
+     */
+    public enum LootMode {
+        SILK_TOUCH("精准采集"),
+        FORTUNE("时运");
+
+        private final String cn;
+
+        LootMode(String cn) {
+            this.cn = cn;
+        }
+
+        @Override
+        public String toString() {
+            return cn;
+        }
+    }
 
     private final MinerFSM fsm = new MinerFSM(this);
     private final BaritoneExecutor baritone = new BaritoneExecutor(this);
@@ -70,6 +98,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Block> overworldOreTarget;
     private final Setting<Block> netherOreTarget;
     private final Setting<Block> blockTarget;
+
+    // ─── 采集模式 ───
+    private final Setting<LootMode> lootMode;
 
     // ─── 种子挖矿 ───
     private final Setting<Boolean> seedMiningEnabled;
@@ -95,6 +126,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Integer> hungerThreshold;
     private final Setting<Integer> durabilityThreshold;
     private final Setting<Integer> teleportDelay;
+    private final Setting<Boolean> shulkerPacker; // 潜影盒打包机：卸货填满潜影盒+换盒重开
 
     // ─── 保留白名单（不丢弃） ───
     private final Setting<List<Item>> keepWhitelist;
@@ -131,6 +163,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Boolean> legitMine;
     private final Setting<Integer> legitMineYLevel;
     private final Setting<Boolean> legitMineIncludeDiagonals;
+    private final Setting<Boolean> fastBreak;
+    private final Setting<Boolean> bypassAnticheat;
 
     // ─── 显示设置（私有字段，不在界面显示） ───
     private final Setting<Double> espScale;
@@ -146,6 +180,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
         //  目标选择 - 挖什么
         // ═══════════════════════════════════════════════════════════
         
+        lootMode = sgTarget.add(new EnumSetting.Builder<LootMode>()
+            .name("采集模式")
+            .description("精准采集：按原矿方块判定计数；时运：按掉落物判定计数（下界残骸两模式共用）")
+            .defaultValue(LootMode.FORTUNE)
+            .build());
+
         overworldOreTarget = sgTarget.add(new BlockSetting.Builder()
             .name("主世界矿石")
             .description("选择主世界矿石（含深层变种）")
@@ -260,6 +300,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .noSlider()
             .build());
 
+        shulkerPacker = sgThreshold.add(new BoolSetting.Builder()
+            .name("潜影盒打包机")
+            .description("卸货时把矿物箱(潜影盒)填满，检测到满后等红石推盒换新盒，自动重开箱继续放，直到背包目标矿放完才RTP。给搭配潜影盒打包机的挂机用户使用。")
+            .defaultValue(false)
+            .build());
+
         // ═══════════════════════════════════════════════════════════
         //  物品管理 - 拿什么扔什么
         // ═══════════════════════════════════════════════════════════
@@ -272,13 +318,15 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         foodWhitelist = sgItems.add(new ItemListSetting.Builder()
             .name("食物白名单")
-            .description("从食物箱只拿选中的物品，默认提供常用食物，可自由增删")
+            .description("从食物箱只拿选中的食物（只显示能吃的食物，默认常用食物，可自由增删）")
             .defaultValue(new ArrayList<>(List.of(
                 Items.COOKED_BEEF,
                 Items.COOKED_PORKCHOP,
                 Items.GOLDEN_CARROT,
                 Items.BREAD
             )))
+            .filter(item -> item.getDefaultInstance().has(DataComponents.FOOD))
+            .bypassFilterWhenSavingAndLoading()
             .build());
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
@@ -344,6 +392,18 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         // ─── Baritone参数 ───
         
+        fastBreak = sgBaritone.add(new BoolSetting.Builder()
+            .name("快速破坏（秒破）")
+            .description("绕过正常挖掘进度直接秒破方块（含黑曜石、远古残骸等硬方块），配合发包模拟完整破坏，比 Meteor 自带 SpeedMine 更强。无反作弊服务器默认开启")
+            .defaultValue(true)
+            .build());
+
+        bypassAnticheat = sgBaritone.add(new BoolSetting.Builder()
+            .name("绕过反作弊")
+            .description("仅强反作弊服务器（Grim 等）开启：秒破后额外补发 ABORT 包混淆破坏进度，绕过 fastbreak 检测")
+            .defaultValue(false)
+            .build());
+
         // ────────────── 开关类设置 ──────────────
         allowBreak = sgBaritone.add(new BoolSetting.Builder()
             .name("破坏阻挡方块")
@@ -476,8 +536,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
             .name("矿点缓存数量")
-            .description("Baritone一次缓存的最大矿点数量")
-            .defaultValue(128)
+            .description("Baritone一次缓存的最大矿点数量，越小越优先挖离自己最近的矿（只保留最近 N 个）")
+            .defaultValue(24)
             .min(1)
             .max(256)
             .noSlider()
@@ -652,6 +712,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
         Block target = getTargetBlock();
         String targetName = BaritoneChatTranslations.translateBlockId(
             BuiltInRegistries.BLOCK.getKey(target).toString());
+        int variantCount = getTargetBlocks().size();
 
         // [维度限制已临时关闭] 启动时不再按维度拦截，便于测试状态机（后续按需恢复）
         // if (mc.level != null) {
@@ -686,6 +747,11 @@ public final class AutoMinerModule extends YiyiaddonModule {
         report.append("§a§l✓ 自动挖矿 · 启动报告");
         report.append("\n§7当前维度　§8▸ ").append(highlightText(getDimensionName())).append("§r");
         report.append("\n§7目标矿物　§8▸ ").append(highlightText(targetName)).append("§r");
+        if (variantCount > 1) {
+            report.append("§7（含深层变种）");
+        }
+        report.append("\n§7采集模式　§8▸ ")
+              .append(highlightText(isSilkTouchMode() ? "精准采集" : "时运")).append("§r");
         report.append("\n§7挖矿模式　§8▸ ")
               .append(highlightText(seedMiningEnabled.get() ? "种子模式" : "普通模式")).append("§r");
 
@@ -704,6 +770,11 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         // 丢弃规则提醒（默认全丢，防止玩家误丢重要物品）
         report.append("\n§c⚠ 丢弃规则：除保留项外全部自动丢弃！想留下的物品请先加进「保留白名单」");
+
+        // 经验修补软提示（不阻断）：挂机修复依赖经验修补，没有则耐久低了修不了
+        if (!hasMendingPickaxe()) {
+            report.append("\n§e⚠ 镐子无经验修补附魔：耐久低时将无法自动修复，建议换有经验修补的镐子");
+        }
 
         notify(report.toString());
     }
@@ -761,6 +832,40 @@ public final class AutoMinerModule extends YiyiaddonModule {
     }
 
     /**
+     * 判断物品是否带指定附魔（26.x 附魔为动态注册表，需从世界注册表解析）。
+     * 用于采集模式自检：识别镐子是否带时运/精准采集。
+     */
+    private boolean hasEnchant(ItemStack stack, ResourceKey<Enchantment> enchantKey) {
+        if (stack.isEmpty() || mc.level == null) return false;
+        ItemEnchantments ench = stack.get(DataComponents.ENCHANTMENTS);
+        if (ench == null || ench.isEmpty()) return false;
+        try {
+            var lookup = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+            var holder = lookup.get(enchantKey).orElse(null);
+            return holder != null && ench.getLevel(holder) > 0;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** 背包里是否有一把带经验修补附魔的镐子（挂机修复依赖它，没有则耐久低了修不了） */
+    private boolean hasMendingPickaxe() {
+        if (mc.player == null) return false;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.isEmpty()
+                && BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_pickaxe")
+                && hasEnchant(stack, Enchantments.MENDING)) {
+                return true;
+            }
+        }
+        ItemStack offhand = mc.player.getOffhandItem();
+        return !offhand.isEmpty()
+            && BuiltInRegistries.ITEM.getKey(offhand.getItem()).getPath().endsWith("_pickaxe")
+            && hasEnchant(offhand, Enchantments.MENDING);
+    }
+
+    /**
      * 启动自检：目标单选、三个WK坐标、五条指令、装备检测
      *
      * 收集全部缺项而不是遇到第一个就返回，这样用户一次就能看到还差什么，
@@ -799,10 +904,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (afkCommand.get().trim().isEmpty()) missing.add("§b前往修复指令§f·未填写");
         if (respawnCommand.get().trim().isEmpty()) missing.add("§b死亡返回指令§f·未填写");
 
-        // 装备检测
+        // 装备检测（含采集模式匹配：模式与镐子附魔不符直接阻断，提示玩家换镐）
         if (mc.player != null) {
             boolean hasPickaxe = false;
             boolean hasWeapon = false;
+            boolean hasSilkPickaxe = false;    // 有精准采集附魔的镐
+            boolean hasFortunePickaxe = false; // 有时运附魔的镐（任意等级）
+            boolean hasPlainPickaxe = false;   // 无时运/精准采集的普通镐
             int foodCount = 0;
 
             for (int i = 0; i < 36; i++) {
@@ -811,7 +919,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
                 String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
                 
-                if (itemId.contains("pickaxe")) hasPickaxe = true;
+                if (itemId.contains("pickaxe")) {
+                    hasPickaxe = true;
+                    if (hasEnchant(stack, Enchantments.SILK_TOUCH)) hasSilkPickaxe = true;
+                    else if (hasEnchant(stack, Enchantments.FORTUNE)) hasFortunePickaxe = true;
+                    else hasPlainPickaxe = true;
+                }
                 if (itemId.endsWith("_sword")) hasWeapon = true;
                 if (foodWhitelist.get().contains(stack.getItem()) && stack.has(DataComponents.FOOD)) foodCount += stack.getCount();
             }
@@ -819,7 +932,12 @@ public final class AutoMinerModule extends YiyiaddonModule {
             ItemStack offhand = mc.player.getOffhandItem();
             if (!offhand.isEmpty()) {
                 String offhandId = BuiltInRegistries.ITEM.getKey(offhand.getItem()).toString();
-                if (offhandId.contains("pickaxe")) hasPickaxe = true;
+                if (offhandId.contains("pickaxe")) {
+                    hasPickaxe = true;
+                    if (hasEnchant(offhand, Enchantments.SILK_TOUCH)) hasSilkPickaxe = true;
+                    else if (hasEnchant(offhand, Enchantments.FORTUNE)) hasFortunePickaxe = true;
+                    else hasPlainPickaxe = true;
+                }
                 if (offhandId.endsWith("_sword")) hasWeapon = true;
                 if (foodWhitelist.get().contains(offhand.getItem()) && offhand.has(DataComponents.FOOD)) foodCount += offhand.getCount();
             }
@@ -827,6 +945,20 @@ public final class AutoMinerModule extends YiyiaddonModule {
             if (!hasPickaxe) missing.add("§7镐子§f·背包里没有");
             if (!hasWeapon) missing.add("§7武器§f·背包里没有");
             if (foodCount < hungerThreshold.get()) missing.add("§7食物§f·白名单只有" + foodCount + "个（低于阈值" + hungerThreshold.get() + "）");
+
+            // 采集模式匹配检测：模式与镐子不符则阻断启动（普通无附魔镐按掉落物处理，视作时运兼容）
+            if (hasPickaxe) {
+                if (isSilkTouchMode()) {
+                    if (!hasSilkPickaxe) {
+                        missing.add("§d精准采集镐§f·背包里没有（当前是精准采集模式，请换成精准采集镐）");
+                    }
+                } else {
+                    // 时运模式：只有「全是精准采集镐」才阻断；有时运镐或普通镐都掉掉落物，兼容
+                    if (!hasFortunePickaxe && !hasPlainPickaxe) {
+                        missing.add("§d时运镐§f·背包里没有（当前是时运模式，请换成时运镐或普通镐）");
+                    }
+                }
+            }
         }
 
         // 种子挖矿检测：种子为选填记录项（挖矿走实测扫描），仅校验格式，不阻塞启动
@@ -913,6 +1045,16 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (isActive()) toggle();
     }
 
+    @EventHandler
+    private void onOpenScreen(OpenScreenEvent event) {
+        if (mc.player == null) return;
+        // 静默容器：挖矿运行中打开矿物箱/食物箱屏幕时取消显示（不抢鼠标），
+        // 箱子数据仍由 mc.player.containerMenu 同步，卸货/补给照常发包。
+        if (isActive() && event.screen instanceof AbstractContainerScreen<?>) {
+            event.setCancelled(true);
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  配置访问器（供子组件调用）
     // ═══════════════════════════════════════════════════════════════════
@@ -930,6 +1072,78 @@ public final class AutoMinerModule extends YiyiaddonModule {
         return Blocks.AIR;
     }
 
+    /** 是否精准采集模式（按原矿方块判定，否则按时运掉落物判定） */
+    public boolean isSilkTouchMode() {
+        return lootMode.get() == LootMode.SILK_TOUCH;
+    }
+
+    /** 是否开启潜影盒打包机模式（容器放满后等红石换盒重开，直到背包目标矿放完才 RTP） */
+    public boolean isShulkerPackerEnabled() {
+        return shulkerPacker.get();
+    }
+
+    /** 目标矿石家族是否包含该方块（含深层/浅层变种，下界矿与普通方块无变种） */
+    public boolean isTargetFamily(Block block) {
+        Block anchor = getTargetBlock();
+        if (anchor == null || anchor == Blocks.AIR || block == null) return false;
+        if (block == anchor) return true;
+        String anchorPath = BuiltInRegistries.BLOCK.getKey(anchor).getPath();
+        String blockPath = BuiltInRegistries.BLOCK.getKey(block).getPath();
+        // 仅主世界矿石存在 deepslate_ 变种互换；下界矿/残骸/普通方块 replace 后不相等，天然排除
+        return anchorPath.replace("deepslate_", "").equals(blockPath.replace("deepslate_", ""));
+    }
+
+    /** 目标矿石家族方块列表（含深层变种），普通模式 Baritone mine 传入挖多种 */
+    public List<Block> getTargetBlocks() {
+        Block anchor = getTargetBlock();
+        List<Block> family = new ArrayList<>();
+        if (anchor == null || anchor == Blocks.AIR) return family;
+        family.add(anchor);
+
+        String path = BuiltInRegistries.BLOCK.getKey(anchor).getPath();
+        // 变种只在主世界矿石里存在（deepslate_ 前缀互换）；下界矿/残骸/普通方块无变种
+        if (!path.contains("_ore")) return family;
+
+        String basePath = path.replace("deepslate_", "");
+        if (path.startsWith("deepslate_")) {
+            // 锚点本身是深层变种，补上浅层原矿
+            BuiltInRegistries.BLOCK.getOptional(Identifier.fromNamespaceAndPath("minecraft", basePath))
+                .ifPresent(b -> { if (!family.contains(b)) family.add(b); });
+        } else {
+            // 锚点是浅层原矿，补上深层变种（存在才加）
+            BuiltInRegistries.BLOCK.getOptional(Identifier.fromNamespaceAndPath("minecraft", "deepslate_" + basePath))
+                .ifPresent(b -> { if (!family.contains(b)) family.add(b); });
+        }
+        return family;
+    }
+
+    /** 目标矿石家族方块完整 ID 集合（精准采集计数/卸货判定用） */
+    public Set<String> getTargetBlockIds() {
+        Set<String> ids = new HashSet<>();
+        for (Block b : getTargetBlocks()) {
+            ids.add(BuiltInRegistries.BLOCK.getKey(b).toString());
+        }
+        return ids;
+    }
+
+    /** 目标矿石对应的掉落物完整 ID（时运模式计数/卸货判定用） */
+    public String getTargetDropItemId() {
+        String blockId = BuiltInRegistries.BLOCK.getKey(getTargetBlock()).getPath();
+        return switch (blockId) {
+            case "lapis_ore", "deepslate_lapis_ore" -> "minecraft:lapis_lazuli";
+            case "redstone_ore", "deepslate_redstone_ore" -> "minecraft:redstone";
+            case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
+            case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
+            case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
+            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
+            case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
+            case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
+            case "nether_quartz_ore" -> "minecraft:quartz";
+            case "ancient_debris" -> "minecraft:ancient_debris";
+            default -> BuiltInRegistries.ITEM.getKey(getTargetBlock().asItem()).toString();
+        };
+    }
+
     public String getWildCommand() { return wildCommand.get(); }
     public boolean isRtpGuiEnabled() { return rtpGuiEnabled.get(); }
     public String getRtpGuiKeyword() { return rtpGuiKeyword.get(); }
@@ -945,6 +1159,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public int getTeleportDelay() { return teleportDelay.get(); }
     public int getMineGoalUpdateInterval() { return mineGoalUpdateInterval.get(); }
     public boolean getAllowBreak() { return allowBreak.get(); }
+    public boolean getAutoTool() { return autoTool.get(); }
+    public boolean getFastBreak() { return fastBreak.get(); }
+    public boolean getBypassAnticheat() { return bypassAnticheat.get(); }
     public boolean isLogisticsBreakBlocks() { return logisticsBreakBlocks.get(); }
     
     public List<Item> getFoodWhitelist() { return foodWhitelist.get(); }
@@ -1030,13 +1247,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
                     BlockPos checkPos = playerPos.offset(x, y, z);
                     Block block = mc.level.getBlockState(checkPos).getBlock();
 
-                    // 检查是否是目标矿石（含深层变种）
-                    String blockId = BuiltInRegistries.BLOCK.getKey(block).toString();
-                    String targetId = BuiltInRegistries.BLOCK.getKey(targetBlock).toString();
-                    
-                    boolean isTargetOre = blockId.equals(targetId) || 
-                                         (blockId.contains(targetId.replace("minecraft:", "")) && 
-                                          blockId.contains("deepslate"));
+                    // 检查是否是目标矿石（含深层变种家族匹配）
+                    boolean isTargetOre = isTargetFamily(block);
 
                     if (isTargetOre) {
                         realOreCount++;

@@ -3,6 +3,7 @@ package com.example.addon.enchant;
 import baritone.api.BaritoneAPI;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.farm.FarmPacketOps;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -13,9 +14,8 @@ import meteordevelopment.meteorclient.systems.modules.combat.KillAura;
 import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.client.gui.screens.inventory.ContainerScreen;
-import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
-import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -34,7 +34,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
 
@@ -478,7 +477,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             },
             new String[]{
                 "§c§l▌ 注意",
-                "§f  · 仅限服务器使用，单人世界自动关闭",
+                "§f  · 单人世界与服务器均可使用",
                 "§f  · 至少选择一个目标词条，否则模块不会启动",
                 "§f  · 找不到横扫之刃剑时仍会启用 KillAura，但无法保证刷怪效率",
                 "§f  · 成品箱满、书箱或青金石箱空时会提示并自动停机",
@@ -491,12 +490,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
-        if (mc.player == null || mc.level == null || mc.hasSingleplayerServer()) {
-            notify("§c本模块仅在服务器中生效，单人世界已自动关闭。");
+        if (mc.player == null || mc.level == null) {
+            notify("§c必须进入世界后才能启动模块。");
             toggle();
             return;
         }
-        if (!checkPositions()) return;
+        if (!reportSelfCheck(selfCheck())) return;
         if (pointServer == null || pointDimension == null) {
             notifyError("旧版点位没有服务器和维度信息，请执行 .fumo clear 后重新设置！");
             toggle();
@@ -529,9 +528,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             sgVanillaFishing, sgVanillaTrident, sgVanillaCrossbow, sgVanillaCommon
         );
         int extensionTasks = activeTasks.size() - vanillaTasks;
-        notify("§a已启动 §7| §b当前模式：§f" + 运行模式.get()
-            + "§7 | §d附魔书属性：§f" + activeTasks.size() + " 本"
-            + "§7（§6原版 " + vanillaTasks + "§7，§5扩展 " + extensionTasks + "§7）");
+        announceStartup(activeTasks.size(), vanillaTasks, extensionTasks);
     }
 
     @Override
@@ -540,18 +537,55 @@ public class AutoEnchantBook extends YiyiaddonModule {
         stopBaritone();
     }
 
+    /**
+     * 启动播报：把本次运行的关键配置合并成一条多行消息块，只带一次模块前缀。
+     *
+     * 正文统一「标签 §8▸ 值」结构，标签固定 4 字宽加全角空格对齐；
+     * 模式名走 highlightFunction、数值走 highlightNumber，与全项目强调色体系一致。
+     */
+    private void announceStartup(int totalTasks, int vanillaTasks, int extensionTasks) {
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 扩展附魔 · 启动报告");
+
+        // 运行模式：纯附魔 / 挂机循环
+        report.append("\n§7当前模式　§8▸ ").append(highlightFunction(运行模式.get().toString())).append("§r");
+
+        // 目标词条统计：总量 + 原版/扩展拆分
+        report.append("\n§7目标词条　§8▸ ").append(highlightNumber(totalTasks + " 本")).append("§r");
+        report.append("\n§7原版词条　§8▸ ").append(highlightNumber(vanillaTasks + " 本")).append("§r");
+        report.append("\n§7扩展词条　§8▸ ").append(highlightNumber(extensionTasks + " 本")).append("§r");
+
+        // 单轮抽取只在挂机循环生效，纯附魔模式忽略
+        if (运行模式.get() == RunMode.EXPERIENCE) {
+            report.append("\n§7单轮抽取　§8▸ ").append(highlightNumber(单轮抽取次数.get() + " 次")).append("§r");
+        }
+
+        notify(report.toString());
+    }
+
     // ── Tick 主循环 ────────────────────────────────────────────────────────
 
     @EventHandler
     private void onOpenScreen(OpenScreenEvent event) {
         if (mc.player == null) return;
-        if (state == State.ENCHANTING && event.screen instanceof EnchantmentScreen && guiPhase == GUI_OPEN_PENDING) {
-            guiPhase = 0;
-            guiTick = GUI操作延迟.get();
-        } else if (state == State.GRINDING && event.screen instanceof GrindstoneScreen && guiPhase == GUI_OPEN_PENDING) {
+
+        // 静默容器操作：自动化运行中打开容器屏幕时取消显示（不抢鼠标），
+        // 容器数据仍由 mc.player.containerMenu 同步，状态机直接通过菜单发包操作。
+        if (shouldSuppressScreen(event.screen)) {
+            event.setCancelled(true);
             guiPhase = 0;
             guiTick = GUI操作延迟.get();
         }
+    }
+
+    /**
+     * 是否静默取消容器屏幕。
+     * 只在模块激活且处于容器操作状态时生效，避免干扰玩家手动开箱。
+     */
+    private boolean shouldSuppressScreen(Screen screen) {
+        if (!isActive() || !(screen instanceof AbstractContainerScreen<?>)) return false;
+        return state == State.ENCHANTING || state == State.GRINDING
+            || state == State.STORING || state == State.RESTOCKING;
     }
 
     @EventHandler
@@ -653,19 +687,22 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private void tickEnchanting() {
         if (guiTick > 0) { guiTick--; return; }
 
-        if (!(mc.screen instanceof EnchantmentScreen) && !isBlockAt(posEnchant, Blocks.ENCHANTING_TABLE)) {
+        // 静默模式下没有 Screen，改为判断 containerMenu 是否已同步为附魔台菜单
+        boolean menuOpen = enchantMenuOpen();
+
+        if (!menuOpen && !isBlockAt(posEnchant, Blocks.ENCHANTING_TABLE)) {
             stopBaritone();
             notifyError("附魔台不存在或已被挖掉，自动化已停止。请重新设置附魔台点位。");
             toggle();
             return;
         }
 
-        if (countInInventory(Items.LAPIS_LAZULI) < 3 && !(mc.screen instanceof EnchantmentScreen)) {
+        if (countInInventory(Items.LAPIS_LAZULI) < 3 && !menuOpen) {
             setState(State.WALK_TO_RESTOCK);
             return;
         }
 
-        if (!(mc.screen instanceof EnchantmentScreen)) {
+        if (!menuOpen) {
             if (guiPhase == 0) {
                 interactBlock(posEnchant);
                 guiPhase = GUI_OPEN_PENDING;
@@ -680,7 +717,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 return;
             }
         }
-        if (!(mc.screen instanceof EnchantmentScreen)) return;
+        if (!menuOpen) return;
 
         EnchantmentMenu handler = (EnchantmentMenu) mc.player.containerMenu;
         int syncId = handler.containerId;
@@ -850,7 +887,9 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private void tickGrinding() {
         if (guiTick > 0) { guiTick--; return; }
 
-        if (!(mc.screen instanceof GrindstoneScreen)) {
+        boolean menuOpen = grindMenuOpen();
+
+        if (!menuOpen) {
             if (guiPhase == 0) {
                 interactBlock(posGrindstone);
                 guiPhase = GUI_OPEN_PENDING;
@@ -865,7 +904,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 return;
             }
         }
-        if (!(mc.screen instanceof GrindstoneScreen)) return;
+        if (!menuOpen) return;
 
         GrindstoneMenu handler = (GrindstoneMenu) mc.player.containerMenu;
         int syncId = handler.containerId;
@@ -909,14 +948,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private void tickStoring() {
         if (guiTick > 0) { guiTick--; return; }
 
-        if (!(mc.screen instanceof ContainerScreen)) {
+        if (!chestMenuOpen()) {
             if (guiPhase == 0) {
                 interactBlock(posOutput);
                 guiTick = GUI操作延迟.get();
                 return;
             }
         }
-        if (!(mc.screen instanceof ContainerScreen)) return;
+        if (!chestMenuOpen()) return;
 
         ChestMenu handler = (ChestMenu) mc.player.containerMenu;
         int syncId = handler.containerId;
@@ -986,7 +1025,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         boolean isLapis = (guiPhase >= 10);
         BlockPos targetPos = isLapis ? posLapis : posBook;
 
-        if (!(mc.screen instanceof ContainerScreen)) {
+        if (!chestMenuOpen()) {
             if (guiPhase == 0 || guiPhase == 10) {
                 interactBlock(targetPos);
                 guiTick = GUI操作延迟.get();
@@ -994,7 +1033,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 return;
             }
         }
-        if (!(mc.screen instanceof ContainerScreen)) return;
+        if (!chestMenuOpen()) return;
 
         ChestMenu handler = (ChestMenu) mc.player.containerMenu;
         int syncId = handler.containerId;
@@ -1153,15 +1192,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
     }
 
-    private int findMergeableInventorySlot(ItemStack stack) {
-        for (int i = 0; i < 36; i++) {
-            ItemStack inventoryStack = mc.player.getInventory().getItem(i);
-            if (inventoryStack.is(Items.BOOK) && stack.is(Items.BOOK)
-                && inventoryStack.getCount() < inventoryStack.getMaxStackSize()) return i;
-        }
-        return -1;
-    }
-
     private int countSelectedTasks(SettingGroup... groups) {
         int count = 0;
         for (SettingGroup group : groups) {
@@ -1176,20 +1206,19 @@ public class AutoEnchantBook extends YiyiaddonModule {
         return pos != null && mc.level != null && mc.level.getBlockState(pos).is(block);
     }
 
-    private boolean checkPositions() {
-        StringBuilder missing = new StringBuilder();
-        if (posBook       == null) missing.append("书本箱 ");
-        if (posLapis      == null) missing.append("青金石箱 ");
-        if (posOutput     == null) missing.append("成品箱 ");
-        if (posEnchant    == null) missing.append("附魔台 ");
-        if (posGrindstone == null) missing.append("砂轮 ");
-        if (运行模式.get() == RunMode.EXPERIENCE && posHangout == null) missing.append("挂机位 ");
-        if (missing.length() > 0) {
-            notifyError("坐标未设置：§c" + missing + "§6请用 .fumo set <节点> 设置后重试！");
-            toggle();
-            return false;
-        }
-        return true;
+    /**
+     * 启动自检：收集所有未绑定的点位，交给 reportSelfCheck 一次性多行播报。
+     * 缺项文案「§颜色点位名§f·未绑定」，与 AutoMinerModule 自检风格保持一致。
+     */
+    private List<String> selfCheck() {
+        List<String> missing = new ArrayList<>();
+        if (posBook       == null) missing.add("§6书本箱§f·未绑定");
+        if (posLapis      == null) missing.add("§2青金石箱§f·未绑定");
+        if (posOutput     == null) missing.add("§6成品箱§f·未绑定");
+        if (posEnchant    == null) missing.add("§d附魔台§f·未绑定");
+        if (posGrindstone == null) missing.add("§d砂轮§f·未绑定");
+        if (运行模式.get() == RunMode.EXPERIENCE && posHangout == null) missing.add("§d挂机位§f·未绑定");
+        return missing;
     }
 
     private boolean needRestock() {
@@ -1228,13 +1257,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
         return -1;
     }
 
-    private int findEmptyChestSlot(ChestMenu handler) {
-        for (int i = 0; i < handler.getRowCount() * 9; i++) {
-            if (handler.getSlot(i).getItem().isEmpty()) return i;
-        }
-        return 0;
-    }
-
     private int containerSlotOf(AbstractContainerMenu handler, int invSlot) {
         int containerSize = handler.slots.size() - 36;
         if (invSlot < 9) {
@@ -1242,6 +1264,24 @@ public class AutoEnchantBook extends YiyiaddonModule {
         } else {
             return containerSize + (invSlot - 9);
         }
+    }
+
+    // ── 静默容器菜单就绪判断 ─────────────────────────────────────────────
+    // 静默模式下不再打开 GUI Screen，改为判断 mc.player.containerMenu 是否已同步为目标菜单。
+
+    /** 附魔台菜单是否已打开（containerMenu 已同步为 EnchantmentMenu） */
+    private boolean enchantMenuOpen() {
+        return mc.player != null && mc.player.containerMenu instanceof EnchantmentMenu;
+    }
+
+    /** 砂轮菜单是否已打开 */
+    private boolean grindMenuOpen() {
+        return mc.player != null && mc.player.containerMenu instanceof GrindstoneMenu;
+    }
+
+    /** 箱子菜单是否已打开（书本箱/青金石箱/成品箱共用 ChestMenu） */
+    private boolean chestMenuOpen() {
+        return mc.player != null && mc.player.containerMenu instanceof ChestMenu;
     }
 
     private boolean arrivedAt(BlockPos pos) {
@@ -1275,8 +1315,9 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private void interactBlock(BlockPos pos) {
         if (pos == null) return;
         if (!arrivedAt(pos)) return;
-        mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
-            new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false));
+        // 直接发包开箱/开附魔台/开砂轮，带 sequence 预测处理。
+        // 窗口失焦时 mc.gameMode.useItemOn 会被吞导致开箱失败，发包方式不受影响。
+        FarmPacketOps.interactBlock(InteractionHand.MAIN_HAND, pos, Direction.UP);
     }
 
     private void restoreHangoutView() {

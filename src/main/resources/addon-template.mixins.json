@@ -36,7 +36,8 @@
     "ResourcePackPushMixin",
     "ClientCommandSourceMixin",
     "WIntEditRealtimeMixin",
-    "WDoubleEditRealtimeMixin"
+    "WDoubleEditRealtimeMixin",
+    "MultiPlayerGameModeFastBreakMixin"
   ],
   "injectors": {
     "defaultRequire": 1

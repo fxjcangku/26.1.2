@@ -178,9 +178,18 @@ tasks {
         // 若被 repackageclasses 移动或重命名，运行时解密调用会找不到方法导致功能异常。
         keep("public class com.example.addon.utils.StringCrypto { public static java.lang.String d(java.lang.String); }")
         
-        // Mixin 类名由 mixins.json 按名称加载，必须保留；实现方法允许混淆。
-        keepnames("@org.spongepowered.asm.mixin.Mixin class *")
-        keepnames("@org.spongepowered.asm.mixin.Mixin interface *")
+        // Mixin 类必须完整保留：类名 + 所有成员（方法签名、参数都不能被 optimize 改）。
+        // 铁律：不能用 keepnames。keepnames 只保名字不保结构，optimize 会删除
+        // @Inject 方法里未使用的参数（如 ExampleMixin 的 GameConfig），导致方法签名
+        // 与目标方法不匹配，Mixin 注入直接崩溃（InvalidInjectionException: Invalid descriptor）。
+        keep("@org.spongepowered.asm.mixin.Mixin class * { *; }")
+        keep("@org.spongepowered.asm.mixin.Mixin interface * { *; }")
+
+        // 保护枚举类核心结构：Class.getEnumConstants() 底层反射调用 values()/valueOf()，
+        // optimize 会重命名或内联这两个方法，导致 EnumSetting 构造时 getEnumConstants()
+        // 返回 null（Cannot read the array length because "this.values" is null）。
+        // 必须用 keepclassmembers（保留方法体 + 原名），不能用 keepnames。
+        keepclassmembers("enum * { public static **[] values(); public static ** valueOf(java.lang.String); }")
 
         // 仅保留 Mixin 与目标类绑定所必需的成员名称，避免把整个 Mixin 实现暴露出来。
         keepclassmembers("class * { @org.spongepowered.asm.mixin.Shadow <fields>; }")
@@ -300,6 +309,14 @@ abstract class EncryptStringsTask : DefaultTask() {
         val cw = ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
         val cv = object : ClassVisitor(Opcodes.ASM9, cw) {
             private var isMixin = false
+            private var isEnum = false
+
+            // 检测枚举类（ACC_ENUM 标志）：枚举 <clinit> 用字符串构造枚举常量，
+            // 加密会破坏 name 字段/getEnumConstants()，导致 EnumSetting 构造时 NPE 崩溃。
+            override fun visit(version: Int, access: Int, name: String?, signature: String?, superName: String?, interfaces: Array<out String>?) {
+                isEnum = (access and Opcodes.ACC_ENUM) != 0
+                return super.visit(version, access, name, signature, superName, interfaces)
+            }
 
             override fun visitAnnotation(descriptor: String, visible: Boolean): AnnotationVisitor {
                 if (descriptor == "Lorg/spongepowered/asm/mixin/Mixin;") {
@@ -310,8 +327,9 @@ abstract class EncryptStringsTask : DefaultTask() {
 
             override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
                 val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
-                // Mixin 类整体跳过，避免破坏 Mixin 注入所需的字符串
-                if (isMixin) return mv
+                // Mixin 类或枚举类整体跳过：Mixin 字符串是注入绑定必需；枚举字符串
+                // 影响 name/getEnumConstants/switch，加密会导致运行时崩溃。
+                if (isMixin || isEnum) return mv
                 return object : MethodVisitor(Opcodes.ASM9, mv) {
                     // switch 的 case 字符串必须是编译期常量，一旦加密会导致 hash/equals 匹配不上
                     private var hasSwitch = false

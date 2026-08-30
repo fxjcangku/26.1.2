@@ -3,6 +3,7 @@ package com.example.addon.autologin;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.KeyboardInvoker;
+import com.example.addon.ui.HelpScreen;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
@@ -194,49 +195,64 @@ public class AutoLoginModule extends YiyiaddonModule {
         }
 
         return buildInfoWidget(theme,
+            table -> {
+                // 使用说明按钮（置顶显眼位置）
+                WButton helpBtn = theme.button("§e查看使用说明");
+                helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+                table.add(helpBtn).expandX().minWidth(200);
+                table.row();
+            },
             new String[]{ "§l自动登入 · 配置说明" },
             new String[]{
                 "§e§l▌ 快速上手",
                 "§f  1. 按服务器需求开启自动登录或自动注册，并填写对应密码",
                 "§f  2. 需要进入目标区域时，开启「自动进入目标区域」并选择进入方式",
-                "§f  3. 开启模块后会按配置完成认证、回服、重连和到达确认"
-            },
-            new String[]{
-                "§a§l▌ 自动流程",
-                "§f  ① 等待世界加载并监听登录、注册或免登录提示",
-                "§f  ② 根据认证结果发送一次登录或注册指令",
-                "§f  ③ 认证完成后执行进服指令或目标区域路线",
-                "§f  ④ 断线后按自动重连设置恢复上一次服务器连接",
-                "§f  ⑤ 到达目标区域并稳定等待后，可执行一次目标区域指令"
-            },
-            new String[]{
-                "§d§l▌ 乐源服定制路线",
-                "§f  1. 选择「乐源服定制」后，「启用乐源服功能」控制首次进服路线",
-                "§f  2. 「挂机区自动回服」是独立开关，可单独检测挂机区并启动回服",
-                "§f  3. 回服顺序固定为：返回主城大区 → 世界传送 → 资源大区 → 资源大区 → 资源二区",
-                "§f  4. 默认使用欢迎页的「书本直达主城」入口，也可切换为扫描乐源城入口",
-                "§f  5. 主城菜单优先使用快捷栏物品，失败时可用 Shift＋F 兜底"
-            },
-            new String[]{
-                "§b§l▌ 路线与指令",
-                "§f  通用子服路线仅用于直接进入以外的前三种普通模式",
-                "§f  开启「检测服务器子服」后，子服连接会沿用大厅认证状态",
-                "§f  · 乐源路线通过侧边栏关键词确认主城、挂机区和最终目标",
-                "§f  · 挂机区菜单延迟只影响检测到挂机区后的首次菜单打开，不影响登录和其他路线",
-                "§f  · 每步等待和单步超时均按 20 tick = 1 秒计算"
-            },
-            new String[]{
-                "§b§l▌ 状态说明",
-                "§f  §a就绪     §f— 已完成登录，模块正常运行",
-                "§f  §e重连中   §f— 断线后等待重连倒计时",
-                "§f  无状态   — 未进服或正在初始化"
-            },
-            new String[]{
-                "§c§l▌ 注意",
-                "§f  · 自动登录与自动注册同时开启时：老账号请关「自动注册」，新账号请关「自动登录」",
-                "§f  · 乐源定制路线仅适用于该服务器，请勿用于其他服务器",
-                "§f  · 密码明文存储在配置文件中，请勿在公共电脑使用"
+                "§f  3. 点击上方「查看使用说明」查看完整流程、路线与注意事项"
             }
+        );
+    }
+
+    /**
+     * 构建使用说明内容（HelpScreen 独立窗口风格，参考 AutoMinerModule）
+     */
+    private String[] buildHelpContent() {
+        return HelpScreen.buildHelpContent(
+            new HelpScreen.HelpSection("快速上手",
+                "  §8├─ §f按服务器需求开启自动登录或自动注册，并填写对应密码",
+                "  §8├─ §f需要进入目标区域时，开启「自动进入目标区域」并选择进入方式",
+                "  §8└─ §f开启模块后按配置完成认证、回服、重连和到达确认"
+            ),
+            new HelpScreen.HelpSection("自动流程",
+                "  §a[1] §f等待世界加载并监听登录、注册或免登录提示",
+                "  §a[2] §f根据认证结果发送一次登录或注册指令",
+                "  §a[3] §f认证完成后执行进服指令或目标区域路线",
+                "  §a[4] §f断线后按自动重连设置恢复上一次服务器连接",
+                "  §a[5] §f到达目标区域并稳定等待后，可执行一次目标区域指令"
+            ),
+            new HelpScreen.HelpSection("乐源服定制路线",
+                "  §b▸ §f选择「乐源服定制」后，「启用乐源服功能」控制首次进服路线",
+                "  §b▸ §f「挂机区自动回服」是独立开关，可单独检测挂机区并启动回服",
+                "  §b▸ §f回服顺序固定：返回主城大区 §8→ §7世界传送 §8→ §7资源大区 §8→ §7资源二区",
+                "  §b▸ §f默认用欢迎页「书本直达主城」入口，也可切换为扫描乐源城入口",
+                "  §b▸ §f主城菜单优先用快捷栏物品，失败时可用 Shift＋F 兜底"
+            ),
+            new HelpScreen.HelpSection("路线与指令",
+                "  §8├─ §f通用子服路线仅用于直接进入以外的前三种普通模式",
+                "  §8├─ §f开启「检测服务器子服」后，子服连接沿用大厅认证状态",
+                "  §8├─ §f乐源路线通过侧边栏关键词确认主城、挂机区和最终目标",
+                "  §8├─ §f挂机区菜单延迟只影响首次菜单打开，不影响登录和其他路线",
+                "  §8└─ §f每步等待和单步超时均按 §e20 tick = 1 秒 §f计算"
+            ),
+            new HelpScreen.HelpSection("状态说明",
+                "  §a就绪     §8— §f已完成登录，模块正常运行",
+                "  §e重连中   §8— §f断线后等待重连倒计时",
+                "  §7无状态   §8— §f未进服或正在初始化"
+            ),
+            new HelpScreen.HelpSection("注意事项",
+                "  §c⚠ §f自动登录与自动注册同时开启：老账号关「自动注册」，新账号关「自动登录」",
+                "  §c⚠ §f乐源定制路线仅适用于该服务器，请勿用于其他服务器",
+                "  §c⚠ §f密码明文存储在配置文件中，请勿在公共电脑使用"
+            )
         );
     }
 

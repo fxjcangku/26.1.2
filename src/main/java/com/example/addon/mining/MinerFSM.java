@@ -12,12 +12,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashSet;
@@ -69,14 +73,29 @@ public final class MinerFSM {
     private boolean killAuraWasOnBefore = false; // 进入修补前 KillAura 是否本来就开着（避免误关用户自己的 KA）
     private int supplyFailCount = 0;             // 补给空手连续计数（2 次箱空直接停机，防 SUPPLY↔MINING 死循环）
 
+    // 潜影盒打包机换盒等待
+    private boolean boxSwapWaiting = false;      // 关箱后等待打包机推盒+放新盒
+    private int boxSwapTicks = 0;                // 换盒等待计时
+    private int boxSwapCount = 0;                // 本轮卸货累计换盒次数
+    private static final int BOX_SWAP_WAIT_TICKS = 40; // 换盒等待 2 秒（40 tick）
+    private static final int MAX_BOX_SWAPS = 10;       // 换盒次数上限（防打包机坏了死循环）
+    private int noContainerTicks = 0;                  // 标点位置无容器持续 tick
+    private static final int NO_CONTAINER_TIMEOUT = 200; // 无容器 10 秒（200 tick）后停机
+
     // 死亡标志
     private boolean playerWasDead = false;
 
     // 卡死监测：改用速度监测而非位置监测
     private int lowSpeedTicks = 0;
     private int waterStuckTicks = 0;
+    private boolean waterEscapeActive = false; // 水中脱困寻路是否进行中
+    private int waterEscapeTicks = 0;          // 水中脱困寻路已持续时间
+    private BlockPos lastPosSample = BlockPos.ZERO; // 原地抖动卡死的位置采样点
+    private int noMoveTicks = 0;                    // 位移长时间不变的累计 tick
+    private int stuckResetCount = 0;                // 连续原地抖动卡死次数（超过阈值才传送去野外）
     private static final double MIN_SPEED_THRESHOLD = 0.05; // 速度低于0.05判定为卡住
     private static final int STUCK_TIME_THRESHOLD = 3600;
+    private static final int NO_MOVE_THRESHOLD = 3600; // 3分钟位移<2格判定原地抖动
     private static final int PATH_TIMEOUT_TICKS = 2400;
 
     // 自动捡取掉落物
@@ -111,9 +130,18 @@ public final class MinerFSM {
         supplyPathIssued = false;
         killAuraWasOnBefore = false;
         supplyFailCount = 0;
+        boxSwapWaiting = false;
+        boxSwapTicks = 0;
+        boxSwapCount = 0;
+        noContainerTicks = 0;
         playerWasDead = false;
         lowSpeedTicks = 0;
         waterStuckTicks = 0;
+        waterEscapeActive = false;
+        waterEscapeTicks = 0;
+        lastPosSample = BlockPos.ZERO;
+        noMoveTicks = 0;
+        stuckResetCount = 0;
         pickupTarget = null;
         pickupTimeout = 0;
     }
@@ -263,7 +291,7 @@ public final class MinerFSM {
             seedVisited.clear();
 
             if (!seedMode) {
-                module.getBaritone().startMining(module.getTargetBlock());
+                module.getBaritone().startMining(module.getTargetBlocks());
             }
 
             // 播放开始挖矿音效
@@ -285,6 +313,14 @@ public final class MinerFSM {
             return;
         }
         if (findDamagedToolSlot() != -1) {
+            ItemStack damaged = findDamagedTool();
+            // 挂机修复依赖经验修补附魔（打怪掉经验修工具），没有则去修复点也白挂到超时，直接停机
+            if (!hasMending(damaged)) {
+                module.getBaritone().stop();
+                module.error("§c✗ " + toolName(damaged) + "无经验修补附魔 §8▸ 无法自动修复，请换有经验修补的工具");
+                if (module.isActive()) module.toggle();
+                return;
+            }
             module.getSoundNotifier().notifyLowDurability();
             transitionTo(MinerState.REPAIR);
             return;
@@ -330,7 +366,7 @@ public final class MinerFSM {
             if (stateTick > 120 && stateTick % 60 == 0
                 && !module.getBaritone().isPathing()
                 && !module.getBaritone().isMiningActive()) {
-                module.getBaritone().startMining(module.getTargetBlock());
+                module.getBaritone().startMining(module.getTargetBlocks());
             }
         }
 
@@ -347,7 +383,7 @@ public final class MinerFSM {
         }
 
         if (lowSpeedTicks > STUCK_TIME_THRESHOLD) {
-            module.error("§c✗ 检测到卡死（速度过低）§8▸ 重新RTP");
+            module.error("§c✗ 检测到卡死（速度过低）§8▸ 重新前往野外");
             module.getSoundNotifier().notifyStuck();
             module.getBaritone().stop();
             lowSpeedTicks = 0;
@@ -355,23 +391,106 @@ public final class MinerFSM {
             return;
         }
 
-        // 水中卡死检测：泡在水里低速抖动 30 秒（600 tick）就 RTP，避免 Baritone 在水里无限挣扎
+        // 原地抖动卡死检测（每 10 秒采样位置）：Baritone 在点位附近原地抖动的通病，
+        // 抖动时速度不为 0 抓不到，需按位移判断。连续 3 分钟位移<2格判定卡死。
+        if (stateTick % 200 == 0) {
+            BlockPos curPos = mc.player.blockPosition();
+            if (!lastPosSample.equals(BlockPos.ZERO) && curPos.distSqr(lastPosSample) < 4.0) {
+                noMoveTicks += 200;
+            } else {
+                noMoveTicks = 0;
+                stuckResetCount = 0; // 玩家在正常移动，重置连续卡死计数
+            }
+            lastPosSample = curPos;
+        }
+
+        if (noMoveTicks > NO_MOVE_THRESHOLD) {
+            module.getSoundNotifier().notifyStuck();
+            module.getBaritone().stop();
+            noMoveTicks = 0;
+            stuckResetCount++;
+            if (stuckResetCount >= 2) {
+                // 连续两次抖动卡死，重置采掘目标也脱不了困，才传送去野外
+                stuckResetCount = 0;
+                module.error("§c✗ 原地抖动卡死（连续两次）§8▸ 重新前往野外");
+                transitionTo(MinerState.GO_WILD);
+            } else {
+                // 先重置采掘目标脱困（换一个矿点），不急着传送
+                module.info("§e⚠ 原地抖动卡死 §8▸ 重置采掘目标脱困");
+                if (seedMode) {
+                    if (seedTarget != null) {
+                        seedVisited.add(seedTarget);
+                        module.getOrePredictor().forgetOre(seedTarget);
+                        seedTarget = null;
+                        seedBreakState = 0;
+                        seedBreakTicks = 0;
+                    }
+                } else {
+                    module.getBaritone().startMining(module.getTargetBlocks());
+                }
+            }
+            return;
+        }
+
+        // 水中卡死：先寻路到最近陆地脱困，避免直接 RTP（水中抖动会取消服务器传送读条）
         if (mc.player.isInWater()) {
             if (currentSpeed < MIN_SPEED_THRESHOLD) {
                 waterStuckTicks++;
             } else {
                 waterStuckTicks = 0;
+                if (waterEscapeActive) waterEscapeActive = false;
             }
-            if (waterStuckTicks > 600) {
-                module.error("§c✗ 检测到水中卡死（30秒未脱离）§8▸ 重新RTP");
+
+            if (waterStuckTicks > 600 && !waterEscapeActive) {
                 module.getSoundNotifier().notifyStuck();
                 module.getBaritone().stop();
-                waterStuckTicks = 0;
-                transitionTo(MinerState.GO_WILD);
-                return;
+                BlockPos land = findNearestLand();
+                if (land != null) {
+                    var baritone = module.getBaritone().getBaritoneInstance();
+                    if (baritone != null) {
+                        baritone.getCustomGoalProcess().setGoalAndPath(new GoalGetToBlock(land));
+                        waterEscapeActive = true;
+                        waterEscapeTicks = 0;
+                        module.info("§e⚠ 水中卡死 §8▸ 寻路到最近陆地脱困");
+                    } else {
+                        waterStuckTicks = 0;
+                        transitionTo(MinerState.GO_WILD);
+                        return;
+                    }
+                } else {
+                    module.error("§c✗ 水中卡死且周围无陆地 §8▸ 重新前往野外");
+                    waterStuckTicks = 0;
+                    transitionTo(MinerState.GO_WILD);
+                    return;
+                }
             }
         } else {
             waterStuckTicks = 0;
+            waterEscapeActive = false;
+        }
+
+        // 水中脱困推进：已上岸则恢复挖矿；超时仍未脱困则 RTP 兜底
+        if (waterEscapeActive) {
+            waterEscapeTicks++;
+            if (!mc.player.isInWater()) {
+                waterEscapeActive = false;
+                waterEscapeTicks = 0;
+                module.getBaritone().stop();
+                module.info("§a✓ 已脱离水域 §8▸ 继续挖矿");
+                if (!seedMode) {
+                    module.getBaritone().startMining(module.getTargetBlocks());
+                }
+                return;
+            }
+            if (waterEscapeTicks > 400) { // 20 秒仍未脱困，RTP 兜底
+                waterEscapeActive = false;
+                waterEscapeTicks = 0;
+                module.getBaritone().stop();
+                module.error("§c✗ 水中脱困超时 §8▸ 重新前往野外");
+                transitionTo(MinerState.GO_WILD);
+                return;
+            }
+            return; // 脱困寻路中，暂停其它挖矿逻辑
         }
 
         // Baritone 卡死检测（普通模式专用，种子模式由 seedPathRetries 兜底）
@@ -400,12 +519,12 @@ public final class MinerFSM {
                 // RTP 后区块分帧加载，若立即判空会在区块到位前误 RTP（传送到树上/高处尤其明显）。
                 // 600 tick（30秒）内还有未加载区块就先等，超时则强制换区防卡死。
                 if (stateTick < 600 && module.getOrePredictor().hasUnloadedChunksInRange(mc.player.blockPosition(), 64)) return;
-                module.info("§e⚠ [种子挖矿] 附近实测矿点已挖完 §8▸ 重新RTP换区域");
+                module.info("§e⚠ [种子挖矿] 附近实测矿点已挖完 §8▸ 重新前往野外换区域");
                 seedVisited.clear();
                 transitionTo(MinerState.GO_WILD);
                 return;
             }
-            ensurePickaxeInHand();
+            ensureBestToolForSeedTarget();
             seedPathRetries = 0;
             if (!baritone.pathToOre(seedTarget)) {
                 seedVisited.add(seedTarget);
@@ -472,12 +591,34 @@ public final class MinerFSM {
     /** 预测位置上的方块是否为当前目标矿（含深层变种家族匹配） */
     private boolean isTargetOreAt(BlockPos pos) {
         if (mc.level == null) return false;
-        Block target = module.getTargetBlock();
-        Block at = mc.level.getBlockState(pos).getBlock();
-        if (at == target) return true;
-        String targetId = BuiltInRegistries.BLOCK.getKey(target).getPath().replace("deepslate_", "");
-        String atId = BuiltInRegistries.BLOCK.getKey(at).getPath().replace("deepslate_", "");
-        return atId.equals(targetId);
+        return module.isTargetFamily(mc.level.getBlockState(pos).getBlock());
+    }
+
+    /**
+     * 螺旋搜索玩家周围最近的可站立陆地（非流体方块且上方为空气），用于水中脱困。
+     * 只在水中卡死触发时调用一次，扫描半径 40 格、上下 2 格。
+     */
+    private BlockPos findNearestLand() {
+        if (mc.player == null || mc.level == null) return null;
+        BlockPos feet = mc.player.blockPosition();
+        for (int r = 0; r <= 40; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue; // 切比雪夫环，只扫当前半径一圈
+                    for (int dy = -2; dy <= 2; dy++) {
+                        BlockPos p = feet.offset(dx, dy, dz);
+                        // 该格无流体、非空气、上方可站（空气且无流体）
+                        if (mc.level.getFluidState(p).isEmpty()
+                            && !mc.level.getBlockState(p).isAir()
+                            && mc.level.getBlockState(p.above()).isAir()
+                            && mc.level.getFluidState(p.above()).isEmpty()) {
+                            return p;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /** 就位后锁定视角，走原版破坏进度流程（start → continue → 服务端回包确认） */
@@ -519,7 +660,52 @@ public final class MinerFSM {
         }
     }
 
-    /** 种子模式没有 Baritone autoTool，破坏前把镐子换到主手 */
+    /** 种子模式破坏前切换工具：开关开启时按目标方块选最佳工具，关闭时固定镐子 */
+    private void ensureBestToolForSeedTarget() {
+        if (mc.player == null) return;
+        // 开关关闭时保持原有行为：固定镐子
+        if (!module.getAutoTool()) {
+            ensurePickaxeInHand();
+            return;
+        }
+        // 无目标或目标为空，回退镐子
+        if (seedTarget == null || mc.level == null) {
+            ensurePickaxeInHand();
+            return;
+        }
+        BlockState state = mc.level.getBlockState(seedTarget);
+        int bestSlot = findBestToolSlot(state);
+        if (bestSlot == -1) {
+            ensurePickaxeInHand();
+            return;
+        }
+        int currentSlot = mc.player.getInventory().getSelectedSlot();
+        if (currentSlot == bestSlot) return;
+        if (bestSlot < 9) {
+            InvUtils.swap(bestSlot, false);
+        } else {
+            InvUtils.move().from(bestSlot).to(0);
+            InvUtils.swap(0, false);
+        }
+    }
+
+    /** 扫描快捷栏，返回挖掘指定方块最快的工具槽位（无快于空手的工具返回 -1） */
+    private int findBestToolSlot(BlockState state) {
+        int best = -1;
+        double bestSpeed = 1.0; // 空手破坏速度基准
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.isEmpty()) continue;
+            double speed = stack.getDestroySpeed(state);
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** 种子模式固定切镐子（自动切换工具开关关闭时的回退行为） */
     private void ensurePickaxeInHand() {
         if (mc.player == null) return;
         if (isPickaxe(mc.player.getMainHandItem())) return;
@@ -537,11 +723,12 @@ public final class MinerFSM {
         }
     }
 
-    /** 扫描附近掉落的目标矿掉落物，用于漏捡补偿 */
+    /** 扫描附近掉落的目标矿（精准采集捡原矿方块，时运捡掉落物），用于漏捡补偿 */
     private ItemEntity findNearbyOreDrop(double radius) {
         if (mc.level == null || mc.player == null) return null;
-        String targetItemId = getTargetItemId();
-        if (targetItemId == null) return null;
+        Set<String> acceptIds = module.isSilkTouchMode()
+            ? module.getTargetBlockIds()
+            : Set.of(module.getTargetDropItemId());
 
         List<ItemEntity> items = mc.level.getEntitiesOfClass(
             ItemEntity.class, mc.player.getBoundingBox().inflate(radius), e -> true);
@@ -551,7 +738,7 @@ public final class MinerFSM {
             ItemStack stack = item.getItem();
             if (stack.isEmpty()) continue;
             String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-            if (!id.equals(targetItemId)) continue;
+            if (!acceptIds.contains(id)) continue;
             double d = item.distanceToSqr(mc.player);
             if (d < best) {
                 best = d;
@@ -592,7 +779,7 @@ public final class MinerFSM {
             pickupTarget = null;
             module.getBaritone().stop();
             if (!module.isSeedMiningEnabled()) {
-                module.getBaritone().startMining(module.getTargetBlock());
+                module.getBaritone().startMining(module.getTargetBlocks());
             }
             return false;
         }
@@ -672,17 +859,65 @@ public final class MinerFSM {
         return dx <= 1 && dy <= 1 && dz <= 1 && (dx | dy | dz) != 0;
     }
 
+    /**
+     * 智能识别矿物箱位置的潜影盒颜色，返回「§颜色代码 + 中文色名 + 潜影盒」，用于换盒公屏提示。
+     * 16 色潜影盒都是独立方块变体，颜色编码在方块 ID 里（如 white_shulker_box / purple_shulker_box）。
+     */
+    private String shulkerColorLabel(BlockPos pos) {
+        if (mc.level == null || pos == null) return "§7潜影盒";
+        Block block = mc.level.getBlockState(pos).getBlock();
+        String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
+        if (id.equals("shulker_box")) return "§7默认潜影盒";
+        if (!id.endsWith("_shulker_box")) return "§7容器";
+
+        String key = id.substring(0, id.length() - "_shulker_box".length());
+        String color = switch (key) {
+            case "white" -> "§f白色";
+            case "orange" -> "§6橙色";
+            case "magenta" -> "§d品红";
+            case "light_blue" -> "§b淡蓝";
+            case "yellow" -> "§e黄色";
+            case "lime" -> "§a黄绿";
+            case "pink" -> "§d粉色";
+            case "gray" -> "§8灰色";
+            case "light_gray" -> "§7淡灰";
+            case "cyan" -> "§b青色";
+            case "purple" -> "§5紫色";
+            case "blue" -> "§9蓝色";
+            case "brown" -> "§6棕色";
+            case "green" -> "§2绿色";
+            case "red" -> "§c红色";
+            case "black" -> "§0黑色";
+            default -> "§7" + key;
+        };
+        return color + "潜影盒";
+    }
+
     private void tickUnloading() {
         CommandManager cmdMgr = module.getCmdManager();
         WKCommand.WKData mineralChest = WKCommand.getMineralChest();
 
         if (stateTick == 1) {
             unloadingPathIssued = false;
+            boxSwapCount = 0;
+            noContainerTicks = 0;
         }
 
         if (mineralChest == null) {
             if (module.isActive()) module.toggle();
             return;
+        }
+
+        // 潜影盒打包机换盒等待：关箱后等 2 秒让打包机推盒+放新盒，再重走开箱流程
+        if (boxSwapWaiting) {
+            boxSwapTicks++;
+            if (boxSwapTicks >= BOX_SWAP_WAIT_TICKS) {
+                boxSwapWaiting = false;
+                boxSwapTicks = 0;
+                module.info("§7换盒完成 §8▸ 重新打开 " + shulkerColorLabel(mineralChest.pos) + " §7继续卸货...");
+            } else {
+                return; // 继续等打包机换盒
+            }
         }
 
         // [维度限制已临时关闭] 目标不在当前维度时不再停机，便于测试状态机（后续按需恢复）
@@ -734,13 +969,57 @@ public final class MinerFSM {
             return;
         }
         if (!module.getContainer().isContainerOpen()) {
+            // 标点位置无容器（潜影盒被推走后未放新盒）→ 累计计时，超时停机提示
+            if (!module.getContainer().isContainerAt(mineralChest.pos)) {
+                noContainerTicks++;
+                if (noContainerTicks > NO_CONTAINER_TIMEOUT) {
+                    module.error("§c✗ 矿物箱位置已无容器 §8▸ 自动停止模块");
+                    if (module.isActive()) module.toggle();
+                    return;
+                }
+            } else {
+                noContainerTicks = 0;
+            }
             module.getContainer().openContainer(mineralChest.pos);
             return;
         }
 
         // 阶段 5：持续倒货，直到目标矿石全部转移
-        boolean hasMore = module.getContainer().depositOres();
-        if (!hasMore || stateTick > 400) {
+        module.getContainer().depositOres();
+
+        // 背包目标矿放完 → 关箱走人（放完才 RTP）
+        if (!module.getContainer().hasOreInInventory()) {
+            module.getContainer().closeContainer();
+            transitionTo(MinerState.GO_WILD);
+            return;
+        }
+
+        // 箱子满但背包还有矿
+        if (module.getContainer().isContainerFull()) {
+            if (module.isShulkerPackerEnabled()) {
+                // 打包机模式：关箱等打包机换盒，再重开新盒继续放
+                boxSwapCount++;
+                if (boxSwapCount > MAX_BOX_SWAPS) {
+                    module.error("§c✗ 潜影盒换盒超过 " + MAX_BOX_SWAPS + " 次仍未放完 §8▸ 自动停止");
+                    module.getContainer().closeContainer();
+                    if (module.isActive()) module.toggle();
+                    return;
+                }
+                module.getContainer().closeContainer();
+                boxSwapWaiting = true;
+                boxSwapTicks = 0;
+                module.info("§e⚠ " + shulkerColorLabel(mineralChest.pos) + " §e已满 §8▸ 等打包机换盒后重开继续放");
+                return;
+            }
+            // 普通箱子模式：箱子满了放不下 → 停止模块并提示，避免空塞后带矿 RTP 跑掉
+            module.getContainer().closeContainer();
+            module.error("§c✗ 矿物容器已满 §8▸ 无法继续卸货，自动停止模块");
+            if (module.isActive()) module.toggle();
+            return;
+        }
+
+        // 超时保护（非打包机模式兜底）
+        if (!module.isShulkerPackerEnabled() && stateTick > 400) {
             module.getContainer().closeContainer();
             transitionTo(MinerState.GO_WILD);
         }
@@ -808,11 +1087,14 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 5：取食物，结束后返回矿区重新RTP，避免在食物箱原地挖矿
+        // 阶段 5：取食物，结束后返回矿区重新前往野外，避免在食物箱原地挖矿
         boolean taken = module.getContainer().withdrawFood();
         if (taken || stateTick > 400) {
             module.getContainer().closeContainer();
-            if (hasFoodToEat()) {
+            // 补给成功判定必须与触发条件一致（按白名单食物数量是否达标），
+            // 不能用 hasFoodToEat()：背包哪怕只剩 1 块食物也会被判成功，
+            // 导致「食物不足→补给→箱空→回来→又不足」无限 RTP 死循环。
+            if (countFoodStacks() >= module.getHungerThreshold()) {
                 supplyFailCount = 0;
                 module.info("§a✓ 食物已补充 §8▸ 返回矿区");
                 transitionTo(MinerState.GO_WILD);
@@ -1051,7 +1333,10 @@ public final class MinerFSM {
         Integer damage = tool.get(DataComponents.DAMAGE);
         if (maxDamage == null || damage == null) return false;
         int remaining = maxDamage - damage;
-        return remaining < module.getDurabilityThreshold();
+        // 阈值不能超过工具最大耐久：否则满耐久（remaining == maxDamage）仍被判为
+        // 「需修复」，修完回矿区又立刻触发修复，形成修复↔挖矿死循环。
+        int effectiveThreshold = Math.min(module.getDurabilityThreshold(), maxDamage);
+        return remaining < effectiveThreshold;
     }
 
     private boolean isFullyRepaired(ItemStack tool) {
@@ -1089,6 +1374,20 @@ public final class MinerFSM {
         String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
         return id.endsWith("_pickaxe") || id.endsWith("_shovel") || id.endsWith("_axe")
             || id.endsWith("_hoe") || id.endsWith("_sword");
+    }
+
+    /** 工具是否带经验修补附魔（挂机修复靠打怪掉经验 + 经验修补，没有就修不了） */
+    private boolean hasMending(ItemStack stack) {
+        if (stack.isEmpty() || mc.level == null) return false;
+        ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
+        if (enchantments == null || enchantments.isEmpty()) return false;
+        try {
+            var lookup = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+            var holder = lookup.get(Enchantments.MENDING).orElse(null);
+            return holder != null && enchantments.getLevel(holder) > 0;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /** 找出当前耐久最低且低于阈值的工具槽位（含副手），返回 -1 无、-2 副手 */
@@ -1160,34 +1459,21 @@ public final class MinerFSM {
         return false;
     }
 
-    private String getTargetItemId() {
-        String blockId = BuiltInRegistries.BLOCK.getKey(module.getTargetBlock()).getPath();
-        return switch (blockId) {
-            case "lapis_ore", "deepslate_lapis_ore" -> "minecraft:lapis_lazuli";
-            case "redstone_ore", "deepslate_redstone_ore" -> "minecraft:redstone";
-            case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
-            case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
-            case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
-            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
-            case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
-            case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
-            case "nether_quartz_ore" -> "minecraft:quartz";
-            case "ancient_debris" -> "minecraft:ancient_debris";
-            default -> BuiltInRegistries.ITEM.getKey(module.getTargetBlock().asItem()).toString();
-        };
-    }
-
     private int countOreStacks() {
         if (mc.player == null) return 0;
 
+        // 精准采集按原矿方块（含深层变种）计数；时运按掉落物计数（下界残骸掉落物=自身方块，两模式共用）
+        Set<String> acceptIds = module.isSilkTouchMode()
+            ? module.getTargetBlockIds()
+            : Set.of(module.getTargetDropItemId());
+
         int totalCount = 0;
-        String targetItemId = getTargetItemId();
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
 
             String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-            if (targetItemId != null && itemId.equals(targetItemId)) {
+            if (acceptIds.contains(itemId)) {
                 totalCount += stack.getCount(); // 统计目标矿物数量
             }
         }

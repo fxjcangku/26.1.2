@@ -2,10 +2,6 @@ package com.example.addon.mining;
 
 import com.example.addon.modules.AutoMinerModule;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -286,30 +282,23 @@ public final class CommandManager {
             return true; // 继续等待传送完成
         }
 
-        Screen currentScreen = mc.screen;
-        
-        // 等待GUI出现
-        if (currentScreen == null) {
-            return true;
-        }
-
         String keyword = module.getRtpGuiKeyword();
         if (keyword == null || keyword.isEmpty()) {
             waitingForGui = false;
             return true;
         }
 
+        // 静默容器模式下没有 Screen，改为检测 containerMenu 是否已同步为容器；
+        // containerId == 0 是玩家自身背包，说明传送菜单还没打开，继续等。
+        if (mc.player == null || mc.player.containerMenu == null
+            || mc.player.containerMenu.containerId == 0 || mc.gameMode == null) {
+            return true;
+        }
+
         // 标准化关键词（移除颜色和空格）
         String normalizedKeyword = stripFormatting(keyword);
 
-        if (!(currentScreen instanceof AbstractContainerScreen<?> containerScreen)) {
-            return true;
-        }
-
-        AbstractContainerMenu menu = containerScreen.getMenu();
-        if (menu == null || mc.player == null || mc.gameMode == null) {
-            return true;
-        }
+        AbstractContainerMenu menu = mc.player.containerMenu;
 
         for (Slot slot : menu.slots) {
             ItemStack stack = slot.getItem();

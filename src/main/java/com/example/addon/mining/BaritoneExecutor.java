@@ -45,9 +45,13 @@ public final class BaritoneExecutor {
      * 启动 Baritone 挖矿（普通模式）。
      * 种子模式不经过这里：由 MinerFSM 的种子采集循环逐块 pathToOre + 破坏。
      */
-    public void startMining(Block target) {
+    public void startMining(List<Block> targets) {
         if (disabled) {
             module.error("Baritone 不可用，无法启动挖矿");
+            return;
+        }
+        if (targets == null || targets.isEmpty()) {
+            module.error("未选择目标矿石，无法启动挖矿");
             return;
         }
 
@@ -59,9 +63,17 @@ public final class BaritoneExecutor {
                 return;
             }
 
-            String blockId = BuiltInRegistries.BLOCK.getKey(target).toString();
-            baritone.getCommandManager().execute("mine " + blockId);
-            module.info("§aBaritone 已启动挖掘：" + BaritoneChatTranslations.translateBlockId(blockId));
+            // 普通模式同时挖深层/浅层变种：mine 命令支持多 block 参数
+            StringBuilder cmd = new StringBuilder("mine");
+            for (Block b : targets) {
+                cmd.append(" ").append(BuiltInRegistries.BLOCK.getKey(b));
+            }
+            baritone.getCommandManager().execute(cmd.toString());
+
+            String firstName = BaritoneChatTranslations.translateBlockId(
+                BuiltInRegistries.BLOCK.getKey(targets.get(0)).toString());
+            String name = targets.size() > 1 ? firstName + " §8等 " + targets.size() + " 种变体" : firstName;
+            module.info("§aBaritone 已启动挖掘：" + name);
 
             // 重置卡死检测
             if (mc.player != null) {
@@ -174,6 +186,7 @@ public final class BaritoneExecutor {
             settings.pauseMiningForFallingBlocks.value = pauseMiningForFallingBlocks;
             settings.allowInventory.value = allowInventory;
             settings.autoTool.value = autoTool;
+            settings.assumeExternalAutoTool.value = false; // 关闭「外部工具假设」，确保 Baritone 自身 autoTool 真正生效
             settings.sprintAscends.value = sprintAscends;
             settings.allowParkour.value = allowParkour;
             settings.allowParkourPlace.value = allowParkourPlace;
@@ -220,7 +233,10 @@ public final class BaritoneExecutor {
             else if (key.equals("maxFallHeightNoWater")) settings.maxFallHeightNoWater.value = (Integer) value;
             else if (key.equals("pauseMiningForFallingBlocks")) settings.pauseMiningForFallingBlocks.value = (Boolean) value;
             else if (key.equals("allowInventory")) settings.allowInventory.value = (Boolean) value;
-            else if (key.equals("autoTool")) settings.autoTool.value = (Boolean) value;
+            else if (key.equals("autoTool")) {
+                settings.autoTool.value = (Boolean) value;
+                settings.assumeExternalAutoTool.value = false; // 关闭「外部工具假设」，确保 autoTool 真正生效
+            }
             else if (key.equals("sprintAscends")) settings.sprintAscends.value = (Boolean) value;
             else if (key.equals("allowParkour")) settings.allowParkour.value = (Boolean) value;
             else if (key.equals("allowParkourPlace")) settings.allowParkourPlace.value = (Boolean) value;

@@ -1,11 +1,11 @@
 com.example.addon.accessor.ModuleTranslationAccess -> com.example.addon.x.l:
-    void yiyiaddon$setTitle(java.lang.String) -> l
-    void yiyiaddon$setDescription(java.lang.String) -> I
+    void yiyiaddon$setTitle(java.lang.String) -> yiyiaddon$setTitle
+    void yiyiaddon$setDescription(java.lang.String) -> yiyiaddon$setDescription
 com.example.addon.accessor.SettingGroupTranslationAccess -> com.example.addon.x.I:
-    void yiyiaddon$setName(java.lang.String) -> l
+    void yiyiaddon$setName(java.lang.String) -> yiyiaddon$setName
 com.example.addon.accessor.SettingTranslationAccess -> com.example.addon.x.O:
-    void yiyiaddon$setTitle(java.lang.String) -> l
-    void yiyiaddon$setDescription(java.lang.String) -> I
+    void yiyiaddon$setTitle(java.lang.String) -> yiyiaddon$setTitle
+    void yiyiaddon$setDescription(java.lang.String) -> yiyiaddon$setDescription
 com.example.addon.autologin.AccountChecker -> com.example.addon.x.ll:
     void <init>() -> <init>
     com.example.addon.autologin.AccountChecker$Result check(net.minecraft.client.Minecraft) -> l
@@ -18,10 +18,10 @@ com.example.addon.autologin.AccountChecker$Result -> com.example.addon.x.lI:
     com.example.addon.autologin.AccountChecker$Result OFFLINE -> I
     com.example.addon.autologin.AccountChecker$Result UNKNOWN -> O
     com.example.addon.autologin.AccountChecker$Result[] $VALUES -> l
-    com.example.addon.autologin.AccountChecker$Result[] values() -> l
-    com.example.addon.autologin.AccountChecker$Result valueOf(java.lang.String) -> l
+    com.example.addon.autologin.AccountChecker$Result[] values() -> values
+    com.example.addon.autologin.AccountChecker$Result valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.autologin.AccountChecker$Result[] $values() -> I
+    com.example.addon.autologin.AccountChecker$Result[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.autologin.AuthRule -> com.example.addon.x.lO:
     com.example.addon.autologin.AuthRule$Type type -> l
@@ -34,10 +34,10 @@ com.example.addon.autologin.AuthRule$Type -> com.example.addon.x.Il:
     com.example.addon.autologin.AuthRule$Type LOGIN -> l
     com.example.addon.autologin.AuthRule$Type REGISTER -> I
     com.example.addon.autologin.AuthRule$Type[] $VALUES -> l
-    com.example.addon.autologin.AuthRule$Type[] values() -> l
-    com.example.addon.autologin.AuthRule$Type valueOf(java.lang.String) -> l
+    com.example.addon.autologin.AuthRule$Type[] values() -> values
+    com.example.addon.autologin.AuthRule$Type valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.autologin.AuthRule$Type[] $values() -> I
+    com.example.addon.autologin.AuthRule$Type[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.autologin.AutoLoginModule -> com.example.addon.x.II:
     int RECONNECT_STABLE_TICKS -> l
@@ -158,8 +158,8 @@ com.example.addon.autologin.AutoLoginModule -> com.example.addon.x.II:
     java.lang.String leyuanHotbarSnapshot() -> ll
     boolean matchesItemKeyword(net.minecraft.world.item.ItemStack,java.lang.String) -> l
     boolean matchesAnyItemKeyword(net.minecraft.world.item.ItemStack,java.util.List) -> l
-    java.lang.String normalizeText(java.lang.String) -> lI
-    java.lang.String normalizeMatchText(java.lang.String) -> lO
+    java.lang.String normalizeText(java.lang.String) -> Il
+    java.lang.String normalizeMatchText(java.lang.String) -> II
     void resetSubserverWorkflow() -> lOl
     void stopStandardMenuRoute() -> lOI
     void stopLeyuanRoute() -> lOO
@@ -167,7 +167,7 @@ com.example.addon.autologin.AutoLoginModule -> com.example.addon.x.II:
     void tickTargetAreaDetection() -> IlI
     java.lang.String findTargetAreaKeyword() -> lI
     void confirmTargetArea(java.lang.String) -> O
-    java.lang.String extractSubserverName(java.lang.String) -> Il
+    java.lang.String extractSubserverName(java.lang.String) -> IO
     void resetAllHandlers() -> IlO
     boolean closeForUnsupportedEnvironment() -> IO
     boolean isAuthenticatedServer() -> Ol
@@ -177,7 +177,7 @@ com.example.addon.autologin.AutoLoginModule -> com.example.addon.x.II:
     com.example.addon.autologin.AutoLoginSettings getCfg() -> l
     void debugMsg(java.lang.String) -> ll
     boolean lambda$findTargetAreaKeyword$3(java.lang.String,java.lang.String) -> l
-    java.lang.String lambda$findTargetAreaKeyword$2(java.lang.String) -> II
+    java.lang.String lambda$findTargetAreaKeyword$2(java.lang.String) -> Ol
     java.lang.String lambda$findTargetAreaKeyword$1(net.minecraft.world.scores.Scoreboard,net.minecraft.world.scores.PlayerScoreEntry) -> l
     boolean lambda$findTargetAreaKeyword$0(net.minecraft.world.scores.PlayerScoreEntry) -> l
     boolean lambda$findSidebarKeyword$2(java.lang.String,java.lang.String) -> I
@@ -294,10 +294,10 @@ com.example.addon.autologin.AutoLoginState -> com.example.addon.x.OI:
     com.example.addon.autologin.AutoLoginState ACTIVE -> Il
     com.example.addon.autologin.AutoLoginState RECONNECT_WAIT -> II
     com.example.addon.autologin.AutoLoginState[] $VALUES -> l
-    com.example.addon.autologin.AutoLoginState[] values() -> l
-    com.example.addon.autologin.AutoLoginState valueOf(java.lang.String) -> l
+    com.example.addon.autologin.AutoLoginState[] values() -> values
+    com.example.addon.autologin.AutoLoginState valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.autologin.AutoLoginState[] $values() -> I
+    com.example.addon.autologin.AutoLoginState[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.autologin.ChatAnalyzer -> com.example.addon.x.OO:
     java.util.regex.Pattern COLOR_CODE -> l
@@ -345,21 +345,21 @@ com.example.addon.autologin.LeyuanRouteState -> com.example.addon.x.I1:
     com.example.addon.autologin.LeyuanRouteState COMPLETE -> llI
     com.example.addon.autologin.LeyuanRouteState FAILED -> llO
     com.example.addon.autologin.LeyuanRouteState[] $VALUES -> l
-    com.example.addon.autologin.LeyuanRouteState[] values() -> l
-    com.example.addon.autologin.LeyuanRouteState valueOf(java.lang.String) -> l
+    com.example.addon.autologin.LeyuanRouteState[] values() -> values
+    com.example.addon.autologin.LeyuanRouteState valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.autologin.LeyuanRouteState[] $values() -> I
+    com.example.addon.autologin.LeyuanRouteState[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.autologin.LeyuanWelcomeEntryMode -> com.example.addon.x.O0:
     com.example.addon.autologin.LeyuanWelcomeEntryMode LEYUAN_CITY -> I
     com.example.addon.autologin.LeyuanWelcomeEntryMode BOOK_DIRECT -> l
     java.lang.String title -> l
     com.example.addon.autologin.LeyuanWelcomeEntryMode[] $VALUES -> l
-    com.example.addon.autologin.LeyuanWelcomeEntryMode[] values() -> l
-    com.example.addon.autologin.LeyuanWelcomeEntryMode valueOf(java.lang.String) -> l
+    com.example.addon.autologin.LeyuanWelcomeEntryMode[] values() -> values
+    com.example.addon.autologin.LeyuanWelcomeEntryMode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.autologin.LeyuanWelcomeEntryMode[] $values() -> I
+    com.example.addon.autologin.LeyuanWelcomeEntryMode[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.autologin.LoginHandler -> com.example.addon.x.lll:
     net.minecraft.client.Minecraft mc -> l
@@ -415,11 +415,11 @@ com.example.addon.autologin.ServerEntryMode -> com.example.addon.x.lIl:
     com.example.addon.autologin.ServerEntryMode LEYUAN_CUSTOM -> ll
     java.lang.String title -> l
     com.example.addon.autologin.ServerEntryMode[] $VALUES -> l
-    com.example.addon.autologin.ServerEntryMode[] values() -> l
-    com.example.addon.autologin.ServerEntryMode valueOf(java.lang.String) -> l
+    com.example.addon.autologin.ServerEntryMode[] values() -> values
+    com.example.addon.autologin.ServerEntryMode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.autologin.ServerEntryMode[] $values() -> I
+    com.example.addon.autologin.ServerEntryMode[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.commands.CommandExample -> com.example.addon.x.lII:
     void <init>() -> <init>
@@ -640,11 +640,11 @@ com.example.addon.core.YiyiaddonModule -> com.example.addon.core.YiyiaddonModule
     void notifyError(java.lang.String) -> I
     boolean reportSelfCheck(java.util.List) -> l
     java.lang.String highlightText(java.lang.String) -> l
-    java.lang.String highlightFunction(java.lang.String) -> lI
-    java.lang.String highlightNumber(java.lang.String) -> lO
-    java.lang.String highlightServer(java.lang.String) -> I
-    java.lang.String highlightLocation(java.lang.String) -> O
-    java.lang.String highlightCommand(java.lang.String) -> ll
+    java.lang.String highlightFunction(java.lang.String) -> I
+    java.lang.String highlightNumber(java.lang.String) -> O
+    java.lang.String highlightServer(java.lang.String) -> ll
+    java.lang.String highlightLocation(java.lang.String) -> lI
+    java.lang.String highlightCommand(java.lang.String) -> lO
     meteordevelopment.meteorclient.gui.widgets.WWidget buildInfoWidget(meteordevelopment.meteorclient.gui.GuiTheme,java.lang.String[][]) -> l
     void addUniformButton(meteordevelopment.meteorclient.gui.GuiTheme,meteordevelopment.meteorclient.gui.widgets.containers.WTable,java.lang.String,java.lang.Runnable) -> l
     meteordevelopment.meteorclient.gui.widgets.WWidget buildInfoWidget(meteordevelopment.meteorclient.gui.GuiTheme,java.util.function.Consumer,java.lang.String[][]) -> l
@@ -875,7 +875,9 @@ com.example.addon.enchant.AutoEnchantBook -> com.example.addon.x.IOI:
     meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
     void onActivate() -> onActivate
     void onDeactivate() -> onDeactivate
+    void announceStartup(int,int,int) -> l
     void onOpenScreen(meteordevelopment.meteorclient.events.game.OpenScreenEvent) -> l
+    boolean shouldSuppressScreen(net.minecraft.client.gui.screens.Screen) -> l
     void onTick$7f84d702() -> I
     void tickIdle() -> O
     void tickWalkToFarm() -> ll
@@ -884,7 +886,7 @@ com.example.addon.enchant.AutoEnchantBook -> com.example.addon.x.IOI:
     void tickEnchanting() -> Il
     void tickChecking() -> II
     boolean matchesEnchantmentTask(java.lang.String,java.lang.String) -> l
-    java.lang.String normalizeEnchantmentText(java.lang.String) -> lI
+    java.lang.String normalizeEnchantmentText(java.lang.String) -> Il
     void tickWalkToGrind() -> IO
     void tickGrinding() -> Ol
     void tickWalkToStore() -> OI
@@ -903,20 +905,21 @@ com.example.addon.enchant.AutoEnchantBook -> com.example.addon.x.IOI:
     boolean hasAnyPosition() -> I
     void clearPoints() -> l
     void rebuildActiveTasks() -> O0
-    int findMergeableInventorySlot(net.minecraft.world.item.ItemStack) -> l
     int countSelectedTasks(meteordevelopment.meteorclient.settings.SettingGroup[]) -> l
     boolean isBlockAt(net.minecraft.core.BlockPos,net.minecraft.world.level.block.Block) -> l
-    boolean checkPositions() -> O
-    boolean needRestock() -> ll
-    boolean needBookRestock() -> lI
-    boolean needLapisRestock() -> lO
+    java.util.List selfCheck() -> l
+    boolean needRestock() -> O
+    boolean needBookRestock() -> ll
+    boolean needLapisRestock() -> lI
     int countInInventory(net.minecraft.world.item.Item) -> l
     int findInInventory(net.minecraft.world.item.Item) -> I
     int findInInventoryAtLeast(net.minecraft.world.item.Item,int) -> l
-    int findEmptyChestSlot(net.minecraft.world.inventory.ChestMenu) -> l
     int containerSlotOf(net.minecraft.world.inventory.AbstractContainerMenu,int) -> l
+    boolean enchantMenuOpen() -> lO
+    boolean grindMenuOpen() -> Il
+    boolean chestMenuOpen() -> II
     boolean arrivedAt(net.minecraft.core.BlockPos) -> l
-    boolean arrivedAtHangout() -> Il
+    boolean arrivedAtHangout() -> IO
     void walkToHangout() -> lll
     void walkTo(net.minecraft.core.BlockPos) -> l
     void interactBlock(net.minecraft.core.BlockPos) -> I
@@ -927,23 +930,23 @@ com.example.addon.enchant.AutoEnchantBook -> com.example.addon.x.IOI:
     int findSweepingSword() -> l
     void stopKillAura() -> lIO
     void stopBaritone() -> lOl
-    boolean isPathing() -> II
+    boolean isPathing() -> Ol
     void setState(com.example.addon.enchant.AutoEnchantBook$State) -> l
     boolean isWorkState(com.example.addon.enchant.AutoEnchantBook$State) -> l
     meteordevelopment.meteorclient.systems.modules.Module fromTag(net.minecraft.nbt.CompoundTag) -> fromTag
     java.lang.Object fromTag(net.minecraft.nbt.CompoundTag) -> fromTag
-    boolean lambda$new$1() -> IO
-    boolean lambda$new$0() -> Ol
+    boolean lambda$new$1() -> OI
+    boolean lambda$new$0() -> OO
 com.example.addon.enchant.AutoEnchantBook$RunMode -> com.example.addon.x.IOO:
     com.example.addon.enchant.AutoEnchantBook$RunMode DRAIN -> l
     com.example.addon.enchant.AutoEnchantBook$RunMode EXPERIENCE -> I
     java.lang.String title -> l
     com.example.addon.enchant.AutoEnchantBook$RunMode[] $VALUES -> l
-    com.example.addon.enchant.AutoEnchantBook$RunMode[] values() -> l
-    com.example.addon.enchant.AutoEnchantBook$RunMode valueOf(java.lang.String) -> l
+    com.example.addon.enchant.AutoEnchantBook$RunMode[] values() -> values
+    com.example.addon.enchant.AutoEnchantBook$RunMode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.enchant.AutoEnchantBook$RunMode[] $values() -> I
+    com.example.addon.enchant.AutoEnchantBook$RunMode[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.enchant.AutoEnchantBook$State -> com.example.addon.x.Oll:
     com.example.addon.enchant.AutoEnchantBook$State IDLE -> l
@@ -960,11 +963,11 @@ com.example.addon.enchant.AutoEnchantBook$State -> com.example.addon.x.Oll:
     com.example.addon.enchant.AutoEnchantBook$State RESTOCKING -> OO
     java.lang.String cn -> l
     com.example.addon.enchant.AutoEnchantBook$State[] $VALUES -> l
-    com.example.addon.enchant.AutoEnchantBook$State[] values() -> l
-    com.example.addon.enchant.AutoEnchantBook$State valueOf(java.lang.String) -> l
+    com.example.addon.enchant.AutoEnchantBook$State[] values() -> values
+    com.example.addon.enchant.AutoEnchantBook$State valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String cn() -> l
-    com.example.addon.enchant.AutoEnchantBook$State[] $values() -> I
+    com.example.addon.enchant.AutoEnchantBook$State[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.enchant.AutoEnchantBook$SuccessSound -> com.example.addon.x.OlI:
     com.example.addon.enchant.AutoEnchantBook$SuccessSound CHALLENGE_COMPLETE -> l
@@ -981,11 +984,11 @@ com.example.addon.enchant.AutoEnchantBook$SuccessSound -> com.example.addon.x.Ol
     com.example.addon.enchant.AutoEnchantBook$SuccessSound THUNDER -> OO
     java.lang.String title -> l
     com.example.addon.enchant.AutoEnchantBook$SuccessSound[] $VALUES -> l
-    com.example.addon.enchant.AutoEnchantBook$SuccessSound[] values() -> l
-    com.example.addon.enchant.AutoEnchantBook$SuccessSound valueOf(java.lang.String) -> l
+    com.example.addon.enchant.AutoEnchantBook$SuccessSound[] values() -> values
+    com.example.addon.enchant.AutoEnchantBook$SuccessSound valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.enchant.AutoEnchantBook$SuccessSound[] $values() -> I
+    com.example.addon.enchant.AutoEnchantBook$SuccessSound[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.enchant.EnchantmentSelectScreen -> com.example.addon.x.OlO:
     com.example.addon.enchant.EnchantmentSelectSetting setting -> l
@@ -1079,8 +1082,8 @@ com.example.addon.farm.CropProfile -> com.example.addon.x.OOl:
     net.minecraft.world.level.block.Block soil -> I
     java.util.Set extraLoot -> l
     com.example.addon.farm.CropProfile[] $VALUES -> l
-    com.example.addon.farm.CropProfile[] values() -> l
-    com.example.addon.farm.CropProfile valueOf(java.lang.String) -> l
+    com.example.addon.farm.CropProfile[] values() -> values
+    com.example.addon.farm.CropProfile valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String,com.example.addon.farm.CropProfile$Kind,net.minecraft.world.level.block.Block,net.minecraft.world.item.Item,net.minecraft.world.item.Item,net.minecraft.world.level.block.Block) -> <init>
     void <init>(java.lang.String,int,java.lang.String,com.example.addon.farm.CropProfile$Kind,net.minecraft.world.level.block.Block,net.minecraft.world.item.Item,net.minecraft.world.item.Item,net.minecraft.world.level.block.Block,java.util.Set) -> <init>
     java.lang.String displayName() -> l
@@ -1100,7 +1103,7 @@ com.example.addon.farm.CropProfile -> com.example.addon.x.OOl:
     com.example.addon.farm.CropProfile byBlock(net.minecraft.world.level.block.Block) -> l
     boolean isPillarRoot(net.minecraft.world.level.block.state.BlockState) -> I
     java.util.Collection all() -> l
-    com.example.addon.farm.CropProfile[] $values() -> I
+    com.example.addon.farm.CropProfile[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.farm.CropProfile$Kind -> com.example.addon.x.OOI:
     com.example.addon.farm.CropProfile$Kind TWIN -> l
@@ -1108,10 +1111,10 @@ com.example.addon.farm.CropProfile$Kind -> com.example.addon.x.OOI:
     com.example.addon.farm.CropProfile$Kind PILLAR -> O
     com.example.addon.farm.CropProfile$Kind VINE -> ll
     com.example.addon.farm.CropProfile$Kind[] $VALUES -> l
-    com.example.addon.farm.CropProfile$Kind[] values() -> l
-    com.example.addon.farm.CropProfile$Kind valueOf(java.lang.String) -> l
+    com.example.addon.farm.CropProfile$Kind[] values() -> values
+    com.example.addon.farm.CropProfile$Kind valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.farm.CropProfile$Kind[] $values() -> I
+    com.example.addon.farm.CropProfile$Kind[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.farm.FarmNav -> com.example.addon.x.OOO:
     boolean disabled -> l
@@ -1197,12 +1200,12 @@ com.example.addon.farm.FarmState -> com.example.addon.x.I1I:
     java.lang.String cn -> l
     int watchdogTicks -> l
     com.example.addon.farm.FarmState[] $VALUES -> l
-    com.example.addon.farm.FarmState[] values() -> l
-    com.example.addon.farm.FarmState valueOf(java.lang.String) -> l
+    com.example.addon.farm.FarmState[] values() -> values
+    com.example.addon.farm.FarmState valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String,int) -> <init>
     java.lang.String cn() -> l
     int watchdogTicks() -> l
-    com.example.addon.farm.FarmState[] $values() -> I
+    com.example.addon.farm.FarmState[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.farm.SiteType -> com.example.addon.x.I1O:
     com.example.addon.farm.SiteType START -> l
@@ -1213,13 +1216,13 @@ com.example.addon.farm.SiteType -> com.example.addon.x.I1O:
     java.lang.String en -> I
     boolean requiresContainer -> l
     com.example.addon.farm.SiteType[] $VALUES -> l
-    com.example.addon.farm.SiteType[] values() -> l
-    com.example.addon.farm.SiteType valueOf(java.lang.String) -> l
+    com.example.addon.farm.SiteType[] values() -> values
+    com.example.addon.farm.SiteType valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String,java.lang.String,boolean) -> <init>
     java.lang.String cn() -> l
     java.lang.String en() -> I
     boolean requiresContainer() -> l
-    com.example.addon.farm.SiteType[] $values() -> I
+    com.example.addon.farm.SiteType[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.hud.HudExample -> com.example.addon.x.O0l:
     meteordevelopment.meteorclient.systems.hud.HudElementInfo INFO -> l
@@ -1243,13 +1246,13 @@ com.example.addon.mining.BaritoneExecutor -> com.example.addon.x.O0O:
     int STUCK_CHECK_INTERVAL -> O
     int STUCK_DISTANCE_THRESHOLD -> ll
     void <init>(com.example.addon.modules.AutoMinerModule) -> <init>
-    void startMining(net.minecraft.world.level.block.Block) -> l
+    void startMining(java.util.List) -> l
     boolean pathToOre(net.minecraft.core.BlockPos) -> l
     boolean isMiningActive() -> l
     void stop() -> l
     void applySettings(boolean,boolean,int,boolean,boolean,int,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean,int,int,int,int,boolean,boolean,int,boolean) -> l
     void updateSetting(java.lang.String,java.lang.Object) -> l
-    void updatePlaceBlocks(java.util.List) -> l
+    void updatePlaceBlocks(java.util.List) -> I
     boolean isStuck() -> I
     boolean isPathing() -> O
     boolean isCustomGoalActive() -> ll
@@ -1314,8 +1317,6 @@ com.example.addon.mining.ContainerHelper -> com.example.addon.x.lllI:
     void quickMove(net.minecraft.world.inventory.AbstractContainerMenu,int) -> l
     boolean isContainerOpen() -> l
     boolean depositOres() -> I
-    java.lang.String itemIdOf(net.minecraft.world.item.ItemStack) -> l
-    java.lang.String targetItemId() -> l
     boolean isAllowedOre(net.minecraft.world.item.ItemStack) -> O
     boolean withdrawFood() -> O
     int countWhitelistedFood() -> l
@@ -1350,11 +1351,17 @@ com.example.addon.mining.MinerFSM -> com.example.addon.x.lllO:
     boolean playerWasDead -> lO
     int lowSpeedTicks -> l1
     int waterStuckTicks -> I1
+    boolean waterEscapeActive -> Il
+    int waterEscapeTicks -> O0
+    net.minecraft.core.BlockPos lastPosSample -> O
+    int noMoveTicks -> lll
+    int stuckResetCount -> llI
     double MIN_SPEED_THRESHOLD -> l
-    int STUCK_TIME_THRESHOLD -> O0
-    int PATH_TIMEOUT_TICKS -> lll
+    int STUCK_TIME_THRESHOLD -> llO
+    int NO_MOVE_THRESHOLD -> lIl
+    int PATH_TIMEOUT_TICKS -> lII
     net.minecraft.world.entity.item.ItemEntity pickupTarget -> l
-    int pickupTimeout -> llI
+    int pickupTimeout -> lIO
     void <init>(com.example.addon.modules.AutoMinerModule) -> <init>
     void reset() -> l
     void tick() -> I
@@ -1367,31 +1374,34 @@ com.example.addon.mining.MinerFSM -> com.example.addon.x.lllO:
     void tickSeedMining() -> lO
     net.minecraft.core.BlockPos findNextSeedTarget() -> l
     boolean isTargetOreAt(net.minecraft.core.BlockPos) -> l
+    net.minecraft.core.BlockPos findNearestLand() -> I
     void breakSeedBlock() -> Il
-    void ensurePickaxeInHand() -> II
+    void ensureBestToolForSeedTarget() -> II
+    int findBestToolSlot(net.minecraft.world.level.block.state.BlockState) -> l
+    void ensurePickaxeInHand() -> IO
     net.minecraft.world.entity.item.ItemEntity findNearbyOreDrop(double) -> l
     boolean tryPickupNearbyOre() -> l
-    void checkToolDurabilityWarning() -> IO
+    void checkToolDurabilityWarning() -> Ol
     java.lang.String toolName(net.minecraft.world.item.ItemStack) -> l
     boolean isAdjacentTo(net.minecraft.core.BlockPos) -> I
-    void tickUnloading() -> Ol
-    void tickSupply() -> OI
-    void tickEating() -> OO
-    void tickRepair() -> l1
+    void tickUnloading() -> OI
+    void tickSupply() -> OO
+    void tickEating() -> l1
+    void tickRepair() -> I1
     boolean isViewAligned(float,float) -> l
-    void tickDeathHandling() -> I1
-    void tickRespawnWait() -> O0
+    void tickDeathHandling() -> O0
+    void tickRespawnWait() -> lll
     boolean needsRepair(net.minecraft.world.item.ItemStack) -> l
     boolean isFullyRepaired(net.minecraft.world.item.ItemStack) -> I
     net.minecraft.world.item.ItemStack findMiningPickaxe() -> l
     int findMiningPickaxeSlot() -> l
     boolean isPickaxe(net.minecraft.world.item.ItemStack) -> O
     boolean isRepairableTool(net.minecraft.world.item.ItemStack) -> ll
+    boolean hasMending(net.minecraft.world.item.ItemStack) -> lI
     int findDamagedToolSlot() -> I
     net.minecraft.world.item.ItemStack findDamagedTool() -> I
     int countFoodStacks() -> O
     boolean hasFoodToEat() -> I
-    java.lang.String getTargetItemId() -> l
     int countOreStacks() -> ll
     net.minecraft.world.item.ItemStack findWeaponInHotbar() -> O
     int findWeaponSlotInHotbar() -> lI
@@ -1399,10 +1409,10 @@ com.example.addon.mining.MinerFSM -> com.example.addon.x.lllO:
     void broadcastStateTransition(com.example.addon.mining.MinerFSM$MinerState,com.example.addon.mining.MinerFSM$MinerState) -> l
     void smoothRotateTo(float,float) -> l
     void faceBlock(net.minecraft.core.BlockPos) -> l
-    void startKillAura() -> lll
-    void stopKillAura() -> llI
-    void tryMeteorAutoRespawn() -> llO
-    void restoreHotbar() -> lIl
+    void startKillAura() -> llI
+    void stopKillAura() -> llO
+    void tryMeteorAutoRespawn() -> lIl
+    void restoreHotbar() -> lII
     boolean lambda$findNearbyOreDrop$0(net.minecraft.world.entity.item.ItemEntity) -> l
 com.example.addon.mining.MinerFSM$MinerState -> com.example.addon.x.llIl:
     com.example.addon.mining.MinerFSM$MinerState IDLE -> l
@@ -1416,11 +1426,11 @@ com.example.addon.mining.MinerFSM$MinerState -> com.example.addon.x.llIl:
     com.example.addon.mining.MinerFSM$MinerState RESPAWN_WAIT -> IO
     java.lang.String cn -> l
     com.example.addon.mining.MinerFSM$MinerState[] $VALUES -> l
-    com.example.addon.mining.MinerFSM$MinerState[] values() -> l
-    com.example.addon.mining.MinerFSM$MinerState valueOf(java.lang.String) -> l
+    com.example.addon.mining.MinerFSM$MinerState[] values() -> values
+    com.example.addon.mining.MinerFSM$MinerState valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String cn() -> l
-    com.example.addon.mining.MinerFSM$MinerState[] $values() -> I
+    com.example.addon.mining.MinerFSM$MinerState[] $values() -> l
     void <clinit>() -> <clinit>
 com.example.addon.mining.OrePredictor -> com.example.addon.x.llII:
     int SCAN_BUDGET_PER_FRAME -> l
@@ -1467,135 +1477,142 @@ com.example.addon.mining.SoundNotifier -> com.example.addon.x.llIO:
     void notifyLowDurability() -> lO
 com.example.addon.mixin.BaritoneCommandLongDescMixin -> com.example.addon.mixin.BaritoneCommandLongDescMixin:
     void <init>() -> <init>
-    void yiyiaddon$translateLongDescription(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
+    void yiyiaddon$translateLongDescription(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$translateLongDescription
 com.example.addon.mixin.BaritoneCommandNamesMixin -> com.example.addon.mixin.BaritoneCommandNamesMixin:
     void <init>() -> <init>
     baritone.api.command.registry.Registry getRegistry() -> getRegistry
-    void yiyiaddon$supportChineseCommandInput(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
-    void yiyiaddon$addChineseCommandSuggestions(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> I
+    void yiyiaddon$supportChineseCommandInput(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$supportChineseCommandInput
+    void yiyiaddon$addChineseCommandSuggestions(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$addChineseCommandSuggestions
 com.example.addon.mixin.BaritoneHelpCommandMixin -> com.example.addon.mixin.BaritoneHelpCommandMixin:
     void <init>() -> <init>
-    void yiyiaddon$translateShortDescription(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
-    java.lang.String yiyiaddon$translateReturnHint(java.lang.String) -> l
-    java.lang.String yiyiaddon$translateCommandListTitle(java.lang.String) -> I
-    java.lang.String yiyiaddon$translateFullHelpHint(java.lang.String) -> O
-    java.lang.String yiyiaddon$translateListedDescription(baritone.api.command.ICommand) -> l
-    java.lang.String yiyiaddon$translateDetailedDescription(baritone.api.command.ICommand) -> I
-    java.lang.String yiyiaddon$translateShortDescription(java.lang.String) -> ll
+    void yiyiaddon$translateShortDescription(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$translateShortDescription
+    java.lang.String yiyiaddon$translateReturnHint(java.lang.String) -> yiyiaddon$translateReturnHint
+    java.lang.String yiyiaddon$translateCommandListTitle(java.lang.String) -> yiyiaddon$translateCommandListTitle
+    java.lang.String yiyiaddon$translateFullHelpHint(java.lang.String) -> yiyiaddon$translateFullHelpHint
+    java.lang.String yiyiaddon$translateListedDescription(baritone.api.command.ICommand) -> yiyiaddon$translateListedDescription
+    java.lang.String yiyiaddon$translateDetailedDescription(baritone.api.command.ICommand) -> yiyiaddon$translateDetailedDescription
+    java.lang.String yiyiaddon$translateShortDescription(java.lang.String) -> yiyiaddon$translateShortDescription
 com.example.addon.mixin.BaritoneHelperTranslationMixin -> com.example.addon.mixin.BaritoneHelperTranslationMixin:
-    void yiyiaddon$colorBaritonePrefix(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
-    net.minecraft.network.chat.Component[] yiyiaddon$translateChatComponents(net.minecraft.network.chat.Component[]) -> l
-    java.lang.String yiyiaddon$translateNotification(java.lang.String) -> l
-    net.minecraft.network.chat.Style lambda$yiyiaddon$colorBaritonePrefix$0(net.minecraft.network.chat.Style) -> l
+    void yiyiaddon$colorBaritonePrefix(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$colorBaritonePrefix
+    net.minecraft.network.chat.Component[] yiyiaddon$translateChatComponents(net.minecraft.network.chat.Component[]) -> yiyiaddon$translateChatComponents
+    java.lang.String yiyiaddon$translateNotification(java.lang.String) -> yiyiaddon$translateNotification
+    net.minecraft.network.chat.Style lambda$yiyiaddon$colorBaritonePrefix$0(net.minecraft.network.chat.Style) -> lambda$yiyiaddon$colorBaritonePrefix$0
 com.example.addon.mixin.BaritonePaginatorMixin -> com.example.addon.mixin.BaritonePaginatorMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translatePreviousPageHint$16915f7f() -> l
-    java.lang.String yiyiaddon$translateNextPageHint$16915f7f() -> I
-    java.lang.String yiyiaddon$translateValidPageError$16915f7f() -> O
+    java.lang.String yiyiaddon$translatePreviousPageHint(java.lang.String) -> yiyiaddon$translatePreviousPageHint
+    java.lang.String yiyiaddon$translateNextPageHint(java.lang.String) -> yiyiaddon$translateNextPageHint
+    java.lang.String yiyiaddon$translateValidPageError(java.lang.String) -> yiyiaddon$translateValidPageError
 com.example.addon.mixin.BaritoneSetCommandMixin -> com.example.addon.mixin.BaritoneSetCommandMixin:
     void <init>() -> <init>
-    void yiyiaddon$localizeSettingEntry(baritone.api.Settings$Setting,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
+    void yiyiaddon$localizeSettingEntry(baritone.api.Settings$Setting,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$localizeSettingEntry
 com.example.addon.mixin.ButtonBuilderTranslationMixin -> com.example.addon.mixin.ButtonBuilderTranslationMixin:
     void <init>() -> <init>
-    net.minecraft.network.chat.Component yiyiaddon$translateMeteorMultiplayerButtons(net.minecraft.network.chat.Component) -> l
+    net.minecraft.network.chat.Component yiyiaddon$translateMeteorMultiplayerButtons(net.minecraft.network.chat.Component) -> yiyiaddon$translateMeteorMultiplayerButtons
 com.example.addon.mixin.CategoryTranslationMixin -> com.example.addon.mixin.CategoryTranslationMixin:
     java.lang.String name -> name
     void <init>() -> <init>
-    void yiyiaddon$localize$343a088f() -> l
+    void yiyiaddon$localize(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$localize
 com.example.addon.mixin.ClientCommandSourceMixin -> com.example.addon.mixin.ClientCommandSourceMixin:
     void <init>() -> <init>
-    void onSendCommand$343a088f(java.lang.String) -> l
+    void onSendCommand(java.lang.String,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> onSendCommand
 com.example.addon.mixin.ClientLevelPredictionAccessor -> com.example.addon.mixin.ClientLevelPredictionAccessor:
     net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler yiyiaddon$getPredictionHandler() -> yiyiaddon$getPredictionHandler
 com.example.addon.mixin.ConfigCustomFontDefaultMixin -> com.example.addon.mixin.ConfigCustomFontDefaultMixin:
     void <init>() -> <init>
-    int yiyiaddon$disableCustomFontByDefault$134621() -> l
+    int yiyiaddon$disableCustomFontByDefault(int) -> yiyiaddon$disableCustomFontByDefault
 com.example.addon.mixin.ExampleMixin -> com.example.addon.mixin.ExampleMixin:
     void <init>() -> <init>
-    void onGameLoaded$16c2ea24() -> l
+    void onGameLoaded(net.minecraft.client.main.GameConfig,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> onGameLoaded
 com.example.addon.mixin.HudCustomFontDefaultMixin -> com.example.addon.mixin.HudCustomFontDefaultMixin:
     void <init>() -> <init>
-    int yiyiaddon$disableCustomFontByDefault$134621() -> l
+    int yiyiaddon$disableCustomFontByDefault(int) -> yiyiaddon$disableCustomFontByDefault
 com.example.addon.mixin.JoinMultiplayerScreenTranslationMixin -> com.example.addon.mixin.JoinMultiplayerScreenTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateStatusText(java.lang.String) -> l
+    java.lang.String yiyiaddon$translateStatusText(java.lang.String) -> yiyiaddon$translateStatusText
 com.example.addon.mixin.KeyboardInvoker -> com.example.addon.mixin.KeyboardInvoker:
     void yiyiaddon$keyPress(long,int,net.minecraft.client.input.KeyEvent) -> yiyiaddon$keyPress
 com.example.addon.mixin.MeteorCommandNamesMixin -> com.example.addon.mixin.MeteorCommandNamesMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateChineseToEnglish(java.lang.String) -> l
+    java.lang.String yiyiaddon$translateChineseToEnglish(java.lang.String) -> yiyiaddon$translateChineseToEnglish
 com.example.addon.mixin.MeteorCommandRegistrationMixin -> com.example.addon.mixin.MeteorCommandRegistrationMixin:
     void <init>() -> <init>
-    void yiyiaddon$registerChineseCommandNames$15da76e3(com.mojang.brigadier.CommandDispatcher) -> l
-    void yiyiaddon$registerChineseSubcommands(com.mojang.brigadier.tree.CommandNode) -> l
-    java.lang.String yiyiaddon$translateMeteorChatOutput(java.lang.String) -> l
-    void yiyiaddon$colorMeteorPrefix(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> l
-    net.minecraft.network.chat.Style lambda$yiyiaddon$colorMeteorPrefix$0(net.minecraft.network.chat.Style) -> l
+    void yiyiaddon$registerChineseCommandNames(com.mojang.brigadier.CommandDispatcher,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$registerChineseCommandNames
+    void yiyiaddon$registerChineseSubcommands(com.mojang.brigadier.tree.CommandNode) -> yiyiaddon$registerChineseSubcommands
+    java.lang.String yiyiaddon$translateMeteorChatOutput(java.lang.String) -> yiyiaddon$translateMeteorChatOutput
+    void yiyiaddon$colorMeteorPrefix(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$colorMeteorPrefix
+    net.minecraft.network.chat.Style lambda$yiyiaddon$colorMeteorPrefix$0(net.minecraft.network.chat.Style) -> lambda$yiyiaddon$colorMeteorPrefix$0
 com.example.addon.mixin.MeteorCommandTranslationMixin -> com.example.addon.mixin.MeteorCommandTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateHelpDescription(meteordevelopment.meteorclient.commands.Command) -> l
-    java.lang.String yiyiaddon$translateHelpCommandName(meteordevelopment.meteorclient.commands.Command) -> I
-    java.util.List yiyiaddon$translateHelpAliases(meteordevelopment.meteorclient.commands.Command) -> l
-    java.lang.String yiyiaddon$translateHelpLabel(java.lang.String) -> l
-    java.lang.String yiyiaddon$translateUsageCommandName(meteordevelopment.meteorclient.commands.Command) -> O
+    java.lang.String yiyiaddon$translateHelpDescription(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateHelpDescription
+    java.lang.String yiyiaddon$translateHelpCommandName(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateHelpCommandName
+    java.util.List yiyiaddon$translateHelpAliases(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateHelpAliases
+    java.lang.String yiyiaddon$translateHelpLabel(java.lang.String) -> yiyiaddon$translateHelpLabel
+    java.lang.String yiyiaddon$translateUsageCommandName(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateUsageCommandName
 com.example.addon.mixin.MeteorCommandsTranslationMixin -> com.example.addon.mixin.MeteorCommandsTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateCommandName(meteordevelopment.meteorclient.commands.Command) -> l
-    java.lang.String yiyiaddon$translateCommandDescription(meteordevelopment.meteorclient.commands.Command) -> I
+    java.lang.String yiyiaddon$translateCommandName(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateCommandName
+    java.lang.String yiyiaddon$translateCommandDescription(meteordevelopment.meteorclient.commands.Command) -> yiyiaddon$translateCommandDescription
 com.example.addon.mixin.ModuleScreenContextTranslationMixin -> com.example.addon.mixin.ModuleScreenContextTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateReset(java.lang.String) -> l
-    java.lang.String yiyiaddon$translateBind(java.lang.String) -> I
-    java.lang.String yiyiaddon$translateToggleOnBindRelease(java.lang.String) -> O
-    java.lang.String yiyiaddon$translateChatFeedback(java.lang.String) -> ll
-    java.lang.String yiyiaddon$translateActive(java.lang.String) -> lI
-    java.lang.String yiyiaddon$translateCopyConfig(java.lang.String) -> lO
-    java.lang.String yiyiaddon$translatePasteConfig(java.lang.String) -> Il
+    java.lang.String yiyiaddon$translateReset(java.lang.String) -> yiyiaddon$translateReset
+    java.lang.String yiyiaddon$translateBind(java.lang.String) -> yiyiaddon$translateBind
+    java.lang.String yiyiaddon$translateToggleOnBindRelease(java.lang.String) -> yiyiaddon$translateToggleOnBindRelease
+    java.lang.String yiyiaddon$translateChatFeedback(java.lang.String) -> yiyiaddon$translateChatFeedback
+    java.lang.String yiyiaddon$translateActive(java.lang.String) -> yiyiaddon$translateActive
+    java.lang.String yiyiaddon$translateCopyConfig(java.lang.String) -> yiyiaddon$translateCopyConfig
+    java.lang.String yiyiaddon$translatePasteConfig(java.lang.String) -> yiyiaddon$translatePasteConfig
 com.example.addon.mixin.ModuleScreenTranslationMixin -> com.example.addon.mixin.ModuleScreenTranslationMixin:
     meteordevelopment.meteorclient.systems.modules.Module module -> module
     void <init>() -> <init>
-    void yiyiaddon$localize$56ed32d9() -> l
+    void yiyiaddon$localize(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$localize
 com.example.addon.mixin.ModuleToggleMessageMixin -> com.example.addon.mixin.ModuleToggleMessageMixin:
     java.lang.String title -> title
     void <init>() -> <init>
     boolean isActive() -> isActive
-    void yiyiaddon$translateToggleMessage(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> l
+    void yiyiaddon$translateToggleMessage(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$translateToggleMessage
 com.example.addon.mixin.ModuleTranslationMixin -> com.example.addon.mixin.ModuleTranslationMixin:
     java.lang.String title -> title
     java.lang.String description -> description
     void <init>() -> <init>
-    void yiyiaddon$setTitle(java.lang.String) -> l
-    void yiyiaddon$setDescription(java.lang.String) -> I
+    void yiyiaddon$setTitle(java.lang.String) -> yiyiaddon$setTitle
+    void yiyiaddon$setDescription(java.lang.String) -> yiyiaddon$setDescription
 com.example.addon.mixin.ModulesScreenTranslationMixin -> com.example.addon.mixin.ModulesScreenTranslationMixin:
     void <init>() -> <init>
-    void yiyiaddon$localizeModulesBeforeWidgets$56ed32d9() -> l
-    java.lang.String yiyiaddon$translateSearch(java.lang.String) -> l
-    java.lang.String yiyiaddon$translateFavorites(java.lang.String) -> I
+    void yiyiaddon$localizeModulesBeforeWidgets(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$localizeModulesBeforeWidgets
+    java.lang.String yiyiaddon$translateSearch(java.lang.String) -> yiyiaddon$translateSearch
+    java.lang.String yiyiaddon$translateFavorites(java.lang.String) -> yiyiaddon$translateFavorites
+com.example.addon.mixin.MultiPlayerGameModeFastBreakMixin -> com.example.addon.mixin.MultiPlayerGameModeFastBreakMixin:
+    void <init>() -> <init>
+    boolean destroyBlock(net.minecraft.core.BlockPos) -> destroyBlock
+    void startPrediction(net.minecraft.client.multiplayer.ClientLevel,net.minecraft.client.multiplayer.prediction.PredictiveAction) -> startPrediction
+    void yiyiaddon$instantBreak(net.minecraft.core.BlockPos,net.minecraft.core.Direction,org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable) -> yiyiaddon$instantBreak
+    net.minecraft.network.protocol.Packet lambda$yiyiaddon$instantBreak$1(net.minecraft.core.BlockPos,net.minecraft.core.Direction,int) -> lambda$yiyiaddon$instantBreak$1
+    net.minecraft.network.protocol.Packet lambda$yiyiaddon$instantBreak$0(net.minecraft.core.BlockPos,net.minecraft.core.Direction,int) -> lambda$yiyiaddon$instantBreak$0
 com.example.addon.mixin.PathManagerScreenTranslationMixin -> com.example.addon.mixin.PathManagerScreenTranslationMixin:
     void <init>() -> <init>
-    void yiyiaddon$localizeBaritoneSettings$56ed32d9() -> l
+    void yiyiaddon$localizeBaritoneSettings(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$localizeBaritoneSettings
 com.example.addon.mixin.ReachTranslationMixin -> com.example.addon.mixin.ReachTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateReachNote(java.lang.String) -> l
+    java.lang.String yiyiaddon$translateReachNote(java.lang.String) -> yiyiaddon$translateReachNote
 com.example.addon.mixin.ResourcePackPushMixin -> com.example.addon.mixin.ResourcePackPushMixin:
     void <init>() -> <init>
     void send(net.minecraft.network.protocol.Packet) -> send
-    void yiyiaddon$handleResourcePackPush(net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> l
+    void yiyiaddon$handleResourcePackPush(net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket,org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$handleResourcePackPush
 com.example.addon.mixin.SettingGroupTranslationMixin -> com.example.addon.mixin.SettingGroupTranslationMixin:
     java.lang.String name -> name
     void <init>() -> <init>
-    void yiyiaddon$setName(java.lang.String) -> l
+    void yiyiaddon$setName(java.lang.String) -> yiyiaddon$setName
 com.example.addon.mixin.SettingTranslationMixin -> com.example.addon.mixin.SettingTranslationMixin:
     java.lang.String title -> title
     java.lang.String description -> description
     void <init>() -> <init>
-    void yiyiaddon$setTitle(java.lang.String) -> l
-    void yiyiaddon$setDescription(java.lang.String) -> I
+    void yiyiaddon$setTitle(java.lang.String) -> yiyiaddon$setTitle
+    void yiyiaddon$setDescription(java.lang.String) -> yiyiaddon$setDescription
 com.example.addon.mixin.TextTranslationMixin -> com.example.addon.mixin.TextTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translate(java.lang.String) -> l
-    java.lang.String yiyiaddon$translateWidth(java.lang.String) -> I
-    java.lang.String yiyiaddon$substringWithinTranslatedText(java.lang.String,int,int) -> l
+    java.lang.String yiyiaddon$translate(java.lang.String) -> yiyiaddon$translate
+    java.lang.String yiyiaddon$translateWidth(java.lang.String) -> yiyiaddon$translateWidth
+    java.lang.String yiyiaddon$substringWithinTranslatedText(java.lang.String,int,int) -> yiyiaddon$substringWithinTranslatedText
 com.example.addon.mixin.WDoubleEditRealtimeMixin -> com.example.addon.mixin.WDoubleEditRealtimeMixin:
     double value -> value
     meteordevelopment.meteorclient.gui.widgets.input.WTextBox textBox -> textBox
@@ -1604,8 +1621,8 @@ com.example.addon.mixin.WDoubleEditRealtimeMixin -> com.example.addon.mixin.WDou
     double min -> min
     double max -> max
     void <init>() -> <init>
-    void yiyiaddon$realtimeTextBox$56ed32d9() -> l
-    void lambda$yiyiaddon$realtimeTextBox$0() -> I
+    void yiyiaddon$realtimeTextBox(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$realtimeTextBox
+    void lambda$yiyiaddon$realtimeTextBox$0() -> lambda$yiyiaddon$realtimeTextBox$0
 com.example.addon.mixin.WIntEditRealtimeMixin -> com.example.addon.mixin.WIntEditRealtimeMixin:
     int value -> value
     meteordevelopment.meteorclient.gui.widgets.input.WTextBox textBox -> textBox
@@ -1614,16 +1631,40 @@ com.example.addon.mixin.WIntEditRealtimeMixin -> com.example.addon.mixin.WIntEdi
     int min -> min
     int max -> max
     void <init>() -> <init>
-    void yiyiaddon$realtimeTextBox$56ed32d9() -> l
-    void lambda$yiyiaddon$realtimeTextBox$0() -> I
+    void yiyiaddon$realtimeTextBox(org.spongepowered.asm.mixin.injection.callback.CallbackInfo) -> yiyiaddon$realtimeTextBox
+    void lambda$yiyiaddon$realtimeTextBox$0() -> lambda$yiyiaddon$realtimeTextBox$0
 com.example.addon.mixin.WMeteorDropdownTranslationMixin -> com.example.addon.mixin.WMeteorDropdownTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateSelectedValue(java.lang.Object) -> l
+    java.lang.String yiyiaddon$translateSelectedValue(java.lang.Object) -> yiyiaddon$translateSelectedValue
 com.example.addon.mixin.WMeteorDropdownValueTranslationMixin -> com.example.addon.mixin.WMeteorDropdownValueTranslationMixin:
     void <init>() -> <init>
-    java.lang.String yiyiaddon$translateValueSize(java.lang.Object) -> l
-    java.lang.String yiyiaddon$translateValueText(java.lang.Object) -> I
-com.example.addon.modules.AutoFarmMatrix -> com.example.addon.x.llOl:
+    java.lang.String yiyiaddon$translateValueSize(java.lang.Object) -> yiyiaddon$translateValueSize
+    java.lang.String yiyiaddon$translateValueText(java.lang.Object) -> yiyiaddon$translateValueText
+com.example.addon.modules.AdminDetectorModule -> com.example.addon.x.llOl:
+    meteordevelopment.meteorclient.settings.SettingGroup sgDetect -> l
+    meteordevelopment.meteorclient.settings.SettingGroup sgList -> I
+    meteordevelopment.meteorclient.settings.Setting detectRange -> l
+    meteordevelopment.meteorclient.settings.Setting detectSpectator -> I
+    meteordevelopment.meteorclient.settings.Setting detectCreative -> O
+    meteordevelopment.meteorclient.settings.Setting detectInvisible -> ll
+    meteordevelopment.meteorclient.settings.Setting detectHidden -> lI
+    meteordevelopment.meteorclient.settings.Setting whitelist -> lO
+    meteordevelopment.meteorclient.settings.Setting blacklist -> Il
+    boolean disconnecting -> l
+    java.util.Map nearbyThreats -> l
+    void <init>() -> <init>
+    void onActivate() -> onActivate
+    void onDeactivate() -> onDeactivate
+    void onTick$7f84d702() -> l
+    void onGameLeft$1e40cabe() -> I
+    java.lang.String getThreatReason(net.minecraft.world.entity.player.Player,java.lang.String,java.util.List) -> l
+    void triggerDisconnect() -> O
+    boolean isCreative(net.minecraft.world.entity.player.Player) -> l
+    boolean isHiddenFromTab(net.minecraft.world.entity.player.Player) -> I
+    net.minecraft.world.level.GameType getGameMode(net.minecraft.world.entity.player.Player) -> l
+    boolean containsName(java.util.List,java.lang.String) -> l
+    meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
+com.example.addon.modules.AutoFarmMatrix -> com.example.addon.x.llOI:
     com.example.addon.farm.FarmScanner scanner -> l
     com.example.addon.farm.ContainerBroker broker -> l
     meteordevelopment.meteorclient.settings.SettingGroup sgCrops -> l
@@ -1689,6 +1730,7 @@ com.example.addon.modules.AutoFarmMatrix -> com.example.addon.x.llOl:
     void onRender3D(meteordevelopment.meteorclient.events.render.Render3DEvent) -> l
     void onRender2D(meteordevelopment.meteorclient.events.render.Render2DEvent) -> l
     void onGameLeft$1e40cabe() -> ll
+    void onOpenScreen(meteordevelopment.meteorclient.events.game.OpenScreenEvent) -> l
     void tickStateMachine() -> lI
     void transitionTo(com.example.addon.farm.FarmState) -> l
     void tickStandby() -> lO
@@ -1736,11 +1778,11 @@ com.example.addon.modules.AutoFarmMatrix -> com.example.addon.x.llOl:
     boolean lambda$new$2(net.minecraft.world.level.block.Block) -> I
     boolean lambda$new$1(net.minecraft.world.level.block.Block) -> O
     boolean lambda$new$0(net.minecraft.world.level.block.Block) -> ll
-com.example.addon.modules.AutoFarmMatrix$1 -> com.example.addon.x.llOI:
+com.example.addon.modules.AutoFarmMatrix$1 -> com.example.addon.x.llOO:
     int[] $SwitchMap$com$example$addon$farm$SiteType -> l
     int[] $SwitchMap$com$example$addon$farm$FarmState -> I
     void <clinit>() -> <clinit>
-com.example.addon.modules.AutoMinerModule -> com.example.addon.x.llOO:
+com.example.addon.modules.AutoMinerModule -> com.example.addon.x.lIll:
     com.example.addon.mining.MinerFSM fsm -> l
     com.example.addon.mining.BaritoneExecutor baritone -> l
     com.example.addon.mining.ContainerHelper container -> l
@@ -1755,90 +1797,104 @@ com.example.addon.modules.AutoMinerModule -> com.example.addon.x.llOO:
     meteordevelopment.meteorclient.settings.Setting overworldOreTarget -> l
     meteordevelopment.meteorclient.settings.Setting netherOreTarget -> I
     meteordevelopment.meteorclient.settings.Setting blockTarget -> O
-    meteordevelopment.meteorclient.settings.Setting seedMiningEnabled -> ll
-    meteordevelopment.meteorclient.settings.Setting worldSeed -> lI
-    meteordevelopment.meteorclient.settings.Setting renderRange -> lO
-    meteordevelopment.meteorclient.settings.Setting oreRenderColor -> Il
-    meteordevelopment.meteorclient.settings.Setting pulseEffect -> II
+    meteordevelopment.meteorclient.settings.Setting lootMode -> ll
+    meteordevelopment.meteorclient.settings.Setting seedMiningEnabled -> lI
+    meteordevelopment.meteorclient.settings.Setting worldSeed -> lO
+    meteordevelopment.meteorclient.settings.Setting renderRange -> Il
+    meteordevelopment.meteorclient.settings.Setting oreRenderColor -> II
+    meteordevelopment.meteorclient.settings.Setting pulseEffect -> IO
     boolean lastCheckFoundFake -> l
-    meteordevelopment.meteorclient.settings.Setting wildCommand -> IO
-    meteordevelopment.meteorclient.settings.Setting rtpGuiEnabled -> Ol
-    meteordevelopment.meteorclient.settings.Setting rtpGuiKeyword -> OI
-    meteordevelopment.meteorclient.settings.Setting unloadCommand -> OO
-    meteordevelopment.meteorclient.settings.Setting supplyCommand -> l1
-    meteordevelopment.meteorclient.settings.Setting afkCommand -> I1
-    meteordevelopment.meteorclient.settings.Setting respawnCommand -> O0
-    meteordevelopment.meteorclient.settings.Setting unloadThreshold -> lll
-    meteordevelopment.meteorclient.settings.Setting hungerThreshold -> llI
-    meteordevelopment.meteorclient.settings.Setting durabilityThreshold -> llO
-    meteordevelopment.meteorclient.settings.Setting teleportDelay -> lIl
-    meteordevelopment.meteorclient.settings.Setting keepWhitelist -> lII
-    meteordevelopment.meteorclient.settings.Setting foodWhitelist -> lIO
+    meteordevelopment.meteorclient.settings.Setting wildCommand -> Ol
+    meteordevelopment.meteorclient.settings.Setting rtpGuiEnabled -> OI
+    meteordevelopment.meteorclient.settings.Setting rtpGuiKeyword -> OO
+    meteordevelopment.meteorclient.settings.Setting unloadCommand -> l1
+    meteordevelopment.meteorclient.settings.Setting supplyCommand -> I1
+    meteordevelopment.meteorclient.settings.Setting afkCommand -> O0
+    meteordevelopment.meteorclient.settings.Setting respawnCommand -> lll
+    meteordevelopment.meteorclient.settings.Setting unloadThreshold -> llI
+    meteordevelopment.meteorclient.settings.Setting hungerThreshold -> llO
+    meteordevelopment.meteorclient.settings.Setting durabilityThreshold -> lIl
+    meteordevelopment.meteorclient.settings.Setting teleportDelay -> lII
+    meteordevelopment.meteorclient.settings.Setting keepWhitelist -> lIO
+    meteordevelopment.meteorclient.settings.Setting foodWhitelist -> lOl
     meteordevelopment.meteorclient.settings.BlockListSetting placeBlocks -> l
-    meteordevelopment.meteorclient.settings.Setting avoidLava -> lOl
-    meteordevelopment.meteorclient.settings.Setting mobAvoidance -> lOI
-    meteordevelopment.meteorclient.settings.Setting mobAvoidanceRadius -> lOO
-    meteordevelopment.meteorclient.settings.Setting allowBreak -> Ill
-    meteordevelopment.meteorclient.settings.Setting logisticsBreakBlocks -> IlI
-    meteordevelopment.meteorclient.settings.Setting allowPlace -> IlO
-    meteordevelopment.meteorclient.settings.Setting maxFallHeight -> IIl
-    meteordevelopment.meteorclient.settings.Setting pauseMiningForFallingBlocks -> III
-    meteordevelopment.meteorclient.settings.Setting allowInventory -> IIO
-    meteordevelopment.meteorclient.settings.Setting autoTool -> IOl
-    meteordevelopment.meteorclient.settings.Setting sprintAscends -> IOI
-    meteordevelopment.meteorclient.settings.Setting allowParkour -> IOO
-    meteordevelopment.meteorclient.settings.Setting allowParkourPlace -> Oll
-    meteordevelopment.meteorclient.settings.Setting allowDiagonalAscend -> OlI
-    meteordevelopment.meteorclient.settings.Setting allowDiagonalDescend -> OlO
-    meteordevelopment.meteorclient.settings.Setting allowOnlyExposedOres -> OIl
-    meteordevelopment.meteorclient.settings.Setting allowOnlyExposedOresDistance -> OII
-    meteordevelopment.meteorclient.settings.Setting minYLevelWhileMining -> OIO
-    meteordevelopment.meteorclient.settings.Setting maxYLevelWhileMining -> OOl
-    meteordevelopment.meteorclient.settings.Setting mineGoalUpdateInterval -> OOI
-    meteordevelopment.meteorclient.settings.Setting mineMaxOreLocationsCount -> OOO
-    meteordevelopment.meteorclient.settings.Setting blacklistClosestOnFailure -> l1l
-    meteordevelopment.meteorclient.settings.Setting legitMine -> l1I
-    meteordevelopment.meteorclient.settings.Setting legitMineYLevel -> l1O
-    meteordevelopment.meteorclient.settings.Setting legitMineIncludeDiagonals -> I1l
-    meteordevelopment.meteorclient.settings.Setting espScale -> I1I
-    meteordevelopment.meteorclient.settings.Setting mineralChestColor -> I1O
-    meteordevelopment.meteorclient.settings.Setting foodChestColor -> O0l
-    meteordevelopment.meteorclient.settings.Setting afkPointColor -> O0I
+    meteordevelopment.meteorclient.settings.Setting avoidLava -> lOI
+    meteordevelopment.meteorclient.settings.Setting mobAvoidance -> lOO
+    meteordevelopment.meteorclient.settings.Setting mobAvoidanceRadius -> Ill
+    meteordevelopment.meteorclient.settings.Setting allowBreak -> IlI
+    meteordevelopment.meteorclient.settings.Setting logisticsBreakBlocks -> IlO
+    meteordevelopment.meteorclient.settings.Setting allowPlace -> IIl
+    meteordevelopment.meteorclient.settings.Setting maxFallHeight -> III
+    meteordevelopment.meteorclient.settings.Setting pauseMiningForFallingBlocks -> IIO
+    meteordevelopment.meteorclient.settings.Setting allowInventory -> IOl
+    meteordevelopment.meteorclient.settings.Setting autoTool -> IOI
+    meteordevelopment.meteorclient.settings.Setting sprintAscends -> IOO
+    meteordevelopment.meteorclient.settings.Setting allowParkour -> Oll
+    meteordevelopment.meteorclient.settings.Setting allowParkourPlace -> OlI
+    meteordevelopment.meteorclient.settings.Setting allowDiagonalAscend -> OlO
+    meteordevelopment.meteorclient.settings.Setting allowDiagonalDescend -> OIl
+    meteordevelopment.meteorclient.settings.Setting allowOnlyExposedOres -> OII
+    meteordevelopment.meteorclient.settings.Setting allowOnlyExposedOresDistance -> OIO
+    meteordevelopment.meteorclient.settings.Setting minYLevelWhileMining -> OOl
+    meteordevelopment.meteorclient.settings.Setting maxYLevelWhileMining -> OOI
+    meteordevelopment.meteorclient.settings.Setting mineGoalUpdateInterval -> OOO
+    meteordevelopment.meteorclient.settings.Setting mineMaxOreLocationsCount -> l1l
+    meteordevelopment.meteorclient.settings.Setting blacklistClosestOnFailure -> l1I
+    meteordevelopment.meteorclient.settings.Setting legitMine -> l1O
+    meteordevelopment.meteorclient.settings.Setting legitMineYLevel -> I1l
+    meteordevelopment.meteorclient.settings.Setting legitMineIncludeDiagonals -> I1I
+    meteordevelopment.meteorclient.settings.Setting fastBreak -> I1O
+    meteordevelopment.meteorclient.settings.Setting bypassAnticheat -> O0l
+    meteordevelopment.meteorclient.settings.Setting espScale -> O0I
+    meteordevelopment.meteorclient.settings.Setting mineralChestColor -> O0O
+    meteordevelopment.meteorclient.settings.Setting foodChestColor -> llll
+    meteordevelopment.meteorclient.settings.Setting afkPointColor -> lllI
     void <init>() -> <init>
     void onActivate() -> onActivate
     void reportStartupInfo() -> I
-    java.lang.String getDimensionName() -> Il
+    java.lang.String getDimensionName() -> II
     boolean isDimension(net.minecraft.resources.ResourceKey,java.lang.String) -> l
     void onDeactivate() -> onDeactivate
     void updateOrePredictor() -> O
-    java.util.List selfCheck() -> I
+    boolean hasEnchant(net.minecraft.world.item.ItemStack,net.minecraft.resources.ResourceKey) -> l
+    boolean hasMendingPickaxe() -> IO
+    java.util.List selfCheck() -> O
     void onTick$7f84d702() -> ll
     void onRender2D(meteordevelopment.meteorclient.events.render.Render2DEvent) -> l
     void onRender3D(meteordevelopment.meteorclient.events.render.Render3DEvent) -> l
     void onGameLeft$1e40cabe() -> lI
+    void onOpenScreen(meteordevelopment.meteorclient.events.game.OpenScreenEvent) -> l
     net.minecraft.world.level.block.Block getTargetBlock() -> l
-    java.lang.String getWildCommand() -> l
-    boolean isRtpGuiEnabled() -> l
-    java.lang.String getRtpGuiKeyword() -> I
-    java.lang.String getUnloadCommand() -> O
-    java.lang.String getSupplyCommand() -> ll
-    java.lang.String getAFKCommand() -> lI
-    java.lang.String getRespawnCommand() -> lO
+    boolean isSilkTouchMode() -> l
+    boolean isTargetFamily(net.minecraft.world.level.block.Block) -> l
+    java.util.List getTargetBlocks() -> l
+    java.util.Set getTargetBlockIds() -> l
+    java.lang.String getTargetDropItemId() -> l
+    java.lang.String getWildCommand() -> I
+    boolean isRtpGuiEnabled() -> I
+    java.lang.String getRtpGuiKeyword() -> O
+    java.lang.String getUnloadCommand() -> ll
+    java.lang.String getSupplyCommand() -> lI
+    java.lang.String getAFKCommand() -> lO
+    java.lang.String getRespawnCommand() -> Il
     int getUnloadThreshold() -> l
     int getFullLoadStacks() -> I
     int getHungerThreshold() -> O
     int getDurabilityThreshold() -> ll
     int getTeleportDelay() -> lI
     int getMineGoalUpdateInterval() -> lO
-    boolean getAllowBreak() -> I
-    boolean isLogisticsBreakBlocks() -> O
-    java.util.List getFoodWhitelist() -> l
+    boolean getAllowBreak() -> O
+    boolean getAutoTool() -> ll
+    boolean getFastBreak() -> lI
+    boolean getBypassAnticheat() -> lO
+    boolean isLogisticsBreakBlocks() -> Il
+    java.util.List getFoodWhitelist() -> I
     com.example.addon.mining.BaritoneExecutor getBaritone() -> l
     com.example.addon.mining.ContainerHelper getContainer() -> l
     com.example.addon.mining.CommandManager getCmdManager() -> l
     com.example.addon.mining.OrePredictor getOrePredictor() -> l
     com.example.addon.mining.SoundNotifier getSoundNotifier() -> l
-    boolean isSeedMiningEnabled() -> ll
+    boolean isSeedMiningEnabled() -> II
     void info(java.lang.String) -> O
     void error(java.lang.String) -> ll
     void checkFakeOres() -> l
@@ -1849,51 +1905,64 @@ com.example.addon.modules.AutoMinerModule -> com.example.addon.x.llOO:
     void lambda$buildLocationCard$0(java.lang.String) -> lI
     void lambda$getWidget$0(meteordevelopment.meteorclient.gui.GuiTheme,meteordevelopment.meteorclient.gui.widgets.containers.WTable) -> l
     void lambda$getWidget$1(meteordevelopment.meteorclient.gui.GuiTheme) -> l
-    boolean lambda$new$31() -> lI
-    boolean lambda$new$30() -> lO
-    boolean lambda$new$29() -> Il
-    boolean lambda$new$28() -> II
-    void lambda$new$27(java.lang.Integer) -> l
-    void lambda$new$26(java.lang.Integer) -> I
-    void lambda$new$25(java.lang.Integer) -> O
-    void lambda$new$24(java.lang.Integer) -> ll
-    void lambda$new$23(java.lang.Integer) -> lI
-    void lambda$new$22(java.lang.Integer) -> lO
-    void lambda$new$21(java.lang.Integer) -> Il
-    void lambda$new$20(java.lang.Integer) -> II
-    void lambda$new$19(java.lang.Boolean) -> l
-    void lambda$new$18(java.lang.Boolean) -> I
-    void lambda$new$17(java.lang.Boolean) -> O
-    void lambda$new$16(java.lang.Boolean) -> ll
-    void lambda$new$15(java.lang.Boolean) -> lI
-    void lambda$new$14(java.lang.Boolean) -> lO
-    void lambda$new$13(java.lang.Boolean) -> Il
-    void lambda$new$12(java.lang.Boolean) -> II
-    void lambda$new$11(java.lang.Boolean) -> IO
-    void lambda$new$10(java.lang.Boolean) -> Ol
-    void lambda$new$9(java.lang.Boolean) -> OI
-    void lambda$new$8(java.lang.Boolean) -> OO
-    void lambda$new$7(java.lang.Boolean) -> l1
-    void lambda$new$6(java.lang.Boolean) -> I1
-    void lambda$new$5(java.lang.Boolean) -> O0
-    void lambda$new$4(java.lang.Boolean) -> lll
-    void lambda$new$3(java.lang.Boolean) -> llI
-    void lambda$new$2(java.util.List) -> l
-    boolean lambda$new$1(net.minecraft.world.level.block.Block) -> l
-    boolean lambda$new$0(net.minecraft.world.level.block.Block) -> I
-com.example.addon.modules.AutoVillagerTradeModule -> com.example.addon.x.lIll:
+    void lambda$getTargetBlocks$1(java.util.List,net.minecraft.world.level.block.Block) -> l
+    void lambda$getTargetBlocks$0(java.util.List,net.minecraft.world.level.block.Block) -> I
+    boolean lambda$new$32() -> Ol
+    boolean lambda$new$31() -> OI
+    boolean lambda$new$30() -> OO
+    boolean lambda$new$29() -> l1
+    void lambda$new$28(java.lang.Integer) -> l
+    void lambda$new$27(java.lang.Integer) -> I
+    void lambda$new$26(java.lang.Integer) -> O
+    void lambda$new$25(java.lang.Integer) -> ll
+    void lambda$new$24(java.lang.Integer) -> lI
+    void lambda$new$23(java.lang.Integer) -> lO
+    void lambda$new$22(java.lang.Integer) -> Il
+    void lambda$new$21(java.lang.Integer) -> II
+    void lambda$new$20(java.lang.Boolean) -> l
+    void lambda$new$19(java.lang.Boolean) -> I
+    void lambda$new$18(java.lang.Boolean) -> O
+    void lambda$new$17(java.lang.Boolean) -> ll
+    void lambda$new$16(java.lang.Boolean) -> lI
+    void lambda$new$15(java.lang.Boolean) -> lO
+    void lambda$new$14(java.lang.Boolean) -> Il
+    void lambda$new$13(java.lang.Boolean) -> II
+    void lambda$new$12(java.lang.Boolean) -> IO
+    void lambda$new$11(java.lang.Boolean) -> Ol
+    void lambda$new$10(java.lang.Boolean) -> OI
+    void lambda$new$9(java.lang.Boolean) -> OO
+    void lambda$new$8(java.lang.Boolean) -> l1
+    void lambda$new$7(java.lang.Boolean) -> I1
+    void lambda$new$6(java.lang.Boolean) -> O0
+    void lambda$new$5(java.lang.Boolean) -> lll
+    void lambda$new$4(java.lang.Boolean) -> llI
+    void lambda$new$3(java.util.List) -> l
+    boolean lambda$new$2(net.minecraft.world.item.Item) -> l
+    boolean lambda$new$1(net.minecraft.world.level.block.Block) -> I
+    boolean lambda$new$0(net.minecraft.world.level.block.Block) -> O
+com.example.addon.modules.AutoMinerModule$LootMode -> com.example.addon.x.lIlI:
+    com.example.addon.modules.AutoMinerModule$LootMode SILK_TOUCH -> l
+    com.example.addon.modules.AutoMinerModule$LootMode FORTUNE -> I
+    java.lang.String cn -> l
+    com.example.addon.modules.AutoMinerModule$LootMode[] $VALUES -> l
+    com.example.addon.modules.AutoMinerModule$LootMode[] values() -> values
+    com.example.addon.modules.AutoMinerModule$LootMode valueOf(java.lang.String) -> valueOf
+    void <init>(java.lang.String,int,java.lang.String) -> <init>
+    java.lang.String toString() -> toString
+    com.example.addon.modules.AutoMinerModule$LootMode[] $values() -> l
+    void <clinit>() -> <clinit>
+com.example.addon.modules.AutoVillagerTradeModule -> com.example.addon.x.lIlO:
     meteordevelopment.meteorclient.settings.SettingGroup sgGeneral -> l
     meteordevelopment.meteorclient.settings.Setting mode -> l
     meteordevelopment.meteorclient.settings.Setting drainMode -> I
     meteordevelopment.meteorclient.settings.Setting emeraldSupplyStacks -> O
     meteordevelopment.meteorclient.settings.Setting profession -> ll
-    meteordevelopment.meteorclient.settings.Setting packetDelay -> lI
-    meteordevelopment.meteorclient.settings.Setting searchRange -> lO
+    meteordevelopment.meteorclient.settings.Setting searchRange -> lI
     java.util.Map professionItemSettings -> l
     java.util.Map professionSupplySettings -> I
     java.util.Map professionPriceSettings -> O
     meteordevelopment.meteorclient.settings.EnchantmentListSetting librarianEnchantments -> l
-    meteordevelopment.meteorclient.settings.Setting stopKey -> Il
+    meteordevelopment.meteorclient.settings.Setting stopKey -> lO
     com.example.addon.villager.fsm.VillagerTradeFSM fsm -> l
     com.example.addon.villager.render.ContainerESP containerESP -> l
     void initializeItemSettings() -> l
@@ -1903,6 +1972,7 @@ com.example.addon.modules.AutoVillagerTradeModule -> com.example.addon.x.lIll:
     void announceStartup(java.util.List,int) -> l
     void onDeactivate() -> onDeactivate
     void onRender3D(meteordevelopment.meteorclient.events.render.Render3DEvent) -> l
+    void onOpenScreen(meteordevelopment.meteorclient.events.game.OpenScreenEvent) -> l
     void onTick$4e92b52b() -> O
     java.util.List selfCheck() -> l
     boolean isProfessionMatch(net.minecraft.world.entity.npc.villager.Villager,net.minecraft.world.entity.npc.villager.VillagerProfession) -> l
@@ -1933,19 +2003,19 @@ com.example.addon.modules.AutoVillagerTradeModule -> com.example.addon.x.lIll:
     boolean lambda$new$2() -> I
     void lambda$new$1(com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice) -> l
     boolean lambda$new$0() -> O
-com.example.addon.modules.AutoVillagerTradeModule$Mode -> com.example.addon.x.lIlI:
+com.example.addon.modules.AutoVillagerTradeModule$Mode -> com.example.addon.x.lIIl:
     com.example.addon.modules.AutoVillagerTradeModule$Mode LOCAL -> l
     com.example.addon.modules.AutoVillagerTradeModule$Mode SINGLE_PATH -> I
     com.example.addon.modules.AutoVillagerTradeModule$Mode PIPELINE -> O
     java.lang.String displayName -> l
     com.example.addon.modules.AutoVillagerTradeModule$Mode[] $VALUES -> l
-    com.example.addon.modules.AutoVillagerTradeModule$Mode[] values() -> l
-    com.example.addon.modules.AutoVillagerTradeModule$Mode valueOf(java.lang.String) -> l
+    com.example.addon.modules.AutoVillagerTradeModule$Mode[] values() -> values
+    com.example.addon.modules.AutoVillagerTradeModule$Mode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.modules.AutoVillagerTradeModule$Mode[] $values() -> I
+    com.example.addon.modules.AutoVillagerTradeModule$Mode[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice -> com.example.addon.x.lIlO:
+com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice -> com.example.addon.x.lIII:
     com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice 盔甲匠 -> I
     com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice 屠夫 -> O
     com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice 制图师 -> ll
@@ -1961,19 +2031,26 @@ com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice -> com.exampl
     com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice 武器匠 -> l1
     java.lang.String id -> l
     com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice[] $VALUES -> l
-    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice[] values() -> l
-    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice valueOf(java.lang.String) -> l
+    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice[] values() -> values
+    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String getId() -> l
-    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice[] $values() -> I
+    com.example.addon.modules.AutoVillagerTradeModule$ProfessionChoice[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.modules.BaritoneCommandGuideModule -> com.example.addon.x.lIIl:
+com.example.addon.modules.BaritoneCommandGuideModule -> com.example.addon.x.lIIO:
     void <init>() -> <init>
     meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
-com.example.addon.modules.MeteorCommandGuideModule -> com.example.addon.x.lIII:
+com.example.addon.modules.CometDisconnectModule -> com.example.addon.x.lIOl:
+    void <init>() -> <init>
+    void onActivate() -> onActivate
+    void disconnect(java.lang.String) -> O
+    meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
+    void lambda$getWidget$0(meteordevelopment.meteorclient.gui.GuiTheme,meteordevelopment.meteorclient.gui.widgets.containers.WTable) -> l
+    void lambda$getWidget$1() -> l
+com.example.addon.modules.MeteorCommandGuideModule -> com.example.addon.x.lIOI:
     void <init>() -> <init>
     meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
-com.example.addon.modules.PinkThemeModule -> com.example.addon.x.lIIO:
+com.example.addon.modules.PinkThemeModule -> com.example.addon.x.lIOO:
     meteordevelopment.meteorclient.settings.SettingGroup sgGeneral -> l
     meteordevelopment.meteorclient.settings.Setting palette -> l
     void <init>() -> <init>
@@ -1989,7 +2066,7 @@ com.example.addon.modules.PinkThemeModule -> com.example.addon.x.lIIO:
     void lambda$addButton$0(com.example.addon.modules.PinkThemeModule$Palette) -> ll
     void lambda$getWidget$0(meteordevelopment.meteorclient.gui.GuiTheme,meteordevelopment.meteorclient.gui.widgets.containers.WTable) -> l
     void lambda$new$0(com.example.addon.modules.PinkThemeModule$Palette) -> lI
-com.example.addon.modules.PinkThemeModule$Palette -> com.example.addon.x.lIOl:
+com.example.addon.modules.PinkThemeModule$Palette -> com.example.addon.x.lOll:
     com.example.addon.modules.PinkThemeModule$Palette SAKURA -> l
     com.example.addon.modules.PinkThemeModule$Palette PEACH -> I
     com.example.addon.modules.PinkThemeModule$Palette ROSE -> O
@@ -2012,13 +2089,13 @@ com.example.addon.modules.PinkThemeModule$Palette -> com.example.addon.x.lIOl:
     int moduleBackground -> II
     int outline -> IO
     com.example.addon.modules.PinkThemeModule$Palette[] $VALUES -> l
-    com.example.addon.modules.PinkThemeModule$Palette[] values() -> l
-    com.example.addon.modules.PinkThemeModule$Palette valueOf(java.lang.String) -> l
+    com.example.addon.modules.PinkThemeModule$Palette[] values() -> values
+    com.example.addon.modules.PinkThemeModule$Palette valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String,int,int,int,int,int,int,int,int,int) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.modules.PinkThemeModule$Palette[] $values() -> I
+    com.example.addon.modules.PinkThemeModule$Palette[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.modules.UserStatsModule -> com.example.addon.x.lIOI:
+com.example.addon.modules.UserStatsModule -> com.example.addon.x.lOlI:
     meteordevelopment.meteorclient.settings.SettingGroup sgGeneral -> l
     meteordevelopment.meteorclient.settings.Setting refreshInterval -> l
     meteordevelopment.meteorclient.settings.Setting maxDisplayUsers -> I
@@ -2053,14 +2130,14 @@ com.example.addon.modules.UserStatsModule -> com.example.addon.x.lIOI:
     com.example.addon.modules.UserStatsModule$IpResult tryFetchFromIpApiCoWithProxy() -> l
     com.example.addon.modules.UserStatsModule$IpResult tryFetchFromIpApiWithProxy() -> I
     com.example.addon.modules.UserStatsModule$IpResult tryFetchFromCloudflareSimple() -> O
-    java.lang.String countryCodeToFlag(java.lang.String) -> lI
+    java.lang.String countryCodeToFlag(java.lang.String) -> Il
     boolean isValidCountryCode(java.lang.String) -> l
-    java.lang.String translateCountryCode(java.lang.String) -> lO
+    java.lang.String translateCountryCode(java.lang.String) -> II
     void lambda$getWidget$0(meteordevelopment.meteorclient.gui.GuiTheme,meteordevelopment.meteorclient.gui.widgets.containers.WTable) -> l
     void lambda$reloadCurrentScreen$0() -> lI
     void lambda$refreshStats$0() -> lO
     void <clinit>() -> <clinit>
-com.example.addon.modules.UserStatsModule$IpResult -> com.example.addon.x.lIOO:
+com.example.addon.modules.UserStatsModule$IpResult -> com.example.addon.x.lOlO:
     java.lang.String ip -> l
     java.lang.String country -> I
     boolean isProxy -> l
@@ -2073,7 +2150,7 @@ com.example.addon.modules.UserStatsModule$IpResult -> com.example.addon.x.lIOO:
     java.lang.String country() -> I
     boolean isProxy() -> l
     java.lang.String proxyType() -> O
-com.example.addon.modules.UserStatsModule$RecentUser -> com.example.addon.x.lOll:
+com.example.addon.modules.UserStatsModule$RecentUser -> com.example.addon.x.lOIl:
     java.lang.String name -> l
     long lastSeen -> l
     boolean isOnline -> l
@@ -2086,12 +2163,12 @@ com.example.addon.modules.UserStatsModule$RecentUser -> com.example.addon.x.lOll
     long lastSeen() -> l
     boolean isOnline() -> l
     java.lang.String serverName() -> I
-com.example.addon.modules.YiyiaddonTranslationModule -> com.example.addon.x.lOlI:
+com.example.addon.modules.YiyiaddonTranslationModule -> com.example.addon.x.lOII:
     meteordevelopment.meteorclient.settings.SettingGroup sgGeneral -> l
     meteordevelopment.meteorclient.settings.Setting simplifiedChinese -> l
     void <init>() -> <init>
     meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme) -> getWidget
-com.example.addon.tactical.AntiKickBypass -> com.example.addon.x.lOlO:
+com.example.addon.tactical.AntiKickBypass -> com.example.addon.x.lOIO:
     meteordevelopment.meteorclient.settings.SettingGroup sg1 -> l
     meteordevelopment.meteorclient.settings.SettingGroup sg2 -> I
     meteordevelopment.meteorclient.settings.SettingGroup sg3 -> O
@@ -2161,17 +2238,17 @@ com.example.addon.tactical.AntiKickBypass -> com.example.addon.x.lOlO:
     boolean lambda$new$2() -> O
     boolean lambda$new$1() -> ll
     boolean lambda$new$0() -> lI
-com.example.addon.tactical.AntiKickBypass$DelayedPacket -> com.example.addon.x.lOIl:
+com.example.addon.tactical.AntiKickBypass$DelayedPacket -> com.example.addon.x.lOOl:
     net.minecraft.network.protocol.Packet packet -> l
     long sendAt -> l
     void <init>(net.minecraft.network.protocol.Packet,long) -> <init>
-com.example.addon.tactical.AntiKickBypass$RubberBandRecord -> com.example.addon.x.lOII:
+com.example.addon.tactical.AntiKickBypass$RubberBandRecord -> com.example.addon.x.lOOI:
     boolean flying -> l
     boolean digging -> I
     boolean placing -> O
     double speed -> l
     void <init>(boolean,boolean,boolean,double) -> <init>
-com.example.addon.tactical.FlightBypass -> com.example.addon.x.lOIO:
+com.example.addon.tactical.FlightBypass -> com.example.addon.x.lOOO:
     meteordevelopment.meteorclient.settings.SettingGroup sgMode -> l
     meteordevelopment.meteorclient.settings.SettingGroup sgTweaks -> I
     meteordevelopment.meteorclient.settings.Setting mode -> l
@@ -2203,20 +2280,20 @@ com.example.addon.tactical.FlightBypass -> com.example.addon.x.lOIO:
     boolean lambda$new$2() -> I
     boolean lambda$new$1() -> O
     void lambda$new$0(com.example.addon.tactical.FlightBypass$FlightMode) -> l
-com.example.addon.tactical.FlightBypass$FlightMode -> com.example.addon.x.lOOl:
+com.example.addon.tactical.FlightBypass$FlightMode -> com.example.addon.x.Illl:
     com.example.addon.tactical.FlightBypass$FlightMode VANILLA_MIMIC -> l
     com.example.addon.tactical.FlightBypass$FlightMode SAFE_GLIDE -> I
     com.example.addon.tactical.FlightBypass$FlightMode FIREWORK_BOOST -> O
     com.example.addon.tactical.FlightBypass$FlightMode SEQUENCE_SCAFFOLD -> ll
     java.lang.String displayName -> l
     com.example.addon.tactical.FlightBypass$FlightMode[] $VALUES -> l
-    com.example.addon.tactical.FlightBypass$FlightMode[] values() -> l
-    com.example.addon.tactical.FlightBypass$FlightMode valueOf(java.lang.String) -> l
+    com.example.addon.tactical.FlightBypass$FlightMode[] values() -> values
+    com.example.addon.tactical.FlightBypass$FlightMode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.tactical.FlightBypass$FlightMode[] $values() -> I
+    com.example.addon.tactical.FlightBypass$FlightMode[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.ServerDetector -> com.example.addon.x.lOOI:
+com.example.addon.tactical.ServerDetector -> com.example.addon.x.IllI:
     meteordevelopment.meteorclient.settings.SettingGroup sgDetection -> l
     meteordevelopment.meteorclient.settings.SettingGroup sgResourcePack -> I
     meteordevelopment.meteorclient.settings.Setting detectCore -> l
@@ -2260,19 +2337,19 @@ com.example.addon.tactical.ServerDetector -> com.example.addon.x.lOOI:
     boolean lambda$new$1() -> I
     boolean lambda$new$0() -> O
     void <clinit>() -> <clinit>
-com.example.addon.tactical.ServerDetector$ResourcePackMode -> com.example.addon.x.lOOO:
+com.example.addon.tactical.ServerDetector$ResourcePackMode -> com.example.addon.x.IllO:
     com.example.addon.tactical.ServerDetector$ResourcePackMode BYPASS -> l
     com.example.addon.tactical.ServerDetector$ResourcePackMode AUTO_DOWNLOAD -> I
     com.example.addon.tactical.ServerDetector$ResourcePackMode VANILLA -> O
     java.lang.String displayName -> l
     com.example.addon.tactical.ServerDetector$ResourcePackMode[] $VALUES -> l
-    com.example.addon.tactical.ServerDetector$ResourcePackMode[] values() -> l
-    com.example.addon.tactical.ServerDetector$ResourcePackMode valueOf(java.lang.String) -> l
+    com.example.addon.tactical.ServerDetector$ResourcePackMode[] values() -> values
+    com.example.addon.tactical.ServerDetector$ResourcePackMode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int,java.lang.String) -> <init>
     java.lang.String toString() -> toString
-    com.example.addon.tactical.ServerDetector$ResourcePackMode[] $values() -> I
+    com.example.addon.tactical.ServerDetector$ResourcePackMode[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.ServerFingerprints -> com.example.addon.x.Illl:
+com.example.addon.tactical.ServerFingerprints -> com.example.addon.x.IlIl:
     java.util.Map CORES -> l
     java.util.Map CORE_COMMANDS -> I
     java.util.Map ANTICHEAT_COMMANDS -> O
@@ -2280,7 +2357,7 @@ com.example.addon.tactical.ServerFingerprints -> com.example.addon.x.Illl:
     void <init>() -> <init>
     boolean isHighRisk(java.lang.String) -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.TacticalFSM -> com.example.addon.x.IllI:
+com.example.addon.tactical.TacticalFSM -> com.example.addon.x.IlII:
     java.lang.String detectedServerCore -> l
     java.lang.String detectedAntiCheat -> I
     boolean hasAdvancedAntiCheat -> l
@@ -2309,24 +2386,24 @@ com.example.addon.tactical.TacticalFSM -> com.example.addon.x.IllI:
     void publishServerLagging(double) -> l
     void reset() -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.TacticalFSM$AntiCheatDetectedEvent -> com.example.addon.x.IllO:
+com.example.addon.tactical.TacticalFSM$AntiCheatDetectedEvent -> com.example.addon.x.IlIO:
     com.example.addon.tactical.TacticalFSM$AntiCheatDetectedEvent INSTANCE -> l
     java.lang.String antiCheatName -> l
     void <init>() -> <init>
     com.example.addon.tactical.TacticalFSM$AntiCheatDetectedEvent get(java.lang.String) -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.TacticalFSM$ResourcePackDownload -> com.example.addon.x.IlIl:
+com.example.addon.tactical.TacticalFSM$ResourcePackDownload -> com.example.addon.x.IlOl:
     java.util.UUID id -> l
     long startTime -> l
     void <init>(java.util.UUID,long) -> <init>
-com.example.addon.tactical.TacticalFSM$ResourcePackDownloadingEvent -> com.example.addon.x.IlII:
+com.example.addon.tactical.TacticalFSM$ResourcePackDownloadingEvent -> com.example.addon.x.IlOI:
     com.example.addon.tactical.TacticalFSM$ResourcePackDownloadingEvent INSTANCE -> l
     java.util.UUID packId -> l
     boolean isDownloading -> l
     void <init>() -> <init>
     com.example.addon.tactical.TacticalFSM$ResourcePackDownloadingEvent get(java.util.UUID,boolean) -> l
     void <clinit>() -> <clinit>
-com.example.addon.tactical.TacticalFSM$RubberBandEvent -> com.example.addon.x.IlIO:
+com.example.addon.tactical.TacticalFSM$RubberBandEvent -> com.example.addon.x.IlOO:
     com.example.addon.tactical.TacticalFSM$RubberBandEvent INSTANCE -> l
     net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket packet -> l
     void <init>() -> <init>
@@ -2336,13 +2413,13 @@ com.example.addon.tactical.TacticalFSM$RubberBandEvent -> com.example.addon.x.Il
     double getY() -> I
     double getZ() -> O
     void <clinit>() -> <clinit>
-com.example.addon.tactical.TacticalFSM$ServerLaggingEvent -> com.example.addon.x.IlOl:
+com.example.addon.tactical.TacticalFSM$ServerLaggingEvent -> com.example.addon.x.IIll:
     com.example.addon.tactical.TacticalFSM$ServerLaggingEvent INSTANCE -> l
     double tps -> l
     void <init>() -> <init>
     com.example.addon.tactical.TacticalFSM$ServerLaggingEvent get(double) -> l
     void <clinit>() -> <clinit>
-com.example.addon.translations.BaritoneChatTranslations -> com.example.addon.x.IlOI:
+com.example.addon.translations.BaritoneChatTranslations -> com.example.addon.x.IIlI:
     java.util.Map EXACT -> l
     java.util.List TEMPLATES -> l
     void <init>() -> <init>
@@ -2404,7 +2481,7 @@ com.example.addon.translations.BaritoneChatTranslations -> com.example.addon.x.I
     java.lang.String lambda$static$1(java.util.regex.MatchResult) -> O0l
     java.lang.String lambda$static$0(java.util.regex.MatchResult) -> O0I
     void <clinit>() -> <clinit>
-com.example.addon.translations.BaritoneChatTranslations$Template -> com.example.addon.x.IlOO:
+com.example.addon.translations.BaritoneChatTranslations$Template -> com.example.addon.x.IIlO:
     java.util.regex.Pattern pattern -> l
     java.util.function.Function translation -> l
     void <init>(java.util.regex.Pattern,java.util.function.Function) -> <init>
@@ -2413,7 +2490,7 @@ com.example.addon.translations.BaritoneChatTranslations$Template -> com.example.
     boolean equals(java.lang.Object) -> equals
     java.util.regex.Pattern pattern() -> l
     java.util.function.Function translation() -> l
-com.example.addon.translations.BaritoneCommandTranslations -> com.example.addon.x.IIll:
+com.example.addon.translations.BaritoneCommandTranslations -> com.example.addon.x.IIIl:
     java.util.Map COMMAND_NAMES -> l
     java.util.Map LONG_DESCRIPTIONS -> I
     void <init>() -> <init>
@@ -2423,13 +2500,13 @@ com.example.addon.translations.BaritoneCommandTranslations -> com.example.addon.
     int longDescriptionCount() -> l
     java.util.Map$Entry entry(java.lang.String,java.lang.String[]) -> l
     void <clinit>() -> <clinit>
-com.example.addon.translations.BaritoneSettingTranslations -> com.example.addon.x.IIlI:
+com.example.addon.translations.BaritoneSettingTranslations -> com.example.addon.x.IIII:
     java.util.Map TRANSLATIONS -> l
     void <init>() -> <init>
     com.example.addon.translations.BaritoneSettingTranslations$Translation get(java.lang.String) -> l
     java.util.Map$Entry entry(java.lang.String,java.lang.String,java.lang.String) -> l
     void <clinit>() -> <clinit>
-com.example.addon.translations.BaritoneSettingTranslations$Translation -> com.example.addon.x.IIlO:
+com.example.addon.translations.BaritoneSettingTranslations$Translation -> com.example.addon.x.IIIO:
     java.lang.String name -> l
     java.lang.String description -> I
     void <init>(java.lang.String,java.lang.String) -> <init>
@@ -2438,7 +2515,7 @@ com.example.addon.translations.BaritoneSettingTranslations$Translation -> com.ex
     boolean equals(java.lang.Object) -> equals
     java.lang.String name() -> l
     java.lang.String description() -> I
-com.example.addon.translations.MeteorCommandTranslations -> com.example.addon.x.IIIl:
+com.example.addon.translations.MeteorCommandTranslations -> com.example.addon.x.IIOl:
     java.util.Map COMMAND_NAMES -> l
     java.util.Map SUBCOMMAND_NAMES -> I
     java.util.Map DESCRIPTIONS -> O
@@ -2455,7 +2532,7 @@ com.example.addon.translations.MeteorCommandTranslations -> com.example.addon.x.
     java.lang.String translateDynamicErrors(java.lang.String) -> lO
     java.lang.String translate(java.lang.String,java.lang.String) -> l
     void <clinit>() -> <clinit>
-com.example.addon.translations.YiyiaddonTranslator -> com.example.addon.x.IIII:
+com.example.addon.translations.YiyiaddonTranslator -> com.example.addon.x.IIOI:
     java.util.Map TRANSLATIONS -> l
     java.util.Map MODULE_NAMES -> I
     java.util.Map MODULE_DESCRIPTIONS -> O
@@ -2494,14 +2571,14 @@ com.example.addon.translations.YiyiaddonTranslator -> com.example.addon.x.IIII:
     java.lang.String lambda$localizeModule$0(meteordevelopment.meteorclient.systems.modules.Module,meteordevelopment.meteorclient.systems.modules.Module) -> I
     java.lang.Boolean lambda$enabled$0(com.example.addon.modules.YiyiaddonTranslationModule) -> l
     void <clinit>() -> <clinit>
-com.example.addon.ui.HelpScreen -> com.example.addon.x.IIIO:
+com.example.addon.ui.HelpScreen -> com.example.addon.x.IIOO:
     meteordevelopment.meteorclient.systems.modules.Module module -> l
     java.lang.String[] helpContent -> l
     void <init>(meteordevelopment.meteorclient.gui.GuiTheme,com.example.addon.core.YiyiaddonModule,java.lang.String[]) -> <init>
     void initWidgets() -> initWidgets
     java.lang.String[] buildHelpContent(com.example.addon.ui.HelpScreen$HelpSection[]) -> l
     void lambda$initWidgets$0() -> l
-com.example.addon.ui.HelpScreen$HelpSection -> com.example.addon.x.IIOl:
+com.example.addon.ui.HelpScreen$HelpSection -> com.example.addon.x.IOll:
     java.lang.String title -> l
     java.lang.String[] lines -> l
     void <init>(java.lang.String,java.lang.String[]) -> <init>
@@ -2733,7 +2810,7 @@ com.example.addon.utils.YiyiaddonWelcomeService$ReleaseInfo -> com.example.addon
     java.lang.String version() -> l
     java.lang.String url() -> I
     java.lang.String body() -> O
-com.example.addon.villager.data.VillagerProfessionRegistry -> com.example.addon.x.IIOI:
+com.example.addon.villager.data.VillagerProfessionRegistry -> com.example.addon.x.IOlI:
     java.util.Map PROFESSION_TO_WORKSTATION -> l
     java.util.Map WORKSTATION_TO_PROFESSION -> I
     java.util.Map PROFESSION_DISPLAY_NAMES -> O
@@ -2753,7 +2830,7 @@ com.example.addon.villager.data.VillagerProfessionRegistry -> com.example.addon.
     net.minecraft.world.entity.npc.villager.VillagerProfession getProfessionByDisplayName(java.lang.String) -> l
     void <init>() -> <init>
     void <clinit>() -> <clinit>
-com.example.addon.villager.data.VillagerTradeTarget -> com.example.addon.x.IIOO:
+com.example.addon.villager.data.VillagerTradeTarget -> com.example.addon.x.IOlO:
     net.minecraft.world.item.Item item -> l
     java.lang.String displayName -> l
     java.lang.String enchantmentId -> I
@@ -2766,7 +2843,7 @@ com.example.addon.villager.data.VillagerTradeTarget -> com.example.addon.x.IIOO:
     boolean equals(java.lang.Object) -> equals
     int hashCode() -> hashCode
     java.lang.String toString() -> toString
-com.example.addon.villager.fsm.VillagerTradeFSM -> com.example.addon.x.IOll:
+com.example.addon.villager.fsm.VillagerTradeFSM -> com.example.addon.x.IOIl:
     net.minecraft.client.Minecraft mc -> l
     com.example.addon.villager.navigation.VillagerNavigationService navigation -> l
     com.example.addon.villager.logistics.SupplyService supplyService -> l
@@ -2818,7 +2895,7 @@ com.example.addon.villager.fsm.VillagerTradeFSM -> com.example.addon.x.IOll:
     void setLogger(java.util.function.Consumer) -> l
     void setCompleteHandler(java.util.function.Consumer) -> I
     void setErrorHandler(java.util.function.Consumer) -> O
-    void configure(net.minecraft.world.entity.npc.villager.VillagerProfession,java.util.List,int,int,int,int) -> l
+    void configure(net.minecraft.world.entity.npc.villager.VillagerProfession,java.util.List,int,int,int) -> l
     void setSearchRange(double) -> l
     void setDrainMode(boolean) -> l
     void setSupplyStacks(int) -> l
@@ -2860,17 +2937,17 @@ com.example.addon.villager.fsm.VillagerTradeFSM -> com.example.addon.x.IOll:
     com.example.addon.villager.fsm.VillagerTradeFSM$State getCurrentState() -> l
     boolean isRunning() -> I
     int lambda$tickSearching$0(net.minecraft.client.player.LocalPlayer,net.minecraft.world.entity.npc.villager.Villager,net.minecraft.world.entity.npc.villager.Villager) -> l
-com.example.addon.villager.fsm.VillagerTradeFSM$Mode -> com.example.addon.x.IOlI:
+com.example.addon.villager.fsm.VillagerTradeFSM$Mode -> com.example.addon.x.IOII:
     com.example.addon.villager.fsm.VillagerTradeFSM$Mode LOCAL -> l
     com.example.addon.villager.fsm.VillagerTradeFSM$Mode SINGLE_PATH -> I
     com.example.addon.villager.fsm.VillagerTradeFSM$Mode PIPELINE -> O
     com.example.addon.villager.fsm.VillagerTradeFSM$Mode[] $VALUES -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$Mode[] values() -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$Mode valueOf(java.lang.String) -> l
+    com.example.addon.villager.fsm.VillagerTradeFSM$Mode[] values() -> values
+    com.example.addon.villager.fsm.VillagerTradeFSM$Mode valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.fsm.VillagerTradeFSM$Mode[] $values() -> I
+    com.example.addon.villager.fsm.VillagerTradeFSM$Mode[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.fsm.VillagerTradeFSM$Route -> com.example.addon.x.IOlO:
+com.example.addon.villager.fsm.VillagerTradeFSM$Route -> com.example.addon.x.IOIO:
     com.example.addon.villager.fsm.VillagerTradeFSM$Route SEARCH_NEXT -> l
     com.example.addon.villager.fsm.VillagerTradeFSM$Route BACK_TO_VILLAGER -> I
     com.example.addon.villager.fsm.VillagerTradeFSM$Route SUPPLY -> O
@@ -2878,12 +2955,12 @@ com.example.addon.villager.fsm.VillagerTradeFSM$Route -> com.example.addon.x.IOl
     com.example.addon.villager.fsm.VillagerTradeFSM$Route FINISH -> lI
     com.example.addon.villager.fsm.VillagerTradeFSM$Route NEXT_TASK -> lO
     com.example.addon.villager.fsm.VillagerTradeFSM$Route[] $VALUES -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$Route[] values() -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$Route valueOf(java.lang.String) -> l
+    com.example.addon.villager.fsm.VillagerTradeFSM$Route[] values() -> values
+    com.example.addon.villager.fsm.VillagerTradeFSM$Route valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.fsm.VillagerTradeFSM$Route[] $values() -> I
+    com.example.addon.villager.fsm.VillagerTradeFSM$Route[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.fsm.VillagerTradeFSM$State -> com.example.addon.x.IOIl:
+com.example.addon.villager.fsm.VillagerTradeFSM$State -> com.example.addon.x.IOOl:
     com.example.addon.villager.fsm.VillagerTradeFSM$State IDLE -> l
     com.example.addon.villager.fsm.VillagerTradeFSM$State SEARCHING -> I
     com.example.addon.villager.fsm.VillagerTradeFSM$State RESOLVING_WORKSTATION -> O
@@ -2901,21 +2978,21 @@ com.example.addon.villager.fsm.VillagerTradeFSM$State -> com.example.addon.x.IOI
     com.example.addon.villager.fsm.VillagerTradeFSM$State DONE -> O0
     com.example.addon.villager.fsm.VillagerTradeFSM$State ERROR -> lll
     com.example.addon.villager.fsm.VillagerTradeFSM$State[] $VALUES -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$State[] values() -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$State valueOf(java.lang.String) -> l
+    com.example.addon.villager.fsm.VillagerTradeFSM$State[] values() -> values
+    com.example.addon.villager.fsm.VillagerTradeFSM$State valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.fsm.VillagerTradeFSM$State[] $values() -> I
+    com.example.addon.villager.fsm.VillagerTradeFSM$State[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase -> com.example.addon.x.IOII:
+com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase -> com.example.addon.x.IOOI:
     com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase SELECT -> l
     com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase CONFIRM -> I
     com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase[] $VALUES -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase[] values() -> l
-    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase valueOf(java.lang.String) -> l
+    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase[] values() -> values
+    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase[] $values() -> I
+    com.example.addon.villager.fsm.VillagerTradeFSM$TradePhase[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.logistics.PipelineTask -> com.example.addon.x.IOIO:
+com.example.addon.villager.logistics.PipelineTask -> com.example.addon.x.IOOO:
     net.minecraft.world.entity.npc.villager.VillagerProfession profession -> l
     java.util.List targets -> l
     int maxPrice -> l
@@ -2930,7 +3007,7 @@ com.example.addon.villager.logistics.PipelineTask -> com.example.addon.x.IOIO:
     boolean isCompleted() -> l
     void setCompleted(boolean) -> l
     java.lang.String toString() -> toString
-com.example.addon.villager.logistics.SupplyService -> com.example.addon.x.IOOl:
+com.example.addon.villager.logistics.SupplyService -> com.example.addon.x.Olll:
     net.minecraft.client.Minecraft mc -> l
     com.example.addon.farm.ContainerBroker broker -> l
     java.util.function.Consumer logger -> l
@@ -2952,18 +3029,18 @@ com.example.addon.villager.logistics.SupplyService -> com.example.addon.x.IOOl:
     com.example.addon.villager.logistics.SupplyService$State getState() -> l
     boolean isRunning() -> l
     void log(java.lang.String) -> l
-com.example.addon.villager.logistics.SupplyService$State -> com.example.addon.x.IOOI:
+com.example.addon.villager.logistics.SupplyService$State -> com.example.addon.x.OllI:
     com.example.addon.villager.logistics.SupplyService$State IDLE -> l
     com.example.addon.villager.logistics.SupplyService$State RUNNING -> I
     com.example.addon.villager.logistics.SupplyService$State COMPLETED -> O
     com.example.addon.villager.logistics.SupplyService$State ERROR -> ll
     com.example.addon.villager.logistics.SupplyService$State[] $VALUES -> l
-    com.example.addon.villager.logistics.SupplyService$State[] values() -> l
-    com.example.addon.villager.logistics.SupplyService$State valueOf(java.lang.String) -> l
+    com.example.addon.villager.logistics.SupplyService$State[] values() -> values
+    com.example.addon.villager.logistics.SupplyService$State valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.logistics.SupplyService$State[] $values() -> I
+    com.example.addon.villager.logistics.SupplyService$State[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.logistics.UnloadService -> com.example.addon.x.IOOO:
+com.example.addon.villager.logistics.UnloadService -> com.example.addon.x.OllO:
     net.minecraft.client.Minecraft mc -> l
     com.example.addon.farm.ContainerBroker broker -> l
     java.util.function.Consumer logger -> l
@@ -2986,18 +3063,18 @@ com.example.addon.villager.logistics.UnloadService -> com.example.addon.x.IOOO:
     com.example.addon.villager.logistics.UnloadService$State getState() -> l
     boolean isRunning() -> l
     void log(java.lang.String) -> l
-com.example.addon.villager.logistics.UnloadService$State -> com.example.addon.x.Olll:
+com.example.addon.villager.logistics.UnloadService$State -> com.example.addon.x.OlIl:
     com.example.addon.villager.logistics.UnloadService$State IDLE -> l
     com.example.addon.villager.logistics.UnloadService$State RUNNING -> I
     com.example.addon.villager.logistics.UnloadService$State COMPLETED -> O
     com.example.addon.villager.logistics.UnloadService$State ERROR -> ll
     com.example.addon.villager.logistics.UnloadService$State[] $VALUES -> l
-    com.example.addon.villager.logistics.UnloadService$State[] values() -> l
-    com.example.addon.villager.logistics.UnloadService$State valueOf(java.lang.String) -> l
+    com.example.addon.villager.logistics.UnloadService$State[] values() -> values
+    com.example.addon.villager.logistics.UnloadService$State valueOf(java.lang.String) -> valueOf
     void <init>(java.lang.String,int) -> <init>
-    com.example.addon.villager.logistics.UnloadService$State[] $values() -> I
+    com.example.addon.villager.logistics.UnloadService$State[] $values() -> l
     void <clinit>() -> <clinit>
-com.example.addon.villager.navigation.VillagerNavigationService -> com.example.addon.x.OllI:
+com.example.addon.villager.navigation.VillagerNavigationService -> com.example.addon.x.OlII:
     net.minecraft.client.Minecraft mc -> l
     boolean disabled -> l
     net.minecraft.core.BlockPos lastPos -> l
@@ -3017,18 +3094,18 @@ com.example.addon.villager.navigation.VillagerNavigationService -> com.example.a
     void resetStuckDetection() -> I
     boolean isAvailable() -> O
     baritone.api.IBaritone getBaritone() -> l
-com.example.addon.villager.render.ContainerESP -> com.example.addon.x.OllO:
+com.example.addon.villager.render.ContainerESP -> com.example.addon.x.OlIO:
     net.minecraft.client.Minecraft mc -> l
     void <init>() -> <init>
     void render(meteordevelopment.meteorclient.events.render.Render3DEvent) -> l
     void renderLabel(meteordevelopment.meteorclient.events.render.Render3DEvent,net.minecraft.core.BlockPos,java.lang.String) -> l
-com.example.addon.villager.trade.EnchantmentMatcher -> com.example.addon.x.OlIl:
+com.example.addon.villager.trade.EnchantmentMatcher -> com.example.addon.x.OlOl:
     boolean matches(net.minecraft.world.item.ItemStack,com.example.addon.villager.data.VillagerTradeTarget) -> l
     java.lang.String getEnchantmentDetails(net.minecraft.world.item.ItemStack) -> l
     void <init>() -> <init>
     java.lang.String lambda$getEnchantmentDetails$0(net.minecraft.resources.ResourceKey) -> l
     java.lang.String lambda$matches$0(net.minecraft.resources.ResourceKey) -> I
-com.example.addon.villager.trade.TradeEngine -> com.example.addon.x.OlII:
+com.example.addon.villager.trade.TradeEngine -> com.example.addon.x.OlOI:
     void <init>() -> <init>
     int findBestOfferIndex(net.minecraft.world.entity.npc.villager.Villager,java.util.List,int,java.util.Set) -> l
     void sendSelectTrade(int) -> l
@@ -3036,7 +3113,7 @@ com.example.addon.villager.trade.TradeEngine -> com.example.addon.x.OlII:
     int countEmeralds() -> l
     boolean hasSpace() -> l
     int safeResultCount(net.minecraft.world.entity.npc.villager.Villager,int) -> l
-com.example.addon.villager.trade.TradeMatcher -> com.example.addon.x.OlIO:
+com.example.addon.villager.trade.TradeMatcher -> com.example.addon.x.OlOO:
     boolean matches(net.minecraft.world.item.trading.MerchantOffer,java.util.List,int) -> l
     boolean matchesTarget(net.minecraft.world.item.ItemStack,com.example.addon.villager.data.VillagerTradeTarget) -> l
     int getEmeraldCost(net.minecraft.world.item.trading.MerchantOffer) -> l

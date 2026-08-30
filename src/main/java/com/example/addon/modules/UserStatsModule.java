@@ -2,6 +2,9 @@ package com.example.addon.modules;
 
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.WidgetScreen;
@@ -18,7 +21,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -157,21 +159,39 @@ public final class UserStatsModule extends YiyiaddonModule {
                     }
                 }
                 if (lastFailure != null) {
-                    String message = lastFailure.getMessage();
-                    errorMessage = message == null || message.isBlank()
-                        ? lastFailure.getClass().getSimpleName()
-                        : lastFailure.getClass().getSimpleName() + "：" + message;
+                    errorMessage = describeFailure(lastFailure);
                 }
             } catch (Exception e) {
-                String message = e.getMessage();
-                errorMessage = message == null || message.isBlank()
-                    ? e.getClass().getSimpleName()
-                    : e.getClass().getSimpleName() + "：" + message;
+                errorMessage = describeFailure(e);
             } finally {
                 isLoading = false;
                 reloadCurrentScreen();
             }
         }, "yiyiaddon-stats-refresh").start();
+    }
+
+    /**
+     * 把异常翻译成可读的错误信息，区分「没网 / 连不上后端 / 后端异常」。
+     * 用户能一眼判断是本地网络问题还是后端接口问题。
+     */
+    private static String describeFailure(Exception e) {
+        // 断网 / DNS 污染 / 域名解析失败
+        if (e instanceof java.net.UnknownHostException || e instanceof java.net.ConnectException) {
+            return "网络连接失败：" + e.getMessage();
+        }
+        // 请求超时（网络慢或后端无响应）
+        if (e instanceof java.net.SocketTimeoutException
+            || e instanceof java.net.http.HttpTimeoutException) {
+            return "请求超时：" + e.getMessage();
+        }
+        // HTTP 非 200（后端限流 / 网关错误）
+        if (e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().startsWith("HTTP ")) {
+            return "后端返回异常：" + e.getMessage();
+        }
+        String message = e.getMessage();
+        return message == null || message.isBlank()
+            ? e.getClass().getSimpleName()
+            : e.getClass().getSimpleName() + "：" + message;
     }
 
     private void reloadCurrentScreen() {
@@ -181,53 +201,114 @@ public final class UserStatsModule extends YiyiaddonModule {
     }
     
     /**
-     * 解析 API 返回的 JSON
-     * 提取 total_users 和 recent_users 列表
+     * 解析 API 返回的 JSON（Gson 容错解析，替代脆弱的正则）
+     * 提取 total_users、total_uses、active_users_24h、online_users、recent_users。
+     * 字段顺序无关、数字/字符串兼容、单个用户数据异常只跳过该用户不影响整体。
      */
     private void parseStatsResponse(String json) {
         try {
-            // 解析总用户数
-            Matcher totalMatcher = Pattern.compile("\"total_users\":(\\d+)").matcher(json);
-            if (!totalMatcher.find()) throw new IllegalArgumentException("缺少 total_users");
-            int parsedTotalUsers = Integer.parseInt(totalMatcher.group(1));
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
 
-            Matcher usesMatcher = Pattern.compile("\"total_uses\":(\\d+)").matcher(json);
-            int parsedTotalUses = usesMatcher.find() ? Integer.parseInt(usesMatcher.group(1)) : parsedTotalUsers;
-            
-            // 解析 24h 活跃用户数
-            Matcher activeMatcher = Pattern.compile("\"(?:active_24h|active_users_24h)\":(\\d+)").matcher(json);
-            int parsedActiveUsers24h = activeMatcher.find() ? Integer.parseInt(activeMatcher.group(1)) : 0;
-
-            Matcher onlineMatcher = Pattern.compile("\"online_users\":(\\d+)").matcher(json);
-            int parsedOnlineUsers = onlineMatcher.find() ? Integer.parseInt(onlineMatcher.group(1)) : 0;
-            
-            // 解析最近活跃用户列表
-            List<RecentUser> newRecentUsers = new ArrayList<>();
-            Pattern userPattern = Pattern.compile(
-                "\\{\"uuid\":\"[^\"]*\",\"name\":\"([^\"]+)\"[^}]*?\"server_name\":(null|\"([^\"]*)\")[^}]*?\"is_online\":(true|false|0|1)[^}]*?\"last_heartbeat\":(null|\\d+)[^}]*?\"last_seen\":(?:\"([^\"]+)\"|(\\d+))[^}]*}"
-            );
-            Matcher userMatcher = userPattern.matcher(json);
-            
-            while (userMatcher.find()) {
-                String name = userMatcher.group(1);
-                String serverName = userMatcher.group(3);
-                boolean isOnline = "true".equals(userMatcher.group(4)) || "1".equals(userMatcher.group(4));
-                long lastSeen = userMatcher.group(8) != null
-                    ? normalizeTimestamp(Long.parseLong(userMatcher.group(8)))
-                    : Instant.parse(userMatcher.group(7)).getEpochSecond();
-                newRecentUsers.add(new RecentUser(name, lastSeen, isOnline, serverName));
+            // total_users 是核心字段，缺失说明后端返回异常结构（如错误页/空对象）
+            if (!root.has("total_users") || root.get("total_users").isJsonNull()) {
+                throw new IllegalArgumentException("后端响应缺少 total_users 字段");
             }
-            
+            int parsedTotalUsers = getInt(root, "total_users", 0);
+            int parsedTotalUses = getInt(root, "total_uses", parsedTotalUsers);
+            int parsedActiveUsers24h = getInt(root, "active_users_24h", getInt(root, "active_24h", 0));
+            int parsedOnlineUsers = getInt(root, "online_users", 0);
+
+            // 解析最近活跃用户列表（容错：单个用户字段异常只跳过该用户，不影响整体）
+            List<RecentUser> newRecentUsers = new ArrayList<>();
+            if (root.has("recent_users") && root.get("recent_users").isJsonArray()) {
+                for (JsonElement element : root.getAsJsonArray("recent_users")) {
+                    if (!element.isJsonObject()) continue;
+                    JsonObject user = element.getAsJsonObject();
+                    String name = getString(user, "name", "未知玩家");
+                    String serverName = getNullableString(user, "server_name");
+                    boolean isOnline = isTruthy(user, "is_online");
+                    long lastSeen = normalizeTimestamp(getLong(user, "last_seen", 0));
+                    newRecentUsers.add(new RecentUser(name, lastSeen, isOnline, serverName));
+                }
+            }
+
             totalUsers = parsedTotalUsers;
             totalUses = parsedTotalUses;
             activeUsers24h = parsedActiveUsers24h;
             onlineUsers = parsedOnlineUsers;
             recentUsers = newRecentUsers;
             errorMessage = null;
-            
+
         } catch (Exception e) {
             errorMessage = "解析失败: " + e.getMessage();
         }
+    }
+
+    /** 读取整数字段（兼容数字与数字字符串），缺失或非法时返回默认值 */
+    private static int getInt(JsonObject obj, String key, int def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        JsonElement e = obj.get(key);
+        try {
+            if (e.isJsonPrimitive()) {
+                if (e.getAsJsonPrimitive().isNumber()) return e.getAsInt();
+                if (e.getAsJsonPrimitive().isString()) return Integer.parseInt(e.getAsString());
+            }
+        } catch (Exception ignored) {
+        }
+        return def;
+    }
+
+    /** 读取长整型字段（兼容数字与数字字符串），缺失或非法时返回默认值 */
+    private static long getLong(JsonObject obj, String key, long def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        JsonElement e = obj.get(key);
+        try {
+            if (e.isJsonPrimitive()) {
+                if (e.getAsJsonPrimitive().isNumber()) return e.getAsLong();
+                if (e.getAsJsonPrimitive().isString()) return Long.parseLong(e.getAsString());
+            }
+        } catch (Exception ignored) {
+        }
+        return def;
+    }
+
+    /** 读取字符串字段，缺失或 null 时返回默认值 */
+    private static String getString(JsonObject obj, String key, String def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        try {
+            return obj.get(key).getAsString();
+        } catch (Exception ignored) {
+            return def;
+        }
+    }
+
+    /** 读取可空字符串字段，缺失或 null 返回 null */
+    private static String getNullableString(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return null;
+        try {
+            return obj.get(key).getAsString();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** 判定布尔语义字段（兼容 true/false、1/0、字符串） */
+    private static boolean isTruthy(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return false;
+        JsonElement e = obj.get(key);
+        try {
+            if (e.isJsonPrimitive()) {
+                var p = e.getAsJsonPrimitive();
+                if (p.isBoolean()) return p.getAsBoolean();
+                if (p.isNumber()) return p.getAsInt() != 0;
+                if (p.isString()) {
+                    String s = p.getAsString();
+                    return "true".equalsIgnoreCase(s) || "1".equals(s);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private long normalizeTimestamp(long timestamp) {

@@ -12,12 +12,16 @@ import com.example.addon.enchant.AutoEnchantBook;
 import com.example.addon.enchant.EnchantmentSelectSetting;
 import com.example.addon.enchant.FumoCommand;
 import com.example.addon.hud.HudExample;
+import com.example.addon.librarian.AutoLibrarianModule;
+import com.example.addon.modules.AdminDetectorModule;
+import com.example.addon.modules.AutoBoneMeal;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.AutoVillagerTradeModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
+import com.example.addon.modules.CometDisconnectModule;
 import com.example.addon.modules.MeteorCommandGuideModule;
-import com.example.addon.modules.PinkThemeModule;
+import com.example.addon.modules.ThemeModule;
 import com.example.addon.modules.UserStatsModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.example.addon.tactical.FlightBypass;
@@ -73,9 +77,9 @@ public class AddonTemplate extends MeteorAddon {
         MeteorCommandGuideModule meteorCommandGuideModule = new MeteorCommandGuideModule();
         Modules.get().add(meteorCommandGuideModule);
 
-        // 粉色主题：应用粉色配色方案
-        PinkThemeModule pinkThemeModule = new PinkThemeModule();
-        Modules.get().add(pinkThemeModule);
+        // 界面主题：一键切换界面和 HUD 配色方案
+        ThemeModule themeModule = new ThemeModule();
+        Modules.get().add(themeModule);
 
         // 用户统计：实时查看有多少玩家正在使用该扩展
         UserStatsModule userStatsModule = new UserStatsModule();
@@ -90,6 +94,14 @@ public class AddonTemplate extends MeteorAddon {
         AutoMinerModule autoMinerModule = new AutoMinerModule();
         Modules.get().add(autoMinerModule);
 
+        // 自动骨粉：Nuker 风格催熟 + ESP 高亮 + 视角静默同步
+        AutoBoneMeal autoBoneMeal = new AutoBoneMeal();
+        Modules.get().add(autoBoneMeal);
+
+        // 附魔交易所：自动寻路失业村民、放讲台刷交易、命中目标附魔自动购买
+        AutoLibrarianModule autoLibrarianModule = new AutoLibrarianModule();
+        Modules.get().add(autoLibrarianModule);
+
         // 自动村民交易：真实打开交易界面发包（26.1.2 协议无静默交易），支持原地/寻路/多任务模式
         AutoVillagerTradeModule autoVillagerTradeModule = new AutoVillagerTradeModule();
         Modules.get().add(autoVillagerTradeModule);
@@ -97,6 +109,10 @@ public class AddonTemplate extends MeteorAddon {
         // 自动登入：自动注册、登录、断线重连、进服后执行指令序列，支持乐源服多阶段回服路线
         AutoLoginModule autoLoginModule = new AutoLoginModule();
         Modules.get().add(autoLoginModule);
+
+        // 自动断线：应急断开服务器连接躲避管理员视察，开启即断线，亦可被防管理员逻辑自动调用
+        CometDisconnectModule cometDisconnectModule = new CometDisconnectModule();
+        Modules.get().add(cometDisconnectModule);
 
         // 扩展附魔：经验获取→定向附魔→极品剔除→洗练仓储全自动闭环
         EnchantmentSelectSetting.register();
@@ -106,9 +122,11 @@ public class AddonTemplate extends MeteorAddon {
         // FlightBypass：飞行绕过
         // AntiKickBypass：防踢绕过
         // ServerDetector：服务器特征检测，自动调整绕过策略
+        // AdminDetector：管理员检测，识别旁观/创造/隐身/隐藏玩家自动断线
         Modules.get().add(new FlightBypass());
         Modules.get().add(new AntiKickBypass());
         Modules.get().add(new ServerDetector());
+        Modules.get().add(new AdminDetectorModule());
 
         // ── 自定义指令 ──
         Commands.add(new CommandExample());

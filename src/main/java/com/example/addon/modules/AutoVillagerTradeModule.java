@@ -10,6 +10,7 @@ import com.example.addon.villager.data.VillagerProfessionRegistry;
 import com.example.addon.villager.data.VillagerTradeTarget;
 import com.example.addon.villager.logistics.PipelineTask;
 import com.example.addon.villager.render.ContainerESP;
+import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -19,14 +20,13 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.Level;
@@ -41,7 +41,7 @@ import java.util.Set;
  * 自动村民交易模块
  * 
  * 功能：
- * · 原地交易模式（不移动/不碰箱子，自动扭头看村民，绿宝石与卸货玩家自理）
+ * · 原地交易模式（不寻路工作站，直接与身边村民交易，绿宝石不足/背包满自动补给/卸货）
  * · 寻路单点模式（Baritone 寻路到工作站，绿宝石不够自动去绿宝石箱补给、满包自动卸货）
  * · 多任务流水线模式（所有已选择物品的职业自动组成队列，完成 1 再做 2，可为不同村民）
  * · 交易通过真实打开村民交易界面发包（26.1.2 协议，无静默交易）
@@ -115,12 +115,11 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
 
     private final Setting<Integer> emeraldSupplyStacks = sgGeneral.add(new IntSetting.Builder()
         .name("绿宝石补给量(组)")
-        .description("去绿宝石箱补给时，背包绿宝石补到「底限32个 + 该组数×64」即返回交易（寻路/多任务模式）")
+        .description("去绿宝石箱补给时，背包绿宝石补到「底限32个 + 该组数×64」即返回交易")
         .defaultValue(1)
         .min(1)
         .max(27)
         .noSlider()
-        .visible(() -> mode.get() != Mode.LOCAL)
         .build()
     );
 
@@ -129,16 +128,6 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         .description("选择村民职业")
         .defaultValue(ProfessionChoice.图书管理员)
         .onChanged(value -> updateItemSettings())
-        .build()
-    );
-
-    private final Setting<Integer> packetDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("发包延迟")
-        .description("交易 Packet 间隔（ms）")
-        .defaultValue(500)
-        .min(100)
-        .max(2000)
-        .noSlider()
         .build()
     );
 
@@ -317,7 +306,7 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             });
         });
 
-        fsm.configure(prof, targets, maxPrice, packetDelay.get(), 32, quantity);
+        fsm.configure(prof, targets, maxPrice, 32, quantity);
         fsm.setSearchRange(searchRange.get());
         fsm.setDrainMode(drainMode.get());
         fsm.setSupplyStacks(emeraldSupplyStacks.get());
@@ -383,10 +372,6 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             report.append("\n§7目标物品　§8▸ ").append(highlightText(String.join(",", names))).append("§r");
             report.append("\n§7价格上限　§8▸ ").append(highlightText(String.valueOf(professionPriceSettings.get(profession.get().name()).get()))).append("§r");
             report.append("\n§7购买总量　§8▸ ").append(highlightText(drainMode.get() ? "不限(榨干)" : String.valueOf(quantity))).append("§r");
-
-            if (mode.get() == Mode.LOCAL) {
-                report.append("\n§7注意事项　§8▸ §f不自动补给/卸货，绿宝石与背包请自行管理");
-            }
         }
 
         info(report.toString());
@@ -401,6 +386,16 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
     private void onRender3D(Render3DEvent event) {
         if (!isActive()) return;
         containerESP.render(event);
+    }
+
+    @EventHandler
+    private void onOpenScreen(OpenScreenEvent event) {
+        if (mc.player == null) return;
+        // 静默容器：交易运行中打开村民交易界面/箱子屏幕时取消显示（不抢鼠标），
+        // 交易界面数据仍由 mc.player.containerMenu 同步，SelectTrade/取绿宝石照常发包。
+        if (isActive() && event.screen instanceof AbstractContainerScreen<?>) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
@@ -453,30 +448,12 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             missing.add("§e目标物品§f·未选择");
         }
 
-        // 3. 容器绑定检测（原地模式不碰箱子，跳过）
-        if (mode.get() != Mode.LOCAL) {
-            if (CunminCommand.getEmeraldChestPos() == null) {
-                missing.add("§a绿宝石箱§f·未绑定");
-            }
-            if (CunminCommand.getUnloadChestPos() == null) {
-                missing.add("§b交易成品箱§f·未绑定");
-            }
+        // 3. 容器绑定检测（三种模式都需要：绿宝石不足/背包满时自动补给/卸货）
+        if (CunminCommand.getEmeraldChestPos() == null) {
+            missing.add("§a绿宝石箱§f·未绑定");
         }
-
-        // 4. 背包绿宝石检测（仅原地模式：玩家自行管理绿宝石，必须有存货；
-        //    寻路/多任务模式绿宝石箱里有就行，交易中会自动去补给）
-        if (mode.get() == Mode.LOCAL && mc.player != null) {
-            int emeraldCount = 0;
-            for (int i = 0; i < 36; i++) {
-                ItemStack stack = mc.player.getInventory().getItem(i);
-                if (stack.getItem() == Items.EMERALD) {
-                    emeraldCount += stack.getCount();
-                }
-            }
-            
-            if (emeraldCount == 0) {
-                missing.add("§a绿宝石§f·背包里没有");
-            }
+        if (CunminCommand.getUnloadChestPos() == null) {
+            missing.add("§b交易成品箱§f·未绑定");
         }
 
         // 5. 目标职业村民检测：搜索半径内必须存在目标职业村民
@@ -507,15 +484,13 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             }
         }
 
-        // 6. Baritone 验证（寻路模式）
-        if (mode.get() == Mode.SINGLE_PATH || mode.get() == Mode.PIPELINE) {
-            try {
-                if (BaritoneAPI.getProvider().getPrimaryBaritone() == null) {
-                    missing.add("§cBaritone§f·未安装或未启用");
-                }
-            } catch (Throwable e) {
+        // 6. Baritone 验证（补给/卸货寻路都需要，三种模式通用）
+        try {
+            if (BaritoneAPI.getProvider().getPrimaryBaritone() == null) {
                 missing.add("§cBaritone§f·未安装或未启用");
             }
+        } catch (Throwable e) {
+            missing.add("§cBaritone§f·未安装或未启用");
         }
 
         return missing;
@@ -565,20 +540,31 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         if (itemSetting != null) {
             List<Item> selectedItems = itemSetting.get();
             for (Item item : selectedItems) {
-                String displayName = BuiltInRegistries.ITEM.getKey(item).getPath();
+                // 物品显示名走本地化（跟随客户端语言），不再用英文注册表 ID
+                String displayName = item.getDefaultInstance().getHoverName().getString();
                 targets.add(new VillagerTradeTarget(item, displayName));
             }
         }
 
         if (isLibrarian && librarianEnchantments != null) {
+            // 附魔是动态注册表，必须走 level 的 registryAccess 解析本地化名（回退到命名空间 ID）
+            var enchantRegistry = (mc.level != null)
+                ? mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT)
+                : null;
             for (ResourceKey<Enchantment> enchantment : librarianEnchantments.get()) {
                 String enchantmentId = enchantment.identifier().toString();
                 if (!VillagerProfessionRegistry.getLibrarianEnchantments().contains(
                     enchantment.identifier().getPath())) continue;
 
+                String enchantName = (enchantRegistry != null)
+                    ? enchantRegistry.get(enchantment)
+                        .map(holder -> holder.value().description().getString())
+                        .orElse(enchantment.identifier().getPath())
+                    : enchantment.identifier().getPath();
+
                 VillagerTradeTarget target = new VillagerTradeTarget(
                     Items.ENCHANTED_BOOK,
-                    "附魔书: " + enchantmentId
+                    "附魔书·" + enchantName
                 );
                 target.setEnchantmentId(enchantmentId);
                 targets.add(target);
@@ -676,8 +662,8 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
                 "  §8└─ §f自检通过才能启动，缺项一次性列全"
             ),
             new HelpScreen.HelpSection("三种模式",
-                "  §b▸ §e原地交易 §8- §f不移动、不碰箱子，视角自动对准村民",
-                "    §7绿宝石与卸货玩家自行管理（不自动补给/卸货）",
+                "  §b▸ §e原地交易 §8- §f不寻路工作站，直接与身边村民交易",
+                "    §7绿宝石不足/背包满时自动去箱子补给/卸货",
                 "  §b▸ §e寻路单点 §8- §fBaritone 寻路到工作站自动交易",
                 "    §7绿宝石不足自动去绿宝石箱补给，背包满自动卸货",
                 "  §b▸ §e多任务 §8- §f所有已选择物品的职业组成队列依次执行",
@@ -687,17 +673,17 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
                 "  §d▸ §f「三个模式」共用的一个开关，不是第四个模式",
                 "  §d▸ §f开启后各职业「购买量(组)」自动隐藏（榨干优先）",
                 "  §d▸ §f一路买到目标交易全部「售罄/锁死」才收工",
-                "  §d▸ §f寻路/多任务：补给卸货循环照常，直到榨干为止",
-                "  §d▸ §f原地模式：绿宝石花完、背包满或买不到即停"
+                "  §d▸ §f补给卸货循环照常，直到目标交易榨干/锁死为止",
+                "  §d▸ §f买不到、村民消失或绿宝石箱也空了才停"
             ),
             new HelpScreen.HelpSection("使用流程",
                 "  §8> §e1§8. §f选择模式、目标职业、目标物品",
                 "  §8> §e2§8. §f图书管理员可同时勾选附魔书 §7(自动忽略等级)",
-                "  §8> §e3§8. §f设置价格上限与购买量（组），寻路模式可调绿宝石补给量",
-                "  §8> §e4§8. §f寻路/多任务模式先绑定两个箱子再开模块",
+                "  §8> §e3§8. §f设置价格上限与购买量（组），可调绿宝石补给量",
+                "  §8> §e4§8. §f先绑定绿宝石箱与成品箱再开模块",
                 "  §8> §e5§8. §f自检通过即开始；快速停止键可随时终止"
             ),
-            new HelpScreen.HelpSection("点位设置 §7(寻路/多任务模式)",
+            new HelpScreen.HelpSection("点位设置 §7(三种模式通用)",
                 "  §8> §3.cunmin set 绿宝石箱 §8— §7准星对准箱子绑定",
                 "  §8> §3.cunmin set 卸货箱 §8— §7准星对准箱子绑定",
                 "  §8> §3.cunmin status §8— §7查看绑定状态",

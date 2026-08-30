@@ -5,11 +5,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundSelectTradePacket;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 
 import java.util.List;
 import java.util.Set;
@@ -32,10 +32,13 @@ public final class TradeEngine {
      * 查找最便宜的可交易 offer 序号（单次遍历，选择与成本判断严格一致）。
      * 过滤条件：未列入黑名单、未售罄、价格不超上限、输出物品匹配目标白名单。
      *
+     * 客户端只能从 MerchantMenu（村民交易界面）读取 offer，禁止调用
+     * Villager.getOffers()（会抛 IllegalStateException: Cannot load Villager offers on the client）。
+     *
+     * @param offers 交易界面同步下来的报价列表（来自 MerchantMenu.getOffers()）
      * @return offer 序号，无可交易项返回 -1
      */
-    public static int findBestOfferIndex(Villager villager, List<VillagerTradeTarget> targets, int maxPrice, Set<Integer> skipIndexes) {
-        var offers = villager.getOffers();
+    public static int findBestOfferIndex(MerchantOffers offers, List<VillagerTradeTarget> targets, int maxPrice, Set<Integer> skipIndexes) {
         if (offers == null || offers.isEmpty()) return -1;
 
         int bestIndex = -1;
@@ -109,8 +112,7 @@ public final class TradeEngine {
     /**
      * 读当前村民 offer 序号对应的结果数量（offers 可能已被服务端刷新替换，需防御越界）。
      */
-    public static int safeResultCount(Villager villager, int offerIndex) {
-        var offers = villager.getOffers();
+    public static int safeResultCount(MerchantOffers offers, int offerIndex) {
         if (offers == null || offerIndex < 0 || offerIndex >= offers.size()) return 1;
 
         ItemStack result = offers.get(offerIndex).getResult();

@@ -4,7 +4,6 @@ import com.example.addon.farm.FarmPacketOps;
 import com.example.addon.modules.AutoMinerModule;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -233,7 +232,7 @@ public final class ContainerHelper {
             openingCooldown--;
             return;
         }
-        if (mc.screen instanceof AbstractContainerScreen<?> screen && screen.getMenu().containerId != 0) {
+        if (mc.player.containerMenu != null && mc.player.containerMenu.containerId != 0) {
             return;
         }
 
@@ -266,7 +265,10 @@ public final class ContainerHelper {
      * 注意 containerMenu 判空没用——玩家自身背包菜单始终非 null。
      */
     public void closeContainer() {
-        if (mc.player != null && mc.screen instanceof AbstractContainerScreen<?>) {
+        // 静默模式下没有 Screen，靠 containerMenu 判断是否真的开着容器；
+        // inventoryMenu 是玩家自身背包，此时关闭会误发 close 包，无需处理。
+        if (mc.player != null && mc.player.containerMenu != null
+            && mc.player.containerMenu != mc.player.inventoryMenu) {
             mc.player.closeContainer();
         }
         openAttempts = 0;
@@ -274,6 +276,15 @@ public final class ContainerHelper {
         currentMenu = null;
         menuStateId = -1;
         stableStateTicks = 0;
+    }
+
+    /**
+     * 标点位置是否还存在容器（潜影盒/箱子等）。
+     * 潜影盒打包机把盒推走后若没放新盒，此处会返回 false，用于检测「无容器可开」。
+     */
+    public boolean isContainerAt(BlockPos pos) {
+        if (mc.level == null || pos == null) return false;
+        return mc.level.getBlockEntity(pos) instanceof Container;
     }
 
     /**
@@ -291,11 +302,9 @@ public final class ContainerHelper {
      * 容器是否已打开
      */
     public boolean isContainerOpen() {
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) {
-            return false;
-        }
+        if (mc.player == null) return false;
 
-        AbstractContainerMenu menu = screen.getMenu();
+        AbstractContainerMenu menu = mc.player.containerMenu;
         if (menu == null || menu.containerId == 0) {
             return false;
         }
@@ -336,7 +345,8 @@ public final class ContainerHelper {
     public boolean depositOres() {
         if (mc.player == null || mc.gameMode == null) return false;
         if (!isContainerOpen()) {
-            return mc.screen instanceof AbstractContainerScreen<?>;
+            // 静默模式下没有 Screen，判断容器是否已开但 stateId 尚未稳定（继续等待）
+            return mc.player.containerMenu != null && mc.player.containerMenu.containerId != 0;
         }
         if (actionCooldown > 0) {
             actionCooldown--;
@@ -369,35 +379,46 @@ public final class ContainerHelper {
         return false;
     }
 
-    /** 物品完整 ID（含 minecraft: 前缀），埋点用 */
-    private String itemIdOf(ItemStack stack) {
-        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-    }
-
-    /** 目标矿物对应掉落物 ID，埋点用 */
-    private String targetItemId() {
-        Block target = module.getTargetBlock();
-        if (target == null) return "无";
-        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(target.asItem()).toString();
-    }
-
     private boolean isAllowedOre(ItemStack stack) {
-        String target = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(module.getTargetBlock()).getPath();
+        if (stack.isEmpty()) return false;
         String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        String expected = switch (target) {
-            case "lapis_ore", "deepslate_lapis_ore" -> "minecraft:lapis_lazuli";
-            case "redstone_ore", "deepslate_redstone_ore" -> "minecraft:redstone";
-            case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
-            case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
-            case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
-            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
-            case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
-            case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
-            case "nether_quartz_ore" -> "minecraft:quartz";
-            case "ancient_debris" -> "minecraft:ancient_debris";
-            default -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(module.getTargetBlock().asItem()).toString();
-        };
-        return expected.equals(itemId) || (target.endsWith("_ore") && itemId.equals("minecraft:" + target));
+        // 精准采集按原矿方块判定，时运按掉落物判定（下界残骸掉落物=自身方块，两模式共用）
+        if (module.isSilkTouchMode()) {
+            return module.getTargetBlockIds().contains(itemId);
+        }
+        return itemId.equals(module.getTargetDropItemId());
+    }
+
+    /**
+     * 检测当前容器是否已满（潜影盒所有存储槽均非空）。
+     * 脚本直接遍历容器槽位判断满，与打包机的比较器无关；打包机自会检测满后推盒换新盒。
+     * 静默模式下直接用 containerMenu，不依赖 Screen，与 isContainerOpen 判定一致。
+     */
+    public boolean isContainerFull() {
+        if (mc.player == null) return false;
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        if (menu == null || menu.containerId == 0) return false;
+
+        Inventory inventory = mc.player.getInventory();
+        for (Slot slot : menu.slots) {
+            if (slot.container == inventory) continue; // 跳过玩家背包槽
+            if (slot.getItem().isEmpty()) return false; // 存在空槽 → 未满
+        }
+        return true;
+    }
+
+    /**
+     * 背包里是否还有目标矿（判断卸货是否彻底放完）。
+     * 潜影盒打包机模式下：放完才允许 RTP，没放完就继续换盒重开。
+     */
+    public boolean hasOreInInventory() {
+        if (mc.player == null) return false;
+        Inventory inventory = mc.player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty() && isAllowedOre(stack)) return true;
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════════

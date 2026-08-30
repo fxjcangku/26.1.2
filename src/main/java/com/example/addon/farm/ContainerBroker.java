@@ -1,7 +1,6 @@
 package com.example.addon.farm;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -72,9 +71,9 @@ public final class ContainerBroker {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null) return null;
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return null;
-
-        AbstractContainerMenu menu = screen.getMenu();
+        // 静默容器模式下不再弹出 Screen，直接读玩家当前 containerMenu。
+        // containerId == 0 是玩家自身背包，说明箱子还没开成功。
+        AbstractContainerMenu menu = player.containerMenu;
         if (menu == null || menu.containerId == 0) return null;
         return menu;
     }
@@ -220,8 +219,9 @@ public final class ContainerBroker {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null) return;
-        // 不是容器界面就不关，避免误伤 Meteor GUI
-        if (!(mc.screen instanceof AbstractContainerScreen<?>)) return;
+        // 只关真的打开了的容器（containerMenu != inventoryMenu），
+        // 静默模式下没有 Screen，靠 containerMenu 判断；Meteor GUI 不占 containerMenu，不会误伤。
+        if (player.containerMenu == player.inventoryMenu) return;
         player.closeContainer();
     }
 }

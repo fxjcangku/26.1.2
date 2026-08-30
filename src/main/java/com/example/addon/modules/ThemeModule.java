@@ -4,6 +4,7 @@ import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.GuiThemes;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
@@ -16,13 +17,18 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class PinkThemeModule extends YiyiaddonModule {
+/**
+ * 界面主题模块
+ * 一键切换 Meteor 界面与 HUD 的整套配色方案，支持樱花粉、雾霾蓝、鼠尾草等 11 种主题，
+ * 关闭模块时恢复 Meteor 默认配色。
+ */
+public final class ThemeModule extends YiyiaddonModule {
     
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     
     private final Setting<Palette> palette = sgGeneral.add(new EnumSetting.Builder<Palette>()
-        .name("选择颜色")
-        .description("选择界面和 HUD 使用的粉色配色。")
+        .name("选择配色")
+        .description("选择界面和 HUD 使用的配色方案。")
         .defaultValue(Palette.SAKURA)
         .onChanged(value -> {
             if (isActive()) apply(value);
@@ -30,8 +36,8 @@ public final class PinkThemeModule extends YiyiaddonModule {
         .build()
     );
 
-    public PinkThemeModule() {
-        super(AddonTemplate.CATEGORY, "粉色主题", "一键把 Meteor 界面和 HUD 换成粉色，并可随时切换配色。");
+    public ThemeModule() {
+        super(AddonTemplate.CATEGORY, "界面主题", "一键切换 Meteor 界面和 HUD 的配色方案，支持多种主题并可随时切换。");
     }
 
     @Override
@@ -46,10 +52,11 @@ public final class PinkThemeModule extends YiyiaddonModule {
 
     private void apply(Palette selected) {
         if (!(GuiThemes.get() instanceof MeteorGuiTheme theme)) {
-            notifyError("当前不是 Meteor 默认主题，无法应用粉色配色");
+            notifyError("当前不是 Meteor 默认主题，无法应用配色方案");
             return;
         }
 
+        // 普通颜色
         theme.accentColor.set(color(selected.accent));
         theme.checkboxColor.set(color(selected.accent));
         theme.plusColor.set(color(selected.light));
@@ -59,19 +66,25 @@ public final class PinkThemeModule extends YiyiaddonModule {
         theme.textSecondaryColor.set(color(selected.secondaryText));
         theme.textHighlightColor.set(color(selected.light));
         theme.titleTextColor.set(color(selected.title));
+        theme.loggedInColor.set(color(selected.light));
         theme.placeholderColor.set(color(selected.secondaryText));
         theme.moduleBackground.set(color(selected.moduleBackground));
         theme.separatorText.set(color(selected.light));
         theme.separatorCenter.set(color(selected.accent));
         theme.separatorEdges.set(color(selected.background));
-        theme.backgroundColor.get().set(color(selected.background));
-        theme.outlineColor.get().set(color(selected.outline));
-        theme.scrollbarColor.get().set(color(selected.accent));
         theme.sliderLeft.set(color(selected.accent));
         theme.sliderRight.set(color(selected.background));
-        theme.sliderHandle.get().set(color(selected.accent));
+
+        // 三态颜色（normal/hovered/pressed）：不补全 hovered/pressed 时，
+        // 滑块把手、背景、边框、滚动条在悬停/按下会残留默认紫色
+        applyThreeState(theme, "Background", "background", color(selected.background), color(selected.moduleBackground), color(selected.moduleBackground));
+        applyThreeState(theme, "Outline", "outline", color(selected.outline), color(selected.outline), color(selected.outline));
+        applyThreeState(theme, "Scrollbar", "Scrollbar", color(selected.accent), color(selected.accent), color(selected.accent));
+        applyThreeState(theme, "Slider", "slider-handle", color(selected.accent), color(selected.light), color(selected.strong));
+
         applyHud(selected);
         GuiThemes.save();
+        invalidateScreen();
     }
 
     private void applyHud(Palette selected) {
@@ -95,6 +108,7 @@ public final class PinkThemeModule extends YiyiaddonModule {
         theme.textSecondaryColor.reset();
         theme.textHighlightColor.reset();
         theme.titleTextColor.reset();
+        theme.loggedInColor.reset();
         theme.placeholderColor.reset();
         theme.moduleBackground.reset();
         theme.separatorText.reset();
@@ -102,18 +116,53 @@ public final class PinkThemeModule extends YiyiaddonModule {
         theme.separatorEdges.reset();
         theme.sliderLeft.reset();
         theme.sliderRight.reset();
-        
-        // ThreeStateColorSetting 类型（需要通过 .get() 访问 SettingColor）
-        // 这些字段没有 reset() 方法，需要手动设置为 Meteor 默认值
-        theme.backgroundColor.get().set(13, 17, 23, 255);      // Meteor 默认背景色
-        theme.outlineColor.get().set(0, 0, 0, 255);            // Meteor 默认边框色
-        theme.scrollbarColor.get().set(145, 61, 226, 255);     // Meteor 默认滚动条色（紫色）
-        theme.sliderHandle.get().set(145, 61, 226, 255);       // Meteor 默认滑块把手色（紫色）
-        
+
+        // 三态颜色：用 reset() 还原 Meteor 真实默认值（normal/hovered/pressed 三态一起恢复）
+        resetThreeState(theme, "Background", "background");
+        resetThreeState(theme, "Outline", "outline");
+        resetThreeState(theme, "Scrollbar", "Scrollbar");
+        resetThreeState(theme, "Slider", "slider-handle");
+
         // HUD 文字颜色
         Hud.get().textColors.reset();
-        
+
         GuiThemes.save();
+        invalidateScreen();
+    }
+
+    /**
+     * 设置三态颜色（normal/hovered/pressed）。
+     * ThreeStateColorSetting 内部三个状态是 private，只能通过 SettingGroup 按名字访问；
+     * 名字由 Meteor 生成规则决定：baseName + "-color"、hovered-/pressed- + baseName + "-color"。
+     */
+    private static void applyThreeState(MeteorGuiTheme theme, String groupName, String baseName, SettingColor normal, SettingColor hovered, SettingColor pressed) {
+        SettingGroup group = theme.settings.getGroup(groupName);
+        setColor(group, baseName + "-color", normal);
+        setColor(group, "hovered-" + baseName + "-color", hovered);
+        setColor(group, "pressed-" + baseName + "-color", pressed);
+    }
+
+    private static void resetThreeState(MeteorGuiTheme theme, String groupName, String baseName) {
+        SettingGroup group = theme.settings.getGroup(groupName);
+        resetColor(group, baseName + "-color");
+        resetColor(group, "hovered-" + baseName + "-color");
+        resetColor(group, "pressed-" + baseName + "-color");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void setColor(SettingGroup group, String name, SettingColor color) {
+        Setting<?> setting = group.get(name);
+        if (setting != null) ((Setting<SettingColor>) setting).set(color);
+    }
+
+    private static void resetColor(SettingGroup group, String name) {
+        Setting<?> setting = group.get(name);
+        if (setting != null) setting.reset();
+    }
+
+    /** 切换配色后立即重绘当前界面，保证颜色实时生效、不残留旧色 */
+    private void invalidateScreen() {
+        if (mc.screen instanceof WidgetScreen screen) screen.invalidate();
     }
 
     private void select(Palette selected) {
@@ -134,34 +183,31 @@ public final class PinkThemeModule extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme,
             table -> {
-                // 第一行
-                addButton(theme, table, "樱花粉", Palette.SAKURA);
-                addButton(theme, table, "蜜桃粉", Palette.PEACH);
-                addButton(theme, table, "玫瑰粉", Palette.ROSE);
-                table.row();
-                
-                // 第二行
-                addButton(theme, table, "莓果粉", Palette.BERRY);
-                addButton(theme, table, "粉紫夜", Palette.PINK_NIGHT);
-                addButton(theme, table, "薄荷灰", Palette.MINT_GRAY);
-                table.row();
-                
-                // 第三行
-                addButton(theme, table, "雾霾蓝", Palette.MIST_BLUE);
-                addButton(theme, table, "暖沙灰", Palette.WARM_SAND);
-                addButton(theme, table, "鼠尾草", Palette.SAGE);
-                table.row();
-                
-                // 第四行
-                addButton(theme, table, "灰紫夜", Palette.DUSK_LAVENDER);
-                addButton(theme, table, "森林雾", Palette.FOREST_MIST);
-                addUniformButton(theme, table, "恢复默认", this::restoreDefault);
+                // 独立按钮表：避免按钮与下方说明文字共享列，防止列宽被说明文字撑大导致按钮大小不一
+                WTable buttons = theme.table();
+                addButton(theme, buttons, "樱花粉", Palette.SAKURA);
+                addButton(theme, buttons, "蜜桃粉", Palette.PEACH);
+                addButton(theme, buttons, "玫瑰粉", Palette.ROSE);
+                buttons.row();
+                addButton(theme, buttons, "莓果粉", Palette.BERRY);
+                addButton(theme, buttons, "粉紫夜", Palette.PINK_NIGHT);
+                addButton(theme, buttons, "薄荷灰", Palette.MINT_GRAY);
+                buttons.row();
+                addButton(theme, buttons, "雾霾蓝", Palette.MIST_BLUE);
+                addButton(theme, buttons, "暖沙灰", Palette.WARM_SAND);
+                addButton(theme, buttons, "鼠尾草", Palette.SAGE);
+                buttons.row();
+                addButton(theme, buttons, "灰紫夜", Palette.DUSK_LAVENDER);
+                addButton(theme, buttons, "森林雾", Palette.FOREST_MIST);
+                addUniformButton(theme, buttons, "恢复默认", this::restoreDefault);
+                buttons.row();
+                table.add(buttons);
                 table.row();
             },
-            new String[]{ "§l粉色主题 · 使用说明" },
+            new String[]{ "§l界面主题 · 使用说明" },
             new String[]{
                 "§e§l▌ 使用方法",
-                "§f  1. 打开模块，立即应用当前选择的颜色",
+                "§f  1. 打开模块，立即应用当前选择的配色",
                 "§f  2. 点击上面的颜色按钮，可直接切换整套配色",
                 "§f  3. 关闭模块，会恢复 Meteor 默认颜色"
             },
@@ -169,12 +215,12 @@ public final class PinkThemeModule extends YiyiaddonModule {
                 "§a§l▌ 会修改什么",
                 "§f  · Meteor 菜单主色、按钮、勾选框、滑块和高亮文字",
                 "§f  · 模块背景、窗口背景、边框、分隔线和滚动条",
-                "§f  · HUD 全局文字颜色，按三种粉色自动渐变"
+                "§f  · HUD 全局文字颜色，按三种配色自动渐变"
             },
             new String[]{
                 "§b§l▌ 当前配色",
                 "§f  · " + palette.get().displayName,
-                "§f  · 颜色选择会自动保存，下次打开继续使用"
+                "§f  · 配色选择会自动保存，下次打开继续使用"
             },
             new String[]{
                 "§c§l▌ 注意",
