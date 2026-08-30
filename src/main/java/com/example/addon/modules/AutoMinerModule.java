@@ -29,13 +29,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.Set;
 
@@ -639,9 +634,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
         cmdManager.reset();
 
         reportStartupInfo();
-
-        debugEvent("A", "模块启动", "目标=" + getTargetBlock() + " 种子模式=" + seedMiningEnabled.get()
-            + " 满载=" + unloadThreshold.get() + " 食物阈值=" + hungerThreshold.get());
     }
 
     /**
@@ -649,21 +641,17 @@ public final class AutoMinerModule extends YiyiaddonModule {
      *
      * 只报会影响本次结果的关键项（目标矿、种子模式、阈值），
      * 不把整个设置面板念一遍，否则聊天栏刷屏反而看不清。
-     * 
+     *
+     * 整份报告合并成一个消息块输出（一条 notify 多行），只带一次模块前缀，
+     * 正文统一「标签 + §8▸ + 值」结构，行首缩进一致，聊天栏里工整不散乱。
+     *
      * 维度不匹配时不仅警告，还会直接停止模块，避免浪费时间挖空气。
      */
     private void reportStartupInfo() {
-        notify("§a已启动，开始挖矿循环");
-
-        // 当前维度
-        String dimension = getDimensionName();
-        notify("§f当前维度：" + highlightText(dimension));
-
         // 目标矿物
         Block target = getTargetBlock();
         String targetName = BaritoneChatTranslations.translateBlockId(
             BuiltInRegistries.BLOCK.getKey(target).toString());
-        notify("§f目标矿物：" + highlightText(targetName));
 
         // [维度限制已临时关闭] 启动时不再按维度拦截，便于测试状态机（后续按需恢复）
         // if (mc.level != null) {
@@ -693,21 +681,31 @@ public final class AutoMinerModule extends YiyiaddonModule {
         //     }
         // }
 
-        // 挖矿模式
+        // 报告正文：标签固定 4 字宽 + 全角空格，各键值行结构统一
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 自动挖矿 · 启动报告");
+        report.append("\n§7当前维度　§8▸ ").append(highlightText(getDimensionName())).append("§r");
+        report.append("\n§7目标矿物　§8▸ ").append(highlightText(targetName)).append("§r");
+        report.append("\n§7挖矿模式　§8▸ ")
+              .append(highlightText(seedMiningEnabled.get() ? "种子模式" : "普通模式")).append("§r");
+
+        // 扫描方式：两种模式结构一致，种子模式附带渲染范围
         if (seedMiningEnabled.get()) {
-            notify("§f挖矿模式：" + highlightText("种子模式") + "§f（实测扫描：只挖服务器上真实存在的目标矿）");
-            notify("§f渲染范围：" + highlightText(renderRange.get() + " 格"));
+            report.append("\n§7扫描方式　§8▸ §f实测扫描（只挖服务器上真实存在的目标矿）· 渲染范围 ")
+                  .append(highlightText(renderRange.get() + " 格")).append("§r");
         } else {
-            notify("§f挖矿模式：" + highlightText("普通模式") + "§f（挖视野内所有目标矿）");
+            report.append("\n§7扫描方式　§8▸ §f视野内所有目标矿");
         }
 
-        // 触发阈值
-        notify("§f触发阈值：满载 " + highlightText(unloadThreshold.get() + " 组")
-            + "§f · 饥饿 " + highlightText(String.valueOf(hungerThreshold.get()))
-            + "§f · 耐久 " + highlightText(String.valueOf(durabilityThreshold.get())));
+        // 触发阈值：三项合并一行，高亮数值
+        report.append("\n§7触发阈值　§8▸ §f满载 ").append(highlightText(unloadThreshold.get() + " 组")).append("§r")
+              .append("§f · 饥饿 ").append(highlightText(String.valueOf(hungerThreshold.get()))).append("§r")
+              .append("§f · 耐久 ").append(highlightText(String.valueOf(durabilityThreshold.get()))).append("§r");
 
         // 丢弃规则提醒（默认全丢，防止玩家误丢重要物品）
-        notify("§c丢弃规则：除保留项外全部自动丢弃！想留下的物品请先加进「保留白名单」");
+        report.append("\n§c⚠ 丢弃规则：除保留项外全部自动丢弃！想留下的物品请先加进「保留白名单」");
+
+        notify(report.toString());
     }
 
     /**
@@ -963,50 +961,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // 公开消息方法供子组件调用
     public void info(String msg) { notify(msg); }
     public void error(String msg) { notifyError(msg); }
-
-    // #region debug-point 自动挖矿-卸货补货寻路
-    private static final String 调试地址 = "http://127.0.0.1:7777/event";
-    private static final String 调试会话 = "2026-08-29-自动挖矿-卸货补货寻路";
-    private final AtomicLong 调试序号 = new AtomicLong();
-
-    /** 运行时埋点：只传假设编号、埋点位置、数据，异步 POST 到本地监听服务。异常全部吞掉，不影响游戏线程。 */
-    public void debugEvent(String 假设编号, String 埋点, String 数据) {
-        long 序号 = 调试序号.incrementAndGet();
-        long 时刻 = System.currentTimeMillis();
-        String json = "{\"sessionId\":\"" + 转义(调试会话) + "\",\"displayName\":\""
-            + 转义(调试会话) + "\",\"runId\":\"probe-1\",\"hypothesisId\":\""
-            + 转义(假设编号) + "\",\"location\":\"" + 转义("自动挖矿/" + 埋点)
-            + "\",\"ts\":" + 时刻 + ",\"data\":{\"sequence\":" + 序号
-            + ",\"detail\":\"" + 转义(数据) + "\"}}";
-
-        Thread 上报线程 = new Thread(() -> {
-            HttpURLConnection 连接 = null;
-            try {
-                连接 = (HttpURLConnection) URI.create(调试地址).toURL().openConnection();
-                连接.setRequestMethod("POST");
-                连接.setConnectTimeout(500);
-                连接.setReadTimeout(500);
-                连接.setDoOutput(true);
-                连接.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                try (OutputStream 输出 = 连接.getOutputStream()) {
-                    输出.write(json.getBytes(StandardCharsets.UTF_8));
-                }
-                连接.getResponseCode();
-            } catch (Exception ignored) {
-                // 调试服务不可用时绝不影响游戏线程。
-            } finally {
-                if (连接 != null) 连接.disconnect();
-            }
-        }, "yiyiaddon-挖矿诊断-" + 序号);
-        上报线程.setDaemon(true);
-        上报线程.start();
-    }
-
-    private static String 转义(String 文本) {
-        return 文本 == null ? "" : 文本.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-    }
-    // #endregion
 
     // ═══════════════════════════════════════════════════════════════════
     //  假矿检测

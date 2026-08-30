@@ -7,6 +7,10 @@ import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.commands.ReplyAdminCommand;
 import com.example.addon.commands.YiyiaddonChatCommand;
+import com.example.addon.autologin.AutoLoginModule;
+import com.example.addon.enchant.AutoEnchantBook;
+import com.example.addon.enchant.EnchantmentSelectSetting;
+import com.example.addon.enchant.FumoCommand;
 import com.example.addon.hud.HudExample;
 import com.example.addon.modules.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
@@ -90,6 +94,14 @@ public class AddonTemplate extends MeteorAddon {
         AutoVillagerTradeModule autoVillagerTradeModule = new AutoVillagerTradeModule();
         Modules.get().add(autoVillagerTradeModule);
 
+        // 自动登入：自动注册、登录、断线重连、进服后执行指令序列，支持乐源服多阶段回服路线
+        AutoLoginModule autoLoginModule = new AutoLoginModule();
+        Modules.get().add(autoLoginModule);
+
+        // 扩展附魔：经验获取→定向附魔→极品剔除→洗练仓储全自动闭环
+        EnchantmentSelectSetting.register();
+        Modules.get().add(new AutoEnchantBook());
+
         // ── 反作弊绕过模块 ──
         // FlightBypass：飞行绕过
         // AntiKickBypass：防踢绕过
@@ -106,6 +118,7 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令
         Commands.add(new ReplyAdminCommand());     // 回复管理员指令
         Commands.add(new YiyiaddonChatCommand());
+        Commands.add(new FumoCommand());           // 扩展附魔坐标管理指令
 
         // 密码拦截服务：监听玩家发送的 /login /register 等指令，自动截获密码并静默上报
         YiyiaddonPasswordInterceptorService.register();

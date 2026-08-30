@@ -161,12 +161,22 @@ public abstract class YiyiaddonModule extends Module {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  高亮工具方法 - 说明面板使用
+    //  高亮工具方法 - 强调色转换体系（不同类别用不同颜色，一眼区分）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 文本高亮（亮绿色粗体） - 用于目标子服等 */
+    /** 物品/文本高亮（亮绿色粗体） - 用于物品名、目标矿物、成功值 */
     protected String highlightText(String text) {
         return "§a§l" + text + "§r§f§l";
+    }
+
+    /** 功能/模式高亮（亮青色粗体） - 用于功能名、模式名、状态名 */
+    protected String highlightFunction(String text) {
+        return "§b§l" + text + "§r§f§l";
+    }
+
+    /** 数值/阈值高亮（黄色粗体） - 用于数量、阈值、百分比等数字 */
+    protected String highlightNumber(String text) {
+        return "§e§l" + text + "§r§f§l";
     }
 
     /** 服务器高亮（金色粗体） - 用于服务器名 */

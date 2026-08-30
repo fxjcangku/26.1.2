@@ -25,8 +25,6 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -34,8 +32,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
@@ -140,52 +136,6 @@ public class ServerDetector extends YiyiaddonModule {
 
     private boolean detectionDone = false;
 
-    // #region debug-point 资源包暴力绕过不生效
-    private static final String 调试地址 = "http://127.0.0.1:7777/event";
-    private static final String 调试会话 = "2026-08-26-资源包暴力绕过不生效";
-    private final AtomicLong 调试序号 = new AtomicLong();
-    private final AtomicLong 收包埋点计数 = new AtomicLong();
-    private volatile String 调试运行批次 = "probe-未启动";
-
-    private void debugEvent(String 假设编号, String 埋点, String 数据) {
-        long 序号 = 调试序号.incrementAndGet();
-        long 时刻 = System.currentTimeMillis();
-        String json = "{\"sessionId\":\"" + 转义(调试会话) + "\",\"displayName\":\""
-            + 转义(调试会话) + "\",\"runId\":\"" + 转义(调试运行批次)
-            + "\",\"hypothesisId\":\"" + 转义(假设编号) + "\",\"location\":\""
-            + 转义("资源包/" + 埋点) + "\",\"ts\":" + 时刻 + ",\"data\":{\"sequence\":"
-            + 序号 + ",\"thread\":\"" + 转义(Thread.currentThread().getName())
-            + "\",\"detail\":\"" + 转义(数据) + "\"}}";
-
-        Thread 上报线程 = new Thread(() -> {
-            HttpURLConnection 连接 = null;
-            try {
-                连接 = (HttpURLConnection) URI.create(调试地址).toURL().openConnection();
-                连接.setRequestMethod("POST");
-                连接.setConnectTimeout(500);
-                连接.setReadTimeout(500);
-                连接.setDoOutput(true);
-                连接.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                try (java.io.OutputStream 输出 = 连接.getOutputStream()) {
-                    输出.write(json.getBytes(StandardCharsets.UTF_8));
-                }
-                连接.getResponseCode();
-            } catch (Exception ignored) {
-                // 调试服务不可用时绝不影响游戏网络线程与下载线程。
-            } finally {
-                if (连接 != null) 连接.disconnect();
-            }
-        }, "yiyiaddon-资源包诊断-" + 序号);
-        上报线程.setDaemon(true);
-        上报线程.start();
-    }
-
-    private static String 转义(String 文本) {
-        return 文本 == null ? "" : 文本.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-    }
-    // #endregion
-
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。点击按钮查看说明。");
     }
@@ -249,8 +199,6 @@ public class ServerDetector extends YiyiaddonModule {
 
     @Override
     public void onActivate() {
-        debugEvent("A", "模块启动", "active=" + isActive() + "，模式=" + resourcePackMode.get());
-        
         // 单人世界自动关闭
         if (mc.hasSingleplayerServer()) {
             chatFeedback = false;
@@ -471,13 +419,10 @@ public class ServerDetector extends YiyiaddonModule {
 
         if (event.packet instanceof ClientboundResourcePackPushPacket packet) {
             ResourcePackMode mode = resourcePackMode.get();
-            debugEvent("B", "资源包拦截", "mode=" + mode + "，id=" + packet.id() + "，url=" + packet.url());
-            
             if (mode == ResourcePackMode.BYPASS) {
                 event.setCancelled(true);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED);
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
-                debugEvent("F", "暴力绕过完成", "id=" + packet.id());
                 notify("已拦截资源包（暴力绕过）");
             } else if (mode == ResourcePackMode.AUTO_DOWNLOAD) {
                 downloadResourcePackAsync(packet.id(), packet.url(), packet.hash());
@@ -488,13 +433,10 @@ public class ServerDetector extends YiyiaddonModule {
     public boolean handleResourcePackPushFromVanilla(ClientboundResourcePackPushPacket packet, Consumer<Packet<?>> sendPacket) {
         if (!isActive()) return false;
         ResourcePackMode mode = resourcePackMode.get();
-        debugEvent("B", "Mixin入口", "mode=" + mode + "，id=" + packet.id());
-        
         if (mode == ResourcePackMode.BYPASS) {
             UUID packId = packet.id();
             sendPacket.accept(new ServerboundResourcePackPacket(packId, ServerboundResourcePackPacket.Action.ACCEPTED));
             sendPacket.accept(new ServerboundResourcePackPacket(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED));
-            debugEvent("F", "Mixin暴力绕过", "id=" + packId);
             notify("已拦截资源包（Mixin入口）");
             return true;
         }
@@ -504,10 +446,8 @@ public class ServerDetector extends YiyiaddonModule {
     private void sendPackAction(UUID packId, ServerboundResourcePackPacket.Action action) {
         ClientPacketListener connection = mc.getConnection();
         if (connection == null) {
-            debugEvent("F", "状态包未发送", "action=" + action + "，原因=连接为空，id=" + packId);
             return;
         }
-        debugEvent("F", "状态包发送", "action=" + action + "，id=" + packId);
         connection.send(new ServerboundResourcePackPacket(packId, action));
     }
 
@@ -522,7 +462,6 @@ public class ServerDetector extends YiyiaddonModule {
                 File targetFile = new File(RESOURCE_PACK_DIR, fileName);
                 
                 if (targetFile.exists()) {
-                    debugEvent("E", "资源包已存在", "跳过下载，id=" + packId + "，路径=" + targetFile.getAbsolutePath());
                     sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
                     notify("该服务器资源包已下载过：" + fileName);
                     return;
@@ -536,7 +475,6 @@ public class ServerDetector extends YiyiaddonModule {
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
                 
                 int code = conn.getResponseCode();
-                debugEvent("E", "HTTP响应", "code=" + code + "，id=" + packId);
                 
                 if (code == 200) {
                     try (InputStream in = conn.getInputStream();

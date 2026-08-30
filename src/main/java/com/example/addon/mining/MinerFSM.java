@@ -242,11 +242,11 @@ public final class MinerFSM {
         if (stateTick > teleportTimeout) {
             if (teleportRetries < MAX_TELEPORT_RETRIES) {
                 teleportRetries++;
-                module.error("§e传送未生效，自动重试 " + teleportRetries + "/" + MAX_TELEPORT_RETRIES);
+                module.error("§e⚠ 传送未生效 §8▸ 自动重试 " + teleportRetries + "/" + MAX_TELEPORT_RETRIES);
                 stateTick = 0; // 回到阶段 1 重新发指令
                 return;
             }
-            module.error("§c传送失败（已重试 " + MAX_TELEPORT_RETRIES + " 次），自动停止挖矿");
+            module.error("§c✗ 传送失败 §8▸ 已重试 " + MAX_TELEPORT_RETRIES + " 次，自动停止挖矿");
             if (module.isActive()) module.toggle();
         }
     }
@@ -280,7 +280,7 @@ public final class MinerFSM {
         ItemStack tool = findMiningPickaxe();
         if (tool.isEmpty()) {
             module.getBaritone().stop();
-            module.error("§c缺少镐子，自动挖矿已停止");
+            module.error("§c✗ 缺少镐子 §8▸ 自动挖矿已停止");
             if (module.isActive()) module.toggle();
             return;
         }
@@ -347,7 +347,7 @@ public final class MinerFSM {
         }
 
         if (lowSpeedTicks > STUCK_TIME_THRESHOLD) {
-            module.error("§c检测到卡死（速度过低），重新RTP");
+            module.error("§c✗ 检测到卡死（速度过低）§8▸ 重新RTP");
             module.getSoundNotifier().notifyStuck();
             module.getBaritone().stop();
             lowSpeedTicks = 0;
@@ -363,7 +363,7 @@ public final class MinerFSM {
                 waterStuckTicks = 0;
             }
             if (waterStuckTicks > 600) {
-                module.error("§c检测到水中卡死（30秒未脱离），重新RTP");
+                module.error("§c✗ 检测到水中卡死（30秒未脱离）§8▸ 重新RTP");
                 module.getSoundNotifier().notifyStuck();
                 module.getBaritone().stop();
                 waterStuckTicks = 0;
@@ -400,7 +400,7 @@ public final class MinerFSM {
                 // RTP 后区块分帧加载，若立即判空会在区块到位前误 RTP（传送到树上/高处尤其明显）。
                 // 600 tick（30秒）内还有未加载区块就先等，超时则强制换区防卡死。
                 if (stateTick < 600 && module.getOrePredictor().hasUnloadedChunksInRange(mc.player.blockPosition(), 64)) return;
-                module.info("§e[种子挖矿] 附近实测矿点已挖完，重新RTP换区域");
+                module.info("§e⚠ [种子挖矿] 附近实测矿点已挖完 §8▸ 重新RTP换区域");
                 seedVisited.clear();
                 transitionTo(MinerState.GO_WILD);
                 return;
@@ -429,7 +429,7 @@ public final class MinerFSM {
             if (!baritone.isCustomGoalActive() && stateTick % 10 == 0) {
                 seedPathRetries++;
                 if (seedPathRetries > 6) {
-                    module.warning("§e[种子挖矿] 该预测矿无法到达，跳过");
+                    module.warning("§e⚠ [种子挖矿] 该预测矿无法到达 §8▸ 跳过");
                     seedVisited.add(seedTarget);
                     module.getOrePredictor().forgetOre(seedTarget);
                     seedTarget = null;
@@ -638,7 +638,7 @@ public final class MinerFSM {
         // 耐久进入预警区（阈值 1.5 倍以内但未触发修复），每 30 秒提醒一次
         if (lowestRemaining <= threshold * 1.5 && lowestRemaining > threshold) {
             if (stateTick % 600 == 0) {
-                module.info("§e" + toolName(lowest) + "剩余耐久 " + lowestRemaining + "，即将触发修复流程");
+                module.info("§e⚠ " + toolName(lowest) + " 剩余耐久 " + lowestRemaining + " §8▸ 即将触发修复流程");
                 module.getSoundNotifier().notifyLowDurability();
             }
         }
@@ -740,11 +740,6 @@ public final class MinerFSM {
 
         // 阶段 5：持续倒货，直到目标矿石全部转移
         boolean hasMore = module.getContainer().depositOres();
-        if (stateTick % 20 == 0) {
-            module.debugEvent("C", "卸货推进", "tick=" + stateTick + " hasMore=" + hasMore
-                + " 容器打开=" + module.getContainer().isContainerOpen()
-                + " 矿石组=" + countOreStacks() + "/" + module.getFullLoadStacks());
-        }
         if (!hasMore || stateTick > 400) {
             module.getContainer().closeContainer();
             transitionTo(MinerState.GO_WILD);
@@ -819,14 +814,14 @@ public final class MinerFSM {
             module.getContainer().closeContainer();
             if (hasFoodToEat()) {
                 supplyFailCount = 0;
-                module.info("§a食物已补充，返回矿区");
+                module.info("§a✓ 食物已补充 §8▸ 返回矿区");
                 transitionTo(MinerState.GO_WILD);
             } else if (supplyFailCount++ >= 1) {
                 // 连续 2 次补给空手：箱子没白名单食物，再循环也只是空转 RTP，停机让玩家补货
-                module.error("§c补给箱连续 2 次无白名单食物，自动停止（请补充食物箱）");
+                module.error("§c✗ 补给箱连续 2 次无白名单食物 §8▸ 自动停止（请补充食物箱）");
                 if (module.isActive()) module.toggle();
             } else {
-                module.warning("§e补给箱内无白名单食物，返回矿区继续挖（饥饿时仍会再试一次）");
+                module.warning("§e⚠ 补给箱内无白名单食物 §8▸ 返回矿区继续挖（饥饿时仍会再试一次）");
                 transitionTo(MinerState.GO_WILD);
             }
         }
@@ -838,7 +833,7 @@ public final class MinerFSM {
         // 检查饱食度是否回满（满值20）
         if (foodData.getFoodLevel() >= 20) {
             mc.options.keyUse.setDown(false); // 释放右键
-            module.info("§a饱食度已恢复，继续挖矿");
+            module.info("§a✓ 饱食度已恢复 §8▸ 继续挖矿");
             module.getSoundNotifier().notifyMiningStart();
             transitionTo(MinerState.MINING);
             return;
@@ -847,7 +842,7 @@ public final class MinerFSM {
         // 食物耗尽（拿到手上的最后一块也吃完了）：别傻等 2 分钟超时，直接去补给
         if (!hasFoodToEat()) {
             mc.options.keyUse.setDown(false);
-            module.info("§6食物已吃完，前往补给点");
+            module.info("§6⚠ 食物已吃完 §8▸ 前往补给点");
             transitionTo(MinerState.SUPPLY);
             return;
         }
@@ -860,13 +855,13 @@ public final class MinerFSM {
         if (stateTick % 40 == 0) {
             ItemStack handItem = mc.player.getMainHandItem();
             String foodName = handItem.isEmpty() ? "食物" : handItem.getHoverName().getString();
-            module.info("§e正在进食: " + foodName + " §7(饱食度: " + foodData.getFoodLevel() + "/20)");
+            module.info("§e进食中 §8▸ " + foodName + " §7(饱食度: " + foodData.getFoodLevel() + "/20)");
         }
 
         // 超时保护：2分钟还没吃饱就放弃，回到挖矿
         if (stateTick > 2400) {
             mc.options.keyUse.setDown(false);
-            module.warning("§c进食超时，放弃等待");
+            module.warning("§c⚠ 进食超时 §8▸ 放弃等待");
             module.getSoundNotifier().notifyLowFood();
             transitionTo(MinerState.MINING);
         }
@@ -1008,7 +1003,7 @@ public final class MinerFSM {
         if (stateTick == 1) {
             tryMeteorAutoRespawn();
             module.getSoundNotifier().notifyDeath();
-            module.error("§c已调用流星自动重生模块");
+            module.error("§c✗ 已调用流星自动重生模块");
         }
 
         // 阶段 2：等待复活
@@ -1242,19 +1237,17 @@ public final class MinerFSM {
         int foodThreshold = module.getHungerThreshold();
         
         String message = switch (to) {
-            case IDLE -> "§7[状态] 待机中";
-            case GO_WILD -> "§a[状态] 前往野外";
-            case MINING -> String.format("§e[状态] 开始挖矿 (矿石: %d/%d组, 食物: %d/%d个)", oreStacks, targetStacks, foodCount, foodThreshold);
-            case UNLOADING -> String.format("§b[状态] 矿石已达 %d/%d 组，执行卸货", oreStacks, targetStacks);
-            case SUPPLY -> String.format("§6[状态] 食物不足 (%d/%d个)，前往补给", foodCount, foodThreshold);
-            case EATING -> "§d[状态] 补充饥饿值";
-            case REPAIR -> "§c[状态] " + toolName(findDamagedTool()) + "耐久过低，联动杀戮光环修复中";
-            case DEATH_HANDLING -> "§4[状态] 检测到死亡，已调用流星自动重生";
-            case RESPAWN_WAIT -> "§6[状态] 复活完成，返回挂机点";
+            case IDLE -> "§7待机中";
+            case GO_WILD -> "§a✓ 前往野外";
+            case MINING -> String.format("§a✓ 开始挖矿 §8▸ 矿石 %d/%d 组 · 食物 %d/%d 个", oreStacks, targetStacks, foodCount, foodThreshold);
+            case UNLOADING -> String.format("§b开始卸货 §8▸ 矿石已达 %d/%d 组", oreStacks, targetStacks);
+            case SUPPLY -> String.format("§6⚠ 前往补给 §8▸ 食物不足 %d/%d 个", foodCount, foodThreshold);
+            case EATING -> "§d补充饥饿值";
+            case REPAIR -> "§c⚠ " + toolName(findDamagedTool()) + "耐久过低 §8▸ 联动杀戮光环修复中";
+            case DEATH_HANDLING -> "§c✗ 检测到死亡 §8▸ 已调用流星自动重生";
+            case RESPAWN_WAIT -> "§6复活完成 §8▸ 返回挂机点";
         };
         
-        module.debugEvent("C", "状态转换", from.cn() + "→" + to.cn()
-            + " 矿石=" + oreStacks + "/" + targetStacks + " 食物=" + foodCount + "/" + foodThreshold);
         module.info(message);
     }
 

@@ -428,9 +428,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
      *
      * 只报会影响本次结果的关键项（作物、物流、安全），
      * 不把整个设置面板念一遍，否则聊天栏刷屏反而看不清。
+     *
+     * 整份报告合并成一个消息块输出（一条 notify 多行），只带一次模块前缀，
+     * 正文统一「标签 + §8▸ + 值」结构，与自动挖矿的启动报告风格一致。
      */
     private void reportStartupInfo() {
-        notify("§a已启动，开始农场循环");
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 自动农场 · 启动报告");
 
         // 作物统计与种子显示
         Set<CropProfile> enabled = getEnabledCrops();
@@ -455,12 +459,12 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             if (enabled.size() > 3) {
                 crops.append("§f 等 ").append(highlightText(String.valueOf(enabled.size()))).append("§f 种");
             }
-            notify("§f收割作物：" + crops);
-            
+            report.append("\n§7收割作物　§8▸ ").append(crops).append("§r");
+
             // 只有存在需要种子的作物时才显示种子行
             boolean hasSeededCrops = enabled.stream().anyMatch(CropProfile::needsSeed);
             if (hasSeededCrops) {
-                notify("§f补种种子：" + seeds);
+                report.append("\n§7补种种子　§8▸ ").append(seeds).append("§r");
             }
         }
 
@@ -472,25 +476,27 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             BlockPos p2 = end.pos();
             int rangeX = Math.abs(p2.getX() - p1.getX()) + 1;
             int rangeZ = Math.abs(p2.getZ() - p1.getZ()) + 1;
-            notify("§f农田范围：" + highlightText(rangeX + "×" + rangeZ));
+            report.append("\n§7农田范围　§8▸ ").append(highlightText(rangeX + "×" + rangeZ)).append("§r");
         }
 
         // 蛇形巡逻
         if (serpentinePatrol.get() && FarmNav.available()) {
-            notify("§f巡逻模式：" + highlightText("蛇形巡逻") + "§f（Baritone 导航全农田）");
+            report.append("\n§7巡逻模式　§8▸ ").append(highlightText("蛇形巡逻")).append("§r§f（Baritone 导航全农田）");
         } else {
-            notify("§f巡逻模式：" + highlightText("站桩模式") + "§f（只收手够得到的）");
+            report.append("\n§7巡逻模式　§8▸ ").append(highlightText("站桩模式")).append("§r§f（只收手够得到的）");
         }
 
         // 安全设置
         if (fortuneLock.get()) {
-            notify("§f时运保护：" + highlightText("已启用") + "§f（耐久 < " 
-                + highlightText(String.valueOf(fortuneLockThreshold.get())) + " 停止作业）");
+            report.append("\n§7时运保护　§8▸ ").append(highlightText("已启用")).append("§r§f（耐久 < ")
+                .append(highlightText(String.valueOf(fortuneLockThreshold.get()))).append("§r§f 停止作业）");
         }
 
         // 触发阈值
-        notify("§f卸货阈值：" + highlightText(unloadThreshold.get() + " 组")
-            + "§f · 种子安全库存：" + highlightText(seedSafetyStock.get() + " 组"));
+        report.append("\n§7卸货阈值　§8▸ §f满载 ").append(highlightText(unloadThreshold.get() + " 组")).append("§r")
+            .append("§f · 种子安全库存 ").append(highlightText(seedSafetyStock.get() + " 组")).append("§r");
+
+        notify(report.toString());
     }
 
     @Override
@@ -722,7 +728,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 逐条播报等于刷屏，一分钟能顶几百条消息
         if (newState == FarmState.UNLOADING || newState == FarmState.RESTOCKING) {
             if (!lastNotifiedState.equals(newState.cn())) {
-                notify("切换状态：" + newState.cn());
+                notify(newState == FarmState.UNLOADING
+                    ? "§b开始卸货 §8▸ 前往卸货总仓"
+                    : "§6⚠ 前往补给 §8▸ 取回种子安全库存");
                 lastNotifiedState = newState.cn();
             }
         } else if (newState == FarmState.NUKE_FARMING) {

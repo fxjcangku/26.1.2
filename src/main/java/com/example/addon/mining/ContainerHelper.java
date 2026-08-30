@@ -350,7 +350,6 @@ public final class ContainerHelper {
 
         // 一次性把所有目标矿 Shift 点进箱子（不再一格一格等冷却），服务端按序处理即可
         int moved = 0;
-        StringBuilder 未匹配 = new StringBuilder();
         for (Slot slot : menu.slots) {
             if (slot.container != inventory) continue;
 
@@ -358,17 +357,9 @@ public final class ContainerHelper {
             if (stack.isEmpty()) continue;
 
             if (isAllowedOre(stack)) {
-                module.debugEvent("C", "卸货放入", "槽位=" + slot.index + " 物品=" + itemIdOf(stack) + " 目标=" + targetItemId());
                 quickMove(menu, slot.index);
                 moved++;
-            } else if (未匹配.length() < 240) {
-                // 采集「玩家背包里但被判定非目标矿」的物品，用于定位「打开箱却不放矿」的根因
-                未匹配.append(itemIdOf(stack)).append(',');
             }
-        }
-
-        if (未匹配.length() > 0) {
-            module.debugEvent("C", "卸货未匹配", "目标=" + targetItemId() + " 背包=" + 未匹配);
         }
 
         if (moved > 0) {

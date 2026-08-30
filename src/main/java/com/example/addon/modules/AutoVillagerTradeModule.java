@@ -345,36 +345,51 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
 
     /**
      * 启动播报：把本次运行参数完整打印到聊天栏，三个模式通用。
-     * 多任务模式逐条列出每个任务的职业与参数；原地模式附带自行管理提示。
+     *
+     * 整份报告合并成一个消息块输出（一条 info 多行），只带一次模块前缀，
+     * 正文统一「标签 + §8▸ + 值」结构。多任务模式逐条列出每个任务；原地模式附带自行管理提示。
      */
     private void announceStartup(List<PipelineTask> pipelineTasks, int quantity) {
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 自动村民交易 · 启动报告");
+
+        // 榨干模式优先展示，覆盖购买总量的语义
         if (drainMode.get()) {
-            info("§d§l榨干模式§r §8|§f 无视购买总量，目标交易全部售罄/锁死才收工");
+            report.append("\n§7交易模式　§8▸ ").append(highlightText("榨干模式"))
+                .append("§r§f（无视购买总量，售罄/锁死才收工）");
         }
+
         if (mode.get() == Mode.PIPELINE) {
-            info("§b§l启动多任务模式§r §8|§f 共 " + pipelineTasks.size() + " 个任务（按顺序执行，完成 1 再做 2）");
+            // 多任务模式：逐条列出每个任务的职业与参数
+            report.append("\n§7执行模式　§8▸ ").append(highlightText(mode.get().toString())).append("§r")
+                .append("§f（共 ").append(highlightText(String.valueOf(pipelineTasks.size())))
+                .append("§r§f 个任务，按顺序执行）");
             for (int i = 0; i < pipelineTasks.size(); i++) {
                 PipelineTask task = pipelineTasks.get(i);
                 List<String> names = new ArrayList<>();
                 for (VillagerTradeTarget t : task.getTargets()) names.add(t.getDisplayName());
-                info("  §f任务" + (i + 1) + " §8▸§f 职业=" + VillagerProfessionRegistry.getDisplayName(task.getProfession())
-                    + " §8|§f 目标=" + String.join(",", names)
-                    + " §8|§f 价格≤" + task.getMaxPrice()
-                    + " §8|§f 总量=" + (drainMode.get() ? "不限(榨干)" : String.valueOf(task.getTargetQuantity())));
+                report.append("\n§7任务 ").append(String.valueOf(i + 1)).append("　§8▸ §f职业=")
+                    .append(highlightText(VillagerProfessionRegistry.getDisplayName(task.getProfession()))).append("§r")
+                    .append("§f · 目标=").append(highlightText(String.join(",", names))).append("§r")
+                    .append("§f · 价格≤").append(highlightText(String.valueOf(task.getMaxPrice()))).append("§r")
+                    .append("§f · 总量=").append(highlightText(drainMode.get() ? "不限(榨干)" : String.valueOf(task.getTargetQuantity()))).append("§r");
             }
-            return;
+        } else {
+            // 单职业模式：职业 / 目标 / 价格 / 总量 一行一项
+            List<String> names = new ArrayList<>();
+            for (VillagerTradeTarget t : buildTargets()) names.add(t.getDisplayName());
+            report.append("\n§7执行模式　§8▸ ").append(highlightText(mode.get().toString())).append("§r");
+            report.append("\n§7交易职业　§8▸ ").append(highlightText(profession.get().name())).append("§r");
+            report.append("\n§7目标物品　§8▸ ").append(highlightText(String.join(",", names))).append("§r");
+            report.append("\n§7价格上限　§8▸ ").append(highlightText(String.valueOf(professionPriceSettings.get(profession.get().name()).get()))).append("§r");
+            report.append("\n§7购买总量　§8▸ ").append(highlightText(drainMode.get() ? "不限(榨干)" : String.valueOf(quantity))).append("§r");
+
+            if (mode.get() == Mode.LOCAL) {
+                report.append("\n§7注意事项　§8▸ §f不自动补给/卸货，绿宝石与背包请自行管理");
+            }
         }
 
-        List<String> names = new ArrayList<>();
-        for (VillagerTradeTarget t : buildTargets()) names.add(t.getDisplayName());
-        info("§b§l启动" + mode.get().toString() + "§r §8|§f 职业=" + profession.get().name()
-            + " §8|§f 目标=" + String.join(",", names)
-            + " §8|§f 价格≤" + professionPriceSettings.get(profession.get().name()).get()
-            + " §8|§f 总量=" + (drainMode.get() ? "不限(榨干)" : String.valueOf(quantity)));
-
-        if (mode.get() == Mode.LOCAL) {
-            info("§7原地模式：不自动补给/卸货，绿宝石与背包请自行管理");
-        }
+        info(report.toString());
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.example.addon.commands;
 
 import com.example.addon.core.AddonTemplate;
+import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.utils.YiyiaddonIdentity;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -72,22 +73,25 @@ public class ReplyAdminCommand extends Command {
 
                 HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
-                // 在主线程显示发送结果
+                // 在主线程显示发送结果（禁止 emoji：Minecraft 字体渲染器不支持）
                 mc.execute(() -> {
                     if (response.statusCode() == 200) {
-                        mc.player.sendSystemMessage(Component.literal("§a✅ 回复已发送给管理员！"));
+                        mc.player.sendSystemMessage(Component.literal(
+                            YiyiaddonModule.formatMessage("管理员消息", "§a§l✓ 回复已发送给管理员")));
                     } else {
                         String errMsg = response.body() != null && !response.body().isEmpty() 
                             ? response.body().substring(0, Math.min(100, response.body().length()))
                             : "状态码 " + response.statusCode();
-                        mc.player.sendSystemMessage(Component.literal("§c❌ 回复失败: " + errMsg));
+                        mc.player.sendSystemMessage(Component.literal(
+                            YiyiaddonModule.formatMessage("管理员消息", "§c§l✗ 回复失败：§r" + errMsg)));
                     }
                 });
 
             } catch (Exception e) {
                 // 捕获异常并显示错误信息
                 mc.execute(() -> {
-                    mc.player.sendSystemMessage(Component.literal("§c❌ 回复失败: " + e.getMessage()));
+                    mc.player.sendSystemMessage(Component.literal(
+                        YiyiaddonModule.formatMessage("管理员消息", "§c§l✗ 回复失败：§r" + e.getMessage())));
                 });
             }
         }, "ReplyAdmin-Thread").start();

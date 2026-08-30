@@ -709,7 +709,7 @@ public final class YiyiaddonWelcomeService {
         Minecraft.getInstance().execute(() -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) {
-                mc.player.sendSystemMessage(Component.literal("§c§l[yiyiaddon]§r§f§l[用户统计]§r §c✗ " + reason));
+                mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("用户统计", "§c✗ " + reason)));
             }
         });
     }

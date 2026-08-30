@@ -164,7 +164,7 @@ public final class BaritoneExecutor {
             if (!avoidLava) blocksToAvoid.removeIf(block -> block == Blocks.LAVA);
             settings.blocksToAvoid.value = blocksToAvoid;
             
-            // ✅ 确认存在的设置
+            // 已确认存在的设置（26.1.2 官方映射下逐个核实）
             settings.allowSprint.value = true;           // 启用疾跑
             settings.allowBreak.value = allowBreak;      // 是否破坏方块
             settings.allowPlace.value = allowPlace;      // 是否放置方块
