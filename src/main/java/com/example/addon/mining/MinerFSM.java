@@ -600,23 +600,60 @@ public final class MinerFSM {
     }
 
     private void checkToolDurabilityWarning() {
-        ItemStack tool = findMiningPickaxe();
-        if (tool.isEmpty()) return;
+        if (mc.player == null) return;
 
-        Integer maxDamage = tool.get(DataComponents.MAX_DAMAGE);
-        Integer damage = tool.get(DataComponents.DAMAGE);
-        if (maxDamage == null || damage == null) return;
+        // 找出耐久最低的可修复工具（镐/铲/斧/锄/剑，含副手），预警提示跟修复触发用同一套判定
+        ItemStack lowest = ItemStack.EMPTY;
+        int lowestRemaining = Integer.MAX_VALUE;
 
-        int remaining = maxDamage - damage;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!isRepairableTool(stack)) continue;
+            Integer maxDamage = stack.get(DataComponents.MAX_DAMAGE);
+            Integer damage = stack.get(DataComponents.DAMAGE);
+            if (maxDamage == null || damage == null) continue;
+            int remaining = maxDamage - damage;
+            if (remaining < lowestRemaining) {
+                lowestRemaining = remaining;
+                lowest = stack;
+            }
+        }
+
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (isRepairableTool(offhand)) {
+            Integer maxDamage = offhand.get(DataComponents.MAX_DAMAGE);
+            Integer damage = offhand.get(DataComponents.DAMAGE);
+            if (maxDamage != null && damage != null) {
+                int remaining = maxDamage - damage;
+                if (remaining < lowestRemaining) {
+                    lowestRemaining = remaining;
+                    lowest = offhand;
+                }
+            }
+        }
+
+        if (lowest.isEmpty()) return;
+
         int threshold = module.getDurabilityThreshold();
-
         // 耐久进入预警区（阈值 1.5 倍以内但未触发修复），每 30 秒提醒一次
-        if (remaining <= threshold * 1.5 && remaining > threshold) {
+        if (lowestRemaining <= threshold * 1.5 && lowestRemaining > threshold) {
             if (stateTick % 600 == 0) {
-                module.info("§e镐子剩余耐久 " + remaining + "，即将触发修复流程");
+                module.info("§e" + toolName(lowest) + "剩余耐久 " + lowestRemaining + "，即将触发修复流程");
                 module.getSoundNotifier().notifyLowDurability();
             }
         }
+    }
+
+    /** 工具中文名（用于耐久预警/修复播报，能识别是哪种工具） */
+    private String toolName(ItemStack stack) {
+        if (stack.isEmpty()) return "工具";
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        if (id.endsWith("_pickaxe")) return "镐子";
+        if (id.endsWith("_shovel")) return "铲子";
+        if (id.endsWith("_axe")) return "斧头";
+        if (id.endsWith("_hoe")) return "锄头";
+        if (id.endsWith("_sword")) return "剑";
+        return "工具";
     }
 
     /**
@@ -1081,6 +1118,14 @@ public final class MinerFSM {
         return bestSlot;
     }
 
+    /** 返回当前最该修的耐久最低工具（用于播报具体工具名） */
+    private ItemStack findDamagedTool() {
+        int slot = findDamagedToolSlot();
+        if (slot == -2) return mc.player.getOffhandItem();
+        if (slot >= 0) return mc.player.getInventory().getItem(slot);
+        return ItemStack.EMPTY;
+    }
+
     /**
      * 统计背包中的食物数量
      */
@@ -1200,7 +1245,7 @@ public final class MinerFSM {
             case UNLOADING -> String.format("§b[状态] 矿石已达 %d/%d 组，执行卸货", oreStacks, targetStacks);
             case SUPPLY -> String.format("§6[状态] 食物不足 (%d/%d个)，前往补给", foodCount, foodThreshold);
             case EATING -> "§d[状态] 补充饥饿值";
-            case REPAIR -> "§c[状态] 工具耐久过低，联动杀戮光环修复中";
+            case REPAIR -> "§c[状态] " + toolName(findDamagedTool()) + "耐久过低，联动杀戮光环修复中";
             case DEATH_HANDLING -> "§4[状态] 检测到死亡，已调用流星自动重生";
             case RESPAWN_WAIT -> "§6[状态] 复活完成，返回挂机点";
         };
