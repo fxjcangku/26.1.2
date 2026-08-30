@@ -187,21 +187,36 @@ async function resolvePremium(uuid, name, xuid) {
   return 1;
 }
 
+// 内存缓存 Mojang 正版查询结果（name -> {id, ts}），同一 isolate 内多个请求复用，
+// 避免离线模式下每次心跳都请求 Mojang 触发限流，把正版账号误判为离线。
+const mojangCache = new Map();
+
 // 通过 Mojang 官方 API 按游戏名查询正版账号，返回真实 Mojang UUID（无连字符）、null（API失败）或 false（404不存在）
 async function lookupMojangProfile(name) {
   if (!name) return false;
   const clean = String(name).trim();
   if (!clean || clean.length > 16) return false;
+  const cacheKey = clean.toLowerCase();
+  const cached = mojangCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts) < 3600000) {
+    return cached.id; // 1 小时内命中缓存直接返回，避免重复请求 Mojang
+  }
   try {
     const resp = await fetch('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(clean), {
       headers: { 'Accept': 'application/json' },
     });
     if (resp.status === 200) {
       const data = await resp.json();
-      return data && data.id ? String(data.id) : false;
+      const id = data && data.id ? String(data.id) : false;
+      mojangCache.set(cacheKey, { id, ts: Date.now() });
+      return id;
     }
-    if (resp.status === 404) return false; // 确认不存在
-    return null; // 其他错误（限流、500等）
+    if (resp.status === 404) {
+      // 404 同样缓存，避免同一离线名反复请求；正版改名场景极罕见，1 小时后自动失效
+      mojangCache.set(cacheKey, { id: false, ts: Date.now() });
+      return false;
+    }
+    return null; // 其他错误（限流、500等）不缓存，下次重试
   } catch (e) {
     return null; // 网络错误/超时
   }
@@ -259,14 +274,47 @@ function computeOnline(heartbeatAt, now) {
   return heartbeatAt && heartbeatAt >= now - HEARTBEAT_TIMEOUT ? 1 : 0;
 }
 
-// 管理员登录：校验用户名与密码，返回由密码派生的 token
+// 生成带过期时间的登录 token：expiry(毫秒) + '.' + sha256(expiry + '::' + 密码 + '::' + 用户名)
+// 相比旧的「纯 sha256(密码+用户名)」永不过期，加入时间戳后 token 到期即失效，泄露后无需改密码也能自动过期。
+async function issueToken(env) {
+  const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const sig = await sha256(String(expiry) + '::' + env.ADMIN_PASSWORD + '::' + env.ADMIN_USERNAME);
+  return String(expiry) + '.' + sig;
+}
+
+// 校验 token：解析过期时间与签名，签名不匹配或已过期均拒绝
+async function verifyToken(token, env) {
+  if (!token) return false;
+  const dot = token.indexOf('.');
+  if (dot < 0) return false;
+  const expiry = Number(token.slice(0, dot));
+  const sig = token.slice(dot + 1);
+  if (!Number.isFinite(expiry) || expiry < Date.now()) return false;
+  const expected = await sha256(String(expiry) + '::' + env.ADMIN_PASSWORD + '::' + env.ADMIN_USERNAME);
+  return sig === expected;
+}
+
+// 登录限流：按客户端真实 IP 记录失败次数，5 次失败后锁定 15 分钟，防暴力破解
+const loginFailures = new Map(); // ip -> { count, lockedUntil }
+
+// 管理员登录：校验用户名与密码，返回带过期时间的 token，并做失败限流
 async function handleLogin(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const rec = loginFailures.get(ip);
+  if (rec && rec.lockedUntil > now) {
+    return jsonResponse({ error: '尝试过于频繁，请 15 分钟后再试' }, 429);
+  }
   try {
     const { username, password } = await request.json();
     if (username === env.ADMIN_USERNAME && password === env.ADMIN_PASSWORD) {
-      const token = await sha256(env.ADMIN_PASSWORD + '::' + env.ADMIN_USERNAME);
-      return jsonResponse({ success: true, token, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+      loginFailures.delete(ip);
+      const token = await issueToken(env);
+      return jsonResponse({ success: true, token, expiresAt: now + 7 * 24 * 60 * 60 * 1000 });
     }
+    const count = (rec ? rec.count : 0) + 1;
+    const lockedUntil = count >= 5 ? now + 15 * 60 * 1000 : 0;
+    loginFailures.set(ip, { count, lockedUntil });
     return jsonResponse({ error: '用户名或密码错误' }, 401);
   } catch (e) {
     return jsonResponse({ error: '登录失败' }, 500);
@@ -281,9 +329,9 @@ async function requireAuth(request, env) {
     return jsonResponse({ error: '未授权' }, 401);
   }
   const token = auth.slice(7);
-  const valid = await sha256(env.ADMIN_PASSWORD + '::' + env.ADMIN_USERNAME);
-  if (token !== valid) {
-    return jsonResponse({ error: '凭证无效' }, 403);
+  const ok = await verifyToken(token, env);
+  if (!ok) {
+    return jsonResponse({ error: '凭证无效或已过期' }, 403);
   }
   return null;
 }
@@ -294,7 +342,7 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, DELETE',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
       });
@@ -476,11 +524,17 @@ export default {
         const effectiveUuid = existing ? existing.uuid : uuid;
 
         // 心跳会持续复核正版身份；Mojang 暂时不可达时保留既有结果，绝不把已确认正版降级。
-        let premium = await resolvePremium(uuid, name, xuid);
-        if (premium === null) {
-          premium = existing ? existing.is_premium : 0;
-        } else if (!premium && existing && existing.is_premium && !sanitizeXuid(xuid)) {
+        // 已确认正版且无新 XUID 时跳过 Mojang 查询，避免高频心跳触发 Mojang 限流。
+        let premium;
+        if (existing && existing.is_premium === 1 && !sanitizeXuid(xuid)) {
           premium = 1;
+        } else {
+          premium = await resolvePremium(uuid, name, xuid);
+          if (premium === null) {
+            premium = existing ? existing.is_premium : 0;
+          } else if (!premium && existing && existing.is_premium && !sanitizeXuid(xuid)) {
+            premium = 1;
+          }
         }
 
         // 累计游戏时长：在线即计时（主菜单/单人/多人均计入），增量 = 本次与上次心跳的真实间隔，上限 60 秒
@@ -676,20 +730,27 @@ export default {
       if (auth) return auth;
 
       try {
-        const users = await env.DB.prepare('SELECT uuid, name, xuid FROM users').all();
-        let updated = 0, skipped = 0, failed = 0;
-        for (const u of users.results) {
-          const premium = await resolvePremium(u.uuid, u.name, u.xuid);
-          if (premium === null) {
-            // API 失败/超时，跳过不更新
-            failed++;
-            continue;
+        // 不清空缓存：优先复用心跳阶段已缓存的 Mojang 结果，避免单次全量验证触发 Mojang 限流
+        // 以及超出 Cloudflare Workers 子请求上限导致整个请求失败（后台一直提示「刷新失败」）。
+        const users = await env.DB.prepare('SELECT uuid, name, xuid FROM users ORDER BY last_seen DESC LIMIT 200').all();
+        let updated = 0, failed = 0, skipped = 0;
+
+        // 并发池：限制同时发起的 Mojang 请求数量，兼顾速度与限流
+        const CONCURRENCY = 5;
+        const queue = users.results.slice();
+        const runWorker = async () => {
+          while (queue.length > 0) {
+            const u = queue.shift();
+            // 已带 XUID 的玩家本就已确认正版，无需再请求 Mojang，直接跳过
+            if (sanitizeXuid(u.xuid)) { skipped++; continue; }
+            const premium = await resolvePremium(u.uuid, u.name, u.xuid);
+            if (premium === null) { failed++; continue; }
+            await env.DB.prepare('UPDATE users SET is_premium = ? WHERE uuid = ?').bind(premium, u.uuid).run();
+            updated++;
           }
-          await env.DB.prepare('UPDATE users SET is_premium = ? WHERE uuid = ?').bind(premium, u.uuid).run();
-          updated++;
-          // 限流保护：每个请求间隔 100ms
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        };
+        await Promise.all(Array.from({ length: CONCURRENCY }, runWorker));
+
         return jsonResponse({ success: true, updated, skipped, failed });
       } catch (error) {
         return jsonResponse({ error: error.message }, 500);
@@ -764,13 +825,14 @@ export default {
       try {
         const now = Date.now();
         const DAY = 24 * 60 * 60 * 1000;
-        const [versionDist, countryDist, kd, total, online, vpn] = await env.DB.batch([
+        const [versionDist, countryDist, kd, total, online, vpn, active24h] = await env.DB.batch([
           env.DB.prepare('SELECT version, COUNT(*) as c FROM users GROUP BY version ORDER BY c DESC'),
           env.DB.prepare('SELECT client_country, COUNT(*) as c FROM users GROUP BY client_country ORDER BY c DESC'),
           env.DB.prepare('SELECT COALESCE(SUM(kill_count),0) as kills, COALESCE(SUM(death_count),0) as deaths, COALESCE(SUM(total_playtime),0) as playtime FROM users'),
           env.DB.prepare('SELECT COUNT(*) as total FROM users'),
           env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE last_heartbeat >= ?').bind(now - HEARTBEAT_TIMEOUT),
           env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE is_vpn_suspected = 1'),
+          env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE last_seen >= ?').bind(now - DAY),
         ]);
 
         // 正版/离线统计：直接以库中 is_premium 为准（register/heartbeat 已用 Mojang 正名纠偏）
@@ -796,6 +858,7 @@ export default {
           total_users: total.results[0].total,
           online_count: online.results[0].c,
           vpn_suspected: vpn.results[0].c,
+          active_24h: active24h.results[0].c,
           daily_active: dailyActive,
           generated_at: now,
         });
@@ -1039,15 +1102,15 @@ export default {
         const player = await env.DB.prepare('SELECT name FROM users WHERE uuid = ?').bind(uuid).first();
         if (!player) return jsonResponse({ error: '玩家不存在' }, 403);
         const now = Date.now();
-        // 同一玩家重复使用同一功能时按时间窗口去重，后台只展示有效活动趋势。
-        const duplicate = await env.DB.prepare(
-          'SELECT id FROM command_activities WHERE uuid = ? AND command_name = ? AND created_at >= ? LIMIT 1'
-        ).bind(uuid, commandName, now - 30_000).first();
-        if (duplicate) return jsonResponse({ success: true, skipped: true });
-        await env.DB.prepare(
-          'INSERT INTO command_activities (uuid, name, command_name, category, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).bind(uuid, player.name, commandName, commandCategory, now).run();
-        return jsonResponse({ success: true });
+        // 同一玩家重复使用同一功能时按 30 秒时间窗口去重，后台只展示有效活动趋势。
+        // 使用原子 INSERT ... WHERE NOT EXISTS 消除并发竞态：多个几乎同时到达的相同指令只保留第一条，
+        // 避免「先查后插」两步操作在并发下同时判空导致重复叠加。
+        const result = await env.DB.prepare(
+          `INSERT INTO command_activities (uuid, name, command_name, category, created_at)
+           SELECT ?, ?, ?, ?, ?
+           WHERE NOT EXISTS (SELECT 1 FROM command_activities WHERE uuid = ? AND command_name = ? AND created_at >= ?)`
+        ).bind(uuid, player.name, commandName, commandCategory, now, uuid, commandName, now - 30_000).run();
+        return jsonResponse({ success: true, skipped: (result.meta.changes || 0) === 0 });
       } catch (error) {
         return jsonResponse({ error: error.message }, 500);
       }
@@ -1067,25 +1130,20 @@ export default {
       }
     }
 
-    // 管理员：清理过期数据（聊天记录和指令记录）
+    // 管理员：立即清空聊天记录与指令记录（点「立即清理」全量清空，不再按保留天数只删过期数据）
     if (path === '/api/admin/clean-old-data' && request.method === 'POST') {
       const auth = await requireAuth(request, env);
       if (auth) return auth;
 
       try {
-        const cfg = await env.DB.prepare('SELECT key, value FROM configs WHERE key IN (?, ?)').bind('chat_retention_days', 'command_retention_days').all();
-        const chatDays = parseInt(cfg.results.find(r => r.key === 'chat_retention_days')?.value || '7');
-        const cmdDays = parseInt(cfg.results.find(r => r.key === 'command_retention_days')?.value || '30');
-        
-        const now = Date.now();
-        const chatCutoff = now - (chatDays * 24 * 60 * 60 * 1000);
-        const cmdCutoff = now - (cmdDays * 24 * 60 * 60 * 1000);
-        
-        const msgResult = await env.DB.prepare('DELETE FROM messages WHERE created_at < ?').bind(chatCutoff).run();
-        const cmdResult = await env.DB.prepare('DELETE FROM command_activities WHERE created_at < ?').bind(cmdCutoff).run();
-        
-        return jsonResponse({ 
-          success: true, 
+        await ensureCommandActivityTable(env.DB);
+        const msgResult = await env.DB.prepare('DELETE FROM messages').run();
+        // 广播已读记录随消息一并清除，避免残留孤儿数据
+        await env.DB.prepare('DELETE FROM message_reads').run();
+        const cmdResult = await env.DB.prepare('DELETE FROM command_activities').run();
+
+        return jsonResponse({
+          success: true,
           deleted_messages: msgResult.meta.changes || 0,
           deleted_commands: cmdResult.meta.changes || 0
         });
