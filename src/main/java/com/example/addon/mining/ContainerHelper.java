@@ -9,7 +9,10 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -79,33 +82,103 @@ public final class ContainerHelper {
     /**
      * 静默垃圾丢弃器（每 tick 调用）
      * 
+     * 反逻辑：默认全丢，只保留白名单内的物品
      * 分频发包规避反作弊：每5 tick丢一个物品
      * 
-     * @param trashList 垃圾方块名单
-     * @param placeBlocks Baritone搭路方块白名单（排除在丢弃外）
+     * @param keepWhitelist 保留白名单（此名单内的物品/方块不会被丢弃）
+     * @param placeBlocks Baritone搭路方块白名单（只保留各一组，多余丢弃）
      */
-    public void tickTrashDisposal(List<Block> trashList, List<Block> placeBlocks) {
-        if (mc.player == null || trashList.isEmpty()) return;
+    public void tickTrashDisposal(List<Item> keepWhitelist, List<Block> placeBlocks) {
+        if (mc.player == null) return;
 
         trashDisposalCooldown--;
         if (trashDisposalCooldown > 0) return;
 
-        // 扫描背包找垃圾
         Inventory inventory = mc.player.getInventory();
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
+
+        // 副手优先：有经验修补/工具/食物/目标矿物/保留白名单/搭路方块才保留，其余丢弃
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (!offhand.isEmpty()
+            && !shouldKeep(offhand, keepWhitelist)
+            && !isPlaceBlock(offhand, placeBlocks)) {
+            dropOffhand();
+            trashDisposalCooldown = TRASH_DISPOSAL_INTERVAL;
+            return;
+        }
+
+        // 主背包 0-35
+        for (int i = 0; i < 36; i++) {
             ItemStack stack = inventory.getItem(i);
             if (stack.isEmpty()) continue;
 
-            Block block = Block.byItem(stack.getItem());
-            
-            // 排除搭路方块：如果在搭路白名单中，跳过丢弃
-            if (placeBlocks.contains(block)) continue;
-            
-            if (trashList.contains(block)) {
-                dropStack(i);
-                trashDisposalCooldown = TRASH_DISPOSAL_INTERVAL;
-                return;
+            // 搭路方块：只留一组，超出部分整组丢弃
+            if (isPlaceBlock(stack, placeBlocks)) {
+                if (countItem(inventory, stack.getItem()) > 64) {
+                    dropStack(i);
+                    trashDisposalCooldown = TRASH_DISPOSAL_INTERVAL;
+                    return;
+                }
+                continue;
             }
+
+            // 非搭路方块：不在保留白名单内的全部丢弃
+            if (shouldKeep(stack, keepWhitelist)) continue;
+
+            dropStack(i);
+            trashDisposalCooldown = TRASH_DISPOSAL_INTERVAL;
+            return;
+        }
+    }
+
+    /** 是否为搭路方块白名单内的方块 */
+    private boolean isPlaceBlock(ItemStack stack, List<Block> placeBlocks) {
+        if (stack.isEmpty() || placeBlocks.isEmpty()) return false;
+        return placeBlocks.contains(Block.byItem(stack.getItem()));
+    }
+
+    /** 背包中指定物品的总数量（主背包 0-35） */
+    private int countItem(Inventory inventory, Item item) {
+        int count = 0;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty() && stack.getItem() == item) count += stack.getCount();
+        }
+        return count;
+    }
+
+    /**
+     * 是否保留该物品。
+     * 默认只留：任意品质工具（镐/铲/斧/剑/锄）、食物白名单、目标矿物、手动保留名单、经验修补物品。
+     * 其余全部视为垃圾丢弃。
+     */
+    private boolean shouldKeep(ItemStack stack, List<Item> keepWhitelist) {
+        if (stack.isEmpty()) return true;
+        if (isTool(stack)) return true;                                    // 工具（任何品质）
+        if (module.getFoodWhitelist().contains(stack.getItem())) return true; // 食物白名单
+        if (isAllowedOre(stack)) return true;                              // 目标矿物
+        if (hasMending(stack)) return true;                                // 经验修补附魔（保护好装备）
+        return keepWhitelist.contains(stack.getItem());                    // 手动保留名单
+    }
+
+    /** 是否为可保留的工具（镐/铲/斧/剑/锄，任意材质） */
+    private boolean isTool(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        return id.endsWith("_pickaxe") || id.endsWith("_shovel")
+            || id.endsWith("_axe") || id.endsWith("_hoe") || id.endsWith("_sword");
+    }
+
+    /** 物品是否带经验修补附魔（26.x 附魔是动态注册表，需从世界注册表解析） */
+    private boolean hasMending(ItemStack stack) {
+        if (stack.isEmpty() || mc.level == null) return false;
+        ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
+        if (enchantments == null || enchantments.isEmpty()) return false;
+        try {
+            var lookup = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+            var holder = lookup.get(Enchantments.MENDING).orElse(null);
+            return holder != null && enchantments.getLevel(holder) > 0;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
@@ -123,6 +196,17 @@ public final class ContainerHelper {
             int menuSlot = slot < 9 ? 36 + slot : slot;
             // button=1 + THROW = 丢弃整组（等价 Ctrl+Q），与 Meteor InvUtils.drop() 同语义
             mc.gameMode.handleContainerInput(0, menuSlot, 1, ContainerInput.THROW, mc.player);
+        } catch (Exception e) {
+            // 静默失败
+        }
+    }
+
+    /** 丢弃副手物品（InventoryMenu 中副手槽位固定为 45） */
+    private void dropOffhand() {
+        if (mc.player == null || mc.gameMode == null) return;
+        try {
+            if (mc.player.getOffhandItem().isEmpty()) return;
+            mc.gameMode.handleContainerInput(0, 45, 1, ContainerInput.THROW, mc.player);
         } catch (Exception e) {
             // 静默失败
         }

@@ -101,8 +101,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Integer> durabilityThreshold;
     private final Setting<Integer> teleportDelay;
 
-    // ─── 垃圾丢弃 ───
-    private final Setting<List<Block>> trashList;
+    // ─── 保留白名单（不丢弃） ───
+    private final Setting<List<Item>> keepWhitelist;
     
     // ─── 食物白名单 ───
     private final Setting<List<Item>> foodWhitelist;
@@ -269,28 +269,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
         //  物品管理 - 拿什么扔什么
         // ═══════════════════════════════════════════════════════════
         
-        trashList = sgItems.add(new BlockListSetting.Builder()
-            .name("垃圾丢弃名单")
-            .description("挖矿时自动丢弃这些方块（点击选择添加，推荐：圆石、石头、泥土、闪长岩、花岗岩、安山岩等）")
-            .defaultValue(new ArrayList<>(List.of(
-                Blocks.COBBLESTONE,
-                Blocks.COBBLED_DEEPSLATE,
-                Blocks.STONE,
-                Blocks.DEEPSLATE,
-                Blocks.DIRT,
-                Blocks.GRAVEL,
-                Blocks.DIORITE,
-                Blocks.GRANITE,
-                Blocks.ANDESITE,
-                Blocks.TUFF,
-                Blocks.DRIPSTONE_BLOCK,
-                Blocks.POINTED_DRIPSTONE,
-                Blocks.CALCITE,
-                Blocks.SMOOTH_BASALT,
-                Blocks.NETHERRACK,
-                Blocks.BLACKSTONE,
-                Blocks.BASALT
-            )))
+        keepWhitelist = sgItems.add(new ItemListSetting.Builder()
+            .name("保留白名单")
+            .description("默认保留任意品质工具、白名单食物、目标矿物；此名单内的额外物品/方块也不会被丢弃")
+            .defaultValue(new ArrayList<>())
             .build());
 
         foodWhitelist = sgItems.add(new ItemListSetting.Builder()
@@ -306,9 +288,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         placeBlocks = sgItems.add(new BlockListSetting.Builder()
             .name("搭路方块白名单")
-            .description("Baritone搭桥/填坑时使用这些方块（点击选择添加，默认圆石即可）")
+            .description("Baritone搭桥/填坑时使用这些方块，且只保留各一组（多余自动丢弃）")
             .defaultValue(new ArrayList<>(List.of(
-                Blocks.COBBLESTONE
+                Blocks.COBBLESTONE,
+                Blocks.NETHERRACK
             )))
             .onChanged(blocks -> baritone.updatePlaceBlocks(blocks))
             .build());
@@ -722,6 +705,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
         notify("§f触发阈值：满载 " + highlightText(unloadThreshold.get() + " 组")
             + "§f · 饥饿 " + highlightText(String.valueOf(hungerThreshold.get()))
             + "§f · 耐久 " + highlightText(String.valueOf(durabilityThreshold.get())));
+
+        // 丢弃规则提醒（默认全丢，防止玩家误丢重要物品）
+        notify("§c丢弃规则：除保留项外全部自动丢弃！想留下的物品请先加进「保留白名单」");
     }
 
     /**
@@ -868,8 +854,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private void onTick(TickEvent.Post event) {
         if (mc.player == null || mc.level == null) return;
 
-        // 垃圾丢弃
-        container.tickTrashDisposal(trashList.get(), placeBlocks.get());
+        // 垃圾丢弃（保留白名单反逻辑：默认全丢）
+        container.tickTrashDisposal(keepWhitelist.get(), placeBlocks.get());
 
         // 实测扫描队列消化（分帧扫描新区块，避免主线程卡顿）
         orePredictor.processScanQueue();
@@ -1283,6 +1269,13 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "  §a[3] §f卸货循环 §8→ §7传送到矿物箱，卸货，返回野外",
                 "  §a[4] §f补给循环 §8→ §7传送到箱，拿食物，吃饱，返回"
             ),
+            new HelpScreen.HelpSection("物品管理 §7(默认全丢)",
+                "  §c▸ §f丢弃逻辑：除保留项外，背包其余物品全部自动丢弃",
+                "  §a▸ §f默认保留：任意品质工具 §7(镐/铲/斧/剑/锄)§f、白名单食物、目标矿物",
+                "  §a▸ §f搭路方块 §7(圆石/地狱岩) §f只保留各一组，多余自动丢弃",
+                "  §e▸ §f保留白名单：不想被扔的物品/方块加进去就不会丢",
+                "  §6⚠ §f启动前记得把想留的东西加进「保留白名单」"
+            ),
             new HelpScreen.HelpSection("参数建议",
                 "  §6▸ §f满载组数 §8= §e36 §7(标准背包容量)",
                 "  §6▸ §f食物阈值 §8= §e14 §7(7格肉约14饱食度)",
@@ -1302,7 +1295,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 "  §c⚠ §f模块运行中无法修改点位，必须先关闭模块",
                 "  §c⚠ §f已绑定点位不允许覆盖，必须先删除再重新设置",
                 "  §c⚠ §f传送指令需服务器支持，否则无法自动返回",
-                "  §c⚠ §f挂机修复点会记录视角，用于精准对准修补工作台"
+                "  §c⚠ §f挂机修复点会记录视角，用于精准对准修补工作台",
+                "  §c⚠ §f默认全丢垃圾！想留下的物品务必先加进「保留白名单」"
             )
         );
     }
