@@ -10,7 +10,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * 容器 ESP 渲染器
  * 
- * 在绑定的绿宝石箱和卸货箱上方显示文字标签
+ * 在绑定的绿宝石箱和成品交易箱上方显示文字标签
  */
 public class ContainerESP {
 
@@ -34,9 +34,9 @@ public class ContainerESP {
             renderLabel(event, binding.getEmeraldBox(), "§a绿宝石箱");
         }
         
-        // 渲染卸货箱
+        // 渲染成品交易箱
         if (binding.getUnloadBox() != null) {
-            renderLabel(event, binding.getUnloadBox(), "§b交易成品箱");
+            renderLabel(event, binding.getUnloadBox(), "§b成品交易箱");
         }
     }
     

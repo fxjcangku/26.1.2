@@ -4,9 +4,14 @@ import baritone.api.BaritoneAPI;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.farm.FarmPacketOps;
+import com.example.addon.ui.HelpScreen;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -16,6 +21,7 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -424,65 +430,173 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     @Override
-    public meteordevelopment.meteorclient.gui.widgets.WWidget getWidget(meteordevelopment.meteorclient.gui.GuiTheme theme) {
-        return buildInfoWidget(theme,
-            new String[]{ "§l扩展附魔 · 使用说明" },
-            new String[]{
-                "§e§l▌ 首次配置",
-                "§f  1. 升级到本版本后，先在要使用的服务器和维度执行 §e.fumo clear",
-                "§f  2. 准星对准对应方块，依次执行：",
-                "§f     §e.fumo set 书§f / §e青晶石§f / §e成品箱§f / §e附魔台§f / §e砂轮",
-                "§f  3. 挂机循环模式站在刷怪点并调整好杀怪视角，再执行 §e.fumo set 挂机位§f（纯附魔模式不需要）",
-                "§f  4. 在扩展附魔分类或原版附魔分类中选择需要收集的目标词条",
-                "§f  5. 将带“横扫之刃”的剑放在背包或快捷栏任意位置",
-                "§f  6. 书箱放空白书，青金石箱放青金石，成品箱预留空间"
-            },
-            new String[]{
-                "§a§l▌ 运行流程",
-                "§f  · 物资不足时自动前往对应补给箱取书或青金石",
-                "§f  · 经验不足时，挂机循环返回挂机位；纯附魔模式低于30级后停止",
-                "§f  · 横扫之刃剑在主背包时会自动换入当前快捷栏并选中",
-                "§f  · 达到目标等级后自动前往附魔台执行 30 级附魔",
-                "§f  · 未命中目标词条时前往砂轮洗练，再继续下一次附魔",
-                "§f  · 命中目标词条时播放提示音并将附魔书存入成品箱"
-            },
-            new String[]{
-                "§b§l▌ 参数说明",
-                "§f  · §e单轮抽取次数§f — 普通模式每轮计划执行的附魔次数",
-                "§f  · §eGUI操作延迟§f — 服务器卡顿或吞点击时适当调大",
-                "§f  · §e书本/青金石补给组数§f — 每次补给希望保有的组数",
-                "§f  · §e自定义附魔目标§f — 每行填写一个附魔名称，可带等级；例如“打雷5”，无需输入空格",
-                "§f  · §e运行模式§f — 纯附魔模式只消耗当前经验，低于 30 级提示停止；挂机循环会前往挂机点补经验",
-                "§f  · §eESP标点§f — 开关六个已设置点位的固定 0.6 字号名称",
-                "§f  · §e返回挂机视角§f — 回到挂机位后恢复设置点位时的视角",
-                "§f  · §e成功提示音§f — 命中目标词条时播放所选音效"
-            },
-            new String[]{
-                "§6§l▌ 原版附魔分类",
-                "§f  · 仅收录普通书通过附魔台随机附魔可以获得的词条",
-                "§f  · 每种词条只提供附魔台实际能刷出的最高等级",
-                "§f  · 锋利、效率、力量等书本附魔最高为 IV，不显示无法直接刷出的 V",
-                "§f  · 不包含经验修补、冰霜行者、灵魂疾行、迅捷潜行和诅咒",
-                "§f  · 原版与服务器扩展词条可以同时选择并自动收集"
-            },
-            new String[]{
-                "§d§l▌ 换服、换维度与指令",
-                "§f  · 一套点位只能用于设置它时所在的服务器和维度",
-                "§f  · 去其他服务器、下界或末地时，旧点位不会运行，也不会乱跑",
-                "§f  · 要在新地点使用：先执行 §e.fumo clear§f，再重新设置六个点位",
-                "§f  · 回到原来的服务器和维度时，旧点位仍可直接使用，不必重设",
-                "§f  · §e.fumo status§f — 查看坐标和当前地点是否匹配",
-                "§f  · §e.fumo remove <节点>§f — 仅删除一个点位，方便在同一地点修改",
-                "§f  · 重设挂机位会同时更新站立坐标和挂机视角"
-            },
-            new String[]{
-                "§c§l▌ 注意",
-                "§f  · 单人世界与服务器均可使用",
-                "§f  · 至少选择一个目标词条，否则模块不会启动",
-                "§f  · 找不到横扫之刃剑时仍会启用 KillAura，但无法保证刷怪效率",
-                "§f  · 成品箱满、书箱或青金石箱空时会提示并自动停机",
-                "§f  · 自动换入横扫之刃剑会占用当前选中的快捷栏格"
+    public WWidget getWidget(GuiTheme theme) {
+        return buildInfoWidget(theme, table -> {
+            // 使用说明按钮（置顶显眼位置）
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+
+            // 点位卡片区（两行三列，共六个点位）
+            WTable row1 = theme.table();
+            buildPointCard(theme, row1, "书", "书");
+            buildPointCard(theme, row1, "青晶石", "青晶石");
+            buildPointCard(theme, row1, "成品箱", "成品箱");
+            table.add(row1).expandX();
+            table.row();
+
+            WTable row2 = theme.table();
+            buildPointCard(theme, row2, "附魔台", "附魔台");
+            buildPointCard(theme, row2, "砂轮", "砂轮");
+            buildPointCard(theme, row2, "挂机位", "挂机位");
+            table.add(row2).expandX();
+            table.row();
+        });
+    }
+
+    /**
+     * 构建点位设置卡片（与自动挖矿的卡片布局一致）
+     * 卡片包含标题、坐标显示、设置按钮、删除按钮。
+     * 设置/删除直接复用 FumoCommand 静态方法，与 .fumo set/remove 指令同一套校验。
+     *
+     * @param theme       Meteor GUI 主题
+     * @param parentTable 父表格（横向排列）
+     * @param title       卡片标题（如"附魔台"）
+     * @param node        节点名（与 FumoCommand 一致）
+     */
+    private void buildPointCard(GuiTheme theme, WTable parentTable, String title, String node) {
+        WTable card = theme.table();
+
+        BlockPos pos = getPointPos(node);
+        boolean isBound = pos != null;
+
+        // 点位标题配色（与 ESP 标点颜色完全一致）
+        String titleColor = switch (node) {
+            case "书" -> "§a";       // 书本箱：绿色（ESP §a）
+            case "青晶石" -> "§9";   // 青金石箱：蓝色（ESP §9）
+            case "成品箱" -> "§6";   // 成品箱：金色（ESP §6）
+            case "附魔台" -> "§d";   // 附魔台：粉色（ESP §d）
+            case "砂轮" -> "§7";     // 砂轮：灰色（ESP §7）
+            case "挂机位" -> "§c";   // 挂机位：红色（ESP §c）
+            default -> "§f";
+        };
+
+        card.add(theme.label(titleColor + title)).expandX().center();
+        card.row();
+
+        // 状态显示（固定两行，保持高度一致）
+        if (isBound) {
+            String coords = String.format("§7X§f%d §7Y§f%d §7Z§f%d",
+                pos.getX(), pos.getY(), pos.getZ());
+            card.add(theme.label(coords)).expandX().center();
+            card.row();
+            card.add(theme.label("§8-")).expandX().center();
+            card.row();
+        } else {
+            card.add(theme.label("§8暂未绑定")).expandX().center();
+            card.row();
+            card.add(theme.label("§8-")).expandX().center();
+            card.row();
+        }
+
+        // 设置按钮（已绑定=亮绿色，未绑定=暗灰色）
+        String setBtnColor = isBound ? "§a" : "§8";
+        WButton setBtn = theme.button(setBtnColor + "设置");
+        setBtn.action = () -> {
+            // 设置成功才关闭 GUI（失败保留界面让玩家重新对准）
+            if (FumoCommand.setPoint(node)) {
+                mc.setScreen(null);
             }
+        };
+        card.add(setBtn).expandX().center();
+        card.row();
+
+        // 删除按钮（红色）
+        WButton delBtn = theme.button("§c删除");
+        delBtn.action = () -> {
+            if (isBound) {
+                FumoCommand.removePoint(node);
+                mc.setScreen(null);
+            }
+        };
+        card.add(delBtn).expandX().center();
+
+        parentTable.add(card).expandX();
+    }
+
+    /** 按节点名取对应点位坐标，未绑定返回 null */
+    private BlockPos getPointPos(String node) {
+        return switch (node) {
+            case "书" -> posBook;
+            case "青晶石" -> posLapis;
+            case "成品箱" -> posOutput;
+            case "附魔台" -> posEnchant;
+            case "砂轮" -> posGrindstone;
+            case "挂机位" -> posHangout;
+            default -> null;
+        };
+    }
+
+    /** 构建使用说明内容（点击「查看使用说明」按钮打开） */
+    private String[] buildHelpContent() {
+        return HelpScreen.buildHelpContent(
+            new HelpScreen.HelpSection("首次配置",
+                "  §8├─ §f先在要使用的服务器和维度执行 §e.fumo clear §7(清空旧点位)",
+                "  §8├─ §f准星对准对应方块，点击下方卡片「设置」按钮依次绑定：",
+                "  §8│    §7书 / 青晶石 / 成品箱 / 附魔台 / 砂轮",
+                "  §8├─ §f挂机循环模式站在刷怪点调好杀怪视角，再绑定「挂机位」 §7(纯附魔模式不需要)",
+                "  §8├─ §f在扩展附魔分类或原版附魔分类勾选要收集的目标词条",
+                "  §8├─ §f把带「横扫之刃」的剑放背包或快捷栏任意位置",
+                "  §8└─ §f书箱放空白书、青金石箱放青金石、成品箱预留空间"
+            ),
+            new HelpScreen.HelpSection("点位设置 §7(两种方式)",
+                "  §b▸ §e方式1 §8- §f配置页面卡片按钮",
+                "    §7准星对准方块 §8→ §f点击对应卡片「设置」",
+                "    §7书/青晶石/成品箱：必须是箱子/桶/潜影盒",
+                "    §7附魔台/砂轮：必须对准对应方块",
+                "    §7挂机位：直接站在目标位置即可绑定 §7(含视角)",
+                "",
+                "  §b▸ §e方式2 §8- §f指令系统",
+                "    §8> §3.fumo set <节点> §8— §7节点：书/青晶石/成品箱/附魔台/砂轮/挂机位",
+                "    §8> §3.fumo remove <节点> §8— §7删除单个点位",
+                "    §8> §3.fumo status §8— §7查看坐标与当前地点匹配",
+                "    §8> §3.fumo clear §8— §7清空全部点位"
+            ),
+            new HelpScreen.HelpSection("运行流程",
+                "  §a▸ §f物资不足时自动前往对应补给箱取书或青金石",
+                "  §a▸ §f经验不足时，挂机循环返回挂机位；纯附魔模式低于 30 级停止",
+                "  §a▸ §f横扫之刃剑在主背包时自动换入当前快捷栏并选中",
+                "  §a▸ §f达到目标等级后自动前往附魔台执行 30 级附魔",
+                "  §a▸ §f未命中目标词条时前往砂轮洗练，再继续下一次附魔",
+                "  §a▸ §f命中目标词条时播放提示音并将附魔书存入成品箱"
+            ),
+            new HelpScreen.HelpSection("参数说明",
+                "  §6▸ §e单轮抽取次数 §f— 普通模式每轮计划执行的附魔次数",
+                "  §6▸ §eGUI操作延迟 §f— 服务器卡顿或吞点击时适当调大",
+                "  §6▸ §e书本/青金石补给组数 §f— 每次补给希望保有的组数",
+                "  §6▸ §e自定义附魔目标 §f— 每行一个附魔名，可带等级，如「打雷5」",
+                "  §6▸ §e运行模式 §f— 纯附魔只消耗当前经验；挂机循环会补经验",
+                "  §6▸ §e成功提示音 §f— 命中目标词条时播放所选音效"
+            ),
+            new HelpScreen.HelpSection("原版附魔分类",
+                "  §7· 仅收录普通书通过附魔台随机附魔可获得的词条",
+                "  §7· 每种词条只提供附魔台实际能刷出的最高等级",
+                "  §7· 锋利/效率/力量等书本附魔最高 IV，不显示无法直接刷出的 V",
+                "  §7· 不含经验修补、冰霜行者、灵魂疾行、迅捷潜行和诅咒"
+            ),
+            new HelpScreen.HelpSection("换服、换维度与指令",
+                "  §d▸ §f一套点位只能用于设置它时所在的服务器和维度",
+                "  §d▸ §f去其他服务器/维度时旧点位不会运行，也不会乱跑",
+                "  §d▸ §f新地点使用：先 §e.fumo clear§f，再重设六个点位",
+                "  §d▸ §f回原服务器/维度时旧点位可直接使用，不必重设"
+            ),
+            new HelpScreen.HelpSection("注意",
+                "  §c⚠ §f单人世界与服务器均可使用",
+                "  §c⚠ §f至少勾选一个目标词条，否则模块不启动",
+                "  §c⚠ §f成品箱满、书箱/青金石箱空时会提示并自动停机",
+                "  §c⚠ §f模块运行中无法修改点位，先关闭模块再设置"
+            )
         );
     }
 
@@ -584,6 +698,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
      */
     private boolean shouldSuppressScreen(Screen screen) {
         if (!isActive() || !(screen instanceof AbstractContainerScreen<?>)) return false;
+        // 玩家手动打开背包永远放行，只静默模块自己操作的容器
+        if (screen instanceof InventoryScreen) return false;
         return state == State.ENCHANTING || state == State.GRINDING
             || state == State.STORING || state == State.RESTOCKING;
     }
@@ -1141,7 +1257,9 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     public String currentServer() {
-        if (mc.getCurrentServer() == null || mc.getCurrentServer().ip == null) return null;
+        // 单机世界没有服务器地址，返回固定标识 "singleplayer"（与自动挖矿 WKCommand 一致），
+        // 保证单人游戏也能正常标点、保存并校验点位，不再报「无法识别当前服务器或维度」。
+        if (mc.getCurrentServer() == null || mc.getCurrentServer().ip == null) return "singleplayer";
         return mc.getCurrentServer().ip.trim().toLowerCase(Locale.ROOT);
     }
 

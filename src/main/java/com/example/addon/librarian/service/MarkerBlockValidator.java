@@ -12,6 +12,7 @@ public final class MarkerBlockValidator {
         this.blockAccess = Objects.requireNonNull(blockAccess, "blockAccess");
     }
 
+    /** 校验固定交易位是否有效（岩浆块标记 + 讲台朝向） */
     public MarkerBlockValidation validate(VillagerStation station) {
         Objects.requireNonNull(station, "station");
         if (!blockAccess.isMagmaBlock(station.markerBlockPosition())) {

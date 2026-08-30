@@ -26,7 +26,7 @@ import java.util.Map;
  * 
  * 功能：
  * · .cunmin set 绿宝石箱   准星指向箱子绑定
- * · .cunmin set 卸货箱     准星指向箱子绑定
+ * · .cunmin set 成品交易箱     准星指向箱子绑定
  * · .cunmin remove <目标>  删除绑定
  * · .cunmin clear          清空全部
  * · .cunmin status         查看状态
@@ -44,7 +44,7 @@ public class CunminCommand extends Command {
     }
 
     public CunminCommand() {
-        super("cunmin", "村民交易点位绑定（绿宝石箱、卸货箱）");
+        super("cunmin", "村民交易点位绑定（绿宝石箱、成品交易箱）");
     }
 
     @Override
@@ -64,7 +64,7 @@ public class CunminCommand extends Command {
         LiteralArgumentBuilder<ClientSuggestionProvider> set = literal("set");
 
         set.then(literal("绿宝石箱").executes(ctx -> bindEmeraldChest()));
-        set.then(literal("卸货箱").executes(ctx -> bindUnloadChest()));
+        set.then(literal("成品交易箱").executes(ctx -> bindUnloadChest()));
 
         builder.then(set);
 
@@ -72,7 +72,7 @@ public class CunminCommand extends Command {
         LiteralArgumentBuilder<ClientSuggestionProvider> remove = literal("remove");
 
         remove.then(literal("绿宝石箱").executes(ctx -> removeBindingCommand("绿宝石箱")));
-        remove.then(literal("卸货箱").executes(ctx -> removeBindingCommand("卸货箱")));
+        remove.then(literal("成品交易箱").executes(ctx -> removeBindingCommand("成品交易箱")));
 
         builder.then(remove);
 
@@ -91,10 +91,10 @@ public class CunminCommand extends Command {
     }
 
     /**
-     * 绑定卸货箱
+     * 绑定成品交易箱
      */
     private int bindUnloadChest() {
-        return bindContainer("卸货箱", "unload_chest");
+        return bindContainer("成品交易箱", "unload_chest");
     }
 
     /**
@@ -181,7 +181,7 @@ public class CunminCommand extends Command {
         info("");
 
         showBindingStatus(data, "绿宝石箱", "emerald_chest", "§a");
-        showBindingStatus(data, "卸货箱", "unload_chest", "§6");
+        showBindingStatus(data, "成品交易箱", "unload_chest", "§6");
 
         if (!data.hasAnyBinding()) {
             info("§7暂无绑定点位");
@@ -378,7 +378,7 @@ public class CunminCommand extends Command {
         }
 
         /**
-         * 获取卸货箱坐标
+         * 获取成品交易箱坐标
          */
         public BlockPos getUnloadBox() {
             return data.positions.get("unload_chest");
@@ -392,7 +392,7 @@ public class CunminCommand extends Command {
         }
 
         /**
-         * 获取卸货箱维度
+         * 获取成品交易箱维度
          */
         public String getUnloadBoxDimension() {
             return data.dimensions.get("unload_chest");
@@ -503,7 +503,7 @@ public class CunminCommand extends Command {
         }
         
         // 调用绑定逻辑
-        String displayName = key.equals("emerald_chest") ? "绿宝石箱" : "卸货箱";
+        String displayName = key.equals("emerald_chest") ? "绿宝石箱" : "成品交易箱";
         cmd.bindContainer(displayName, key);
         return true;
     }
@@ -520,7 +520,7 @@ public class CunminCommand extends Command {
             data.removeBinding(key);
             saveData();
             
-            String name = key.equals("emerald_chest") ? "绿宝石箱" : "卸货箱";
+            String name = key.equals("emerald_chest") ? "绿宝石箱" : "成品交易箱";
             cmd.info("§c§l✗ 已删除 " + name + " 绑定");
         } else {
             cmd.error("§c该坐标本来就没有绑定");

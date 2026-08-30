@@ -375,8 +375,8 @@ public final class UserStatsModule extends YiyiaddonModule {
                 long hoursAgo = (System.currentTimeMillis() / 1000 - user.lastSeen) / 3600;
                 String timeDesc = user.isOnline ? "§a在线" : (hoursAgo == 0 ? "§e刚刚离线" : "§7" + hoursAgo + "h 前");
                 
-                // 格式：序号. 玩家名 - 时间描述
-                String server = user.serverName == null || user.serverName.isBlank() ? " §8| §7未连接服务器" : " §8| §7" + user.serverName;
+                // 格式：序号. 玩家名 - 时间描述 - 智能识别服务器状态
+                String server = formatServerStatus(user.serverName);
                 String line = String.format("§f  %2d. §e%s §8· %s%s",
                     i + 1, user.name, timeDesc, server);
                 usersSection.add(line);
@@ -412,6 +412,43 @@ public final class UserStatsModule extends YiyiaddonModule {
     // ══════════════════════════════════════════════════════════════
     //  格式化辅助
     // ══════════════════════════════════════════════════════════════
+    
+    /**
+     * 智能识别服务器状态（防止后端上报的乱码/数字/问号污染界面）
+     * 
+     * 识别规则：
+     * 1. null/空 → 未连接服务器
+     * 2. 纯数字 / 特殊符号(<3字符) / ????等 → 单人游戏
+     * 3. 包含域名特征(.net/.com/.cn等) → 显示真实服务器域名
+     * 4. 其他合法服务器名(3+字符，字母数字) → 显示服务器名
+     * 5. 兜底 → 单人游戏（避免显示乱码）
+     */
+    private static String formatServerStatus(String serverName) {
+        // 规则 1：未填写
+        if (serverName == null || serverName.isBlank()) {
+            return " §8| §7未连接服务器";
+        }
+        
+        String clean = serverName.trim();
+        
+        // 规则 2：纯数字（如 "1"）或纯问号（如 "????"）或长度太短
+        if (clean.matches("^\\d+$") || clean.matches("^[?!.]+$") || clean.length() < 3) {
+            return " §8| §7单人游戏";
+        }
+        
+        // 规则 3：包含域名特征（.net/.com/.cn/.org/.gg/.co/.xyz/.cc/.io 等常见后缀）
+        if (clean.matches(".*\\.(net|com|cn|org|gg|co|xyz|cc|io|top|fun|club|live|pro|us|uk|jp|kr|tw|hk|asia|world|online|games|host|server|play|mine|craft)\\b.*")) {
+            return " §8| §b" + clean;  // 蓝色高亮真实服务器
+        }
+        
+        // 规则 4：合法服务器名（3+ 字符，主要由字母数字下划线组成，允许少量特殊字符）
+        if (clean.matches("^[a-zA-Z0-9_\\-. ]{3,}$")) {
+            return " §8| §7" + clean;
+        }
+        
+        // 规则 5：兜底（乱码/特殊字符过多）
+        return " §8| §7单人游戏";
+    }
     
     private String formatUpdateTime() {
         if (lastUpdateTime == 0) {

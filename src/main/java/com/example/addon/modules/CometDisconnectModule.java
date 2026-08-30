@@ -23,7 +23,7 @@ public final class CometDisconnectModule extends YiyiaddonModule {
 
     public CometDisconnectModule() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动断线",
-            "应急断开服务器连接躲避管理员视察。开启立即断线，亦可被自动挖矿防管理员自动调用。点击按钮查看说明。");
+            "应急断开服务器连接躲避管理员视察。开启立即断线，亦可被管理员检测模块自动调用。点击按钮查看说明。");
     }
 
     /**
@@ -45,7 +45,7 @@ public final class CometDisconnectModule extends YiyiaddonModule {
     }
 
     /**
-     * 静态断线入口：自动挖矿等模块检测到危险玩家时直接调用。
+     * 静态断线入口：管理员检测等模块检测到危险玩家时直接调用。
      * 断线前会强制关闭「自动重连」，否则刚断就重连回去等于白断。
      *
      * @param reason 断开界面显示的原因
@@ -74,7 +74,7 @@ public final class CometDisconnectModule extends YiyiaddonModule {
             "§e§l▌ 功能",
             "§f  · 应急断开服务器连接，用于躲避管理员视察 / 封禁。",
             "§f  · 开启本模块即立即断线一次，断线后自动关闭。",
-            "§f  · 自动挖矿的「防管理员」开关检测到危险玩家时会自动调用本模块。"
+            "§f  · 管理员检测模块发现危险玩家接近时会自动调用本模块。"
         },
         new String[]{
             "§c§l▌ 注意",

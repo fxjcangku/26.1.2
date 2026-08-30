@@ -28,7 +28,6 @@ public final class BaritoneExecutor {
     private final AutoMinerModule module;
     private final Minecraft mc;
 
-    private boolean disabled = false;
     private BlockPos lastPos = BlockPos.ZERO;
     private int stuckTicks = 0;
     private int lastCheckTick = 0;
@@ -46,10 +45,6 @@ public final class BaritoneExecutor {
      * 种子模式不经过这里：由 MinerFSM 的种子采集循环逐块 pathToOre + 破坏。
      */
     public void startMining(List<Block> targets) {
-        if (disabled) {
-            module.error("Baritone 不可用，无法启动挖矿");
-            return;
-        }
         if (targets == null || targets.isEmpty()) {
             module.error("未选择目标矿石，无法启动挖矿");
             return;
@@ -58,7 +53,6 @@ public final class BaritoneExecutor {
         try {
             var baritone = getBaritone();
             if (baritone == null) {
-                disabled = true;
                 module.error("Baritone 未加载");
                 return;
             }
@@ -83,7 +77,6 @@ public final class BaritoneExecutor {
             lastCheckTick = 0;
 
         } catch (Throwable e) {
-            disabled = true;
             module.error("Baritone 调用失败：" + e.getMessage());
         }
     }
@@ -95,18 +88,14 @@ public final class BaritoneExecutor {
      * @return 是否成功发起寻路
      */
     public boolean pathToOre(BlockPos pos) {
-        if (disabled) return false;
-
         try {
             var baritone = getBaritone();
             if (baritone == null) {
-                disabled = true;
                 return false;
             }
             baritone.getCustomGoalProcess().setGoalAndPath(new GoalTwoBlocks(pos));
             return true;
         } catch (Throwable e) {
-            disabled = true;
             return false;
         }
     }
@@ -116,14 +105,11 @@ public final class BaritoneExecutor {
      * 用于「进程意外退出才重启」的自愈判断，避免打断正常挖矿。
      */
     public boolean isMiningActive() {
-        if (disabled) return false;
-
         try {
             var baritone = getBaritone();
             if (baritone == null) return false;
             return baritone.getMineProcess().isActive() || baritone.getCustomGoalProcess().isActive();
         } catch (Throwable e) {
-            disabled = true;
             return false;
         }
     }
@@ -132,8 +118,6 @@ public final class BaritoneExecutor {
      * 停止 Baritone
      */
     public void stop() {
-        if (disabled) return;
-
         try {
             var baritone = getBaritone();
             if (baritone == null) return;
@@ -142,19 +126,12 @@ public final class BaritoneExecutor {
             baritone.getPathingBehavior().cancelEverything();
 
         } catch (Throwable e) {
-            disabled = true;
+            // 停止失败不影响后续，忽略
         }
     }
 
     /**
      * 批量应用 Baritone 设置（模块启动时调用）
-     * 
-     * 根据 Baritone GitHub 源码，Settings 类的字段定义：
-     * - allowBreak (Boolean)
-     * - allowSprint (Boolean)
-     * - allowPlace (Boolean)
-     * - legitMine (Boolean) - 不存在，跳过
-     * - maxFallHeightNoWater (Integer) - 不存在，使用其他参数
      */
     public void applySettings(boolean avoidLava, boolean mobAvoidance, int mobAvoidanceRadius,
                               boolean allowBreak, boolean allowPlace, int maxFallHeight,
@@ -167,8 +144,6 @@ public final class BaritoneExecutor {
                               int maxYLevelWhileMining, int mineMaxOreLocationsCount,
                               boolean blacklistClosestOnFailure, boolean legitMine,
                               int legitMineYLevel, boolean legitMineIncludeDiagonals) {
-        if (disabled) return;
-
         try {
             var settings = BaritoneAPI.getSettings();
             List<Block> blocksToAvoid = new ArrayList<>(settings.blocksToAvoid.value);
@@ -207,7 +182,7 @@ public final class BaritoneExecutor {
             settings.blockReachDistance.value = 4.5f;    // 缩小交互距离，优先近处
             
         } catch (Throwable e) {
-            disabled = true;
+            // 设置应用失败不影响主体逻辑，下次启动重新应用
         }
     }
 
@@ -215,8 +190,6 @@ public final class BaritoneExecutor {
      * 动态更新单个设置
      */
     public void updateSetting(String key, Object value) {
-        if (disabled) return;
-
         try {
             var settings = BaritoneAPI.getSettings();
             
@@ -254,7 +227,7 @@ public final class BaritoneExecutor {
             else if (key.equals("mineGoalUpdateInterval")) settings.mineGoalUpdateInterval.value = (Integer) value;
             
         } catch (Throwable e) {
-            disabled = true;
+            // 单设置更新失败不影响整体
         }
     }
 
@@ -262,8 +235,6 @@ public final class BaritoneExecutor {
      * 更新搭路方块白名单
      */
     public void updatePlaceBlocks(List<Block> blocks) {
-        if (disabled) return;
-
         try {
             var settings = BaritoneAPI.getSettings();
             settings.acceptableThrowawayItems.value = new ArrayList<>(
@@ -273,7 +244,7 @@ public final class BaritoneExecutor {
                     .toList()
             );
         } catch (Throwable e) {
-            disabled = true;
+            // 忽略
         }
     }
 
@@ -281,7 +252,7 @@ public final class BaritoneExecutor {
      * 检测 Baritone 是否卡死（原地滞留超过3分钟且位移<5格）
      */
     public boolean isStuck() {
-        if (mc.player == null || disabled) return false;
+        if (mc.player == null) return false;
 
         try {
             var baritone = getBaritone();
@@ -309,7 +280,6 @@ public final class BaritoneExecutor {
             return distance < STUCK_DISTANCE_THRESHOLD;
 
         } catch (Throwable e) {
-            disabled = true;
             return false;
         }
     }
@@ -318,14 +288,11 @@ public final class BaritoneExecutor {
      * Baritone 是否正在寻路
      */
     public boolean isPathing() {
-        if (disabled) return false;
-
         try {
             var baritone = getBaritone();
             if (baritone == null) return false;
             return baritone.getPathingBehavior().isPathing();
         } catch (Throwable e) {
-            disabled = true;
             return false;
         }
     }
@@ -337,38 +304,33 @@ public final class BaritoneExecutor {
      * isActive 从 setGoalAndPath 起即为 true，直到目标完成/取消才变 false，正好区分「算路中」与「真的断了」。
      */
     public boolean isCustomGoalActive() {
-        if (disabled) return false;
-
         try {
             var baritone = getBaritone();
             if (baritone == null) return false;
             return baritone.getCustomGoalProcess().isActive();
         } catch (Throwable e) {
-            disabled = true;
             return false;
         }
     }
 
     /**
-     * 获取 Baritone 实例（供状态机调用）
+     * 获取 Baritone 实例（供状态机调用）。失败返回 null。
      */
     public IBaritone getBaritoneInstance() {
         try {
             return BaritoneAPI.getProvider().getPrimaryBaritone();
         } catch (Throwable e) {
-            disabled = true;
             return null;
         }
     }
 
     /**
-     * 获取 Baritone 实例（内部使用）
+     * 获取 Baritone 实例（内部使用）。失败返回 null。
      */
     private IBaritone getBaritone() {
         try {
             return BaritoneAPI.getProvider().getPrimaryBaritone();
         } catch (Throwable e) {
-            disabled = true;
             return null;
         }
     }

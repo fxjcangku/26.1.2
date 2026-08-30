@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -707,7 +708,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         if (mc.player == null) return;
         // 静默容器：自动化运行中打开箱子屏幕时取消显示（不抢鼠标），
         // 箱子数据仍由 mc.player.containerMenu 同步，卸货/补给照常发包。
-        if (isActive() && event.screen instanceof AbstractContainerScreen<?>) {
+        // 排除背包(InventoryScreen)：玩家手动按 E 打开背包必须放行，不能被模块拦掉。
+        if (isActive() && event.screen instanceof AbstractContainerScreen<?>
+            && !(event.screen instanceof InventoryScreen)) {
             event.setCancelled(true);
         }
     }

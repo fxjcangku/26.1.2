@@ -796,24 +796,24 @@ public final class VillagerTradeFSM {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  卸货流程（交易成品箱）
+    //  卸货流程（成品交易箱）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private void tickUnloadNav() {
         CunminCommand.ContainerBinding binding = CunminCommand.getBinding();
         BlockPos box = binding == null ? null : binding.getUnloadBox();
         if (box == null) {
-            fail("未绑定交易成品箱");
+            fail("未绑定成品交易箱");
             return;
         }
         if (stateTicks > NAV_TIMEOUT || navigation.isStuck()) {
-            fail("前往成品箱超时或卡死");
+            fail("前往成品交易箱超时或卡死");
             return;
         }
 
         if (stateTicks == 1 || (!navigation.isPathing() && stateTicks % 60 == 0)) {
             if (!navigation.pathToContainer(box)) {
-                fail("无法前往成品箱");
+                fail("无法前往成品交易箱");
             }
             return;
         }
@@ -828,11 +828,11 @@ public final class VillagerTradeFSM {
         CunminCommand.ContainerBinding binding = CunminCommand.getBinding();
         BlockPos box = binding == null ? null : binding.getUnloadBox();
         if (box == null) {
-            fail("未绑定交易成品箱");
+            fail("未绑定成品交易箱");
             return;
         }
         if (stateTicks > OPEN_TIMEOUT) {
-            fail("无法打开成品箱");
+            fail("无法打开成品交易箱");
             return;
         }
         if (mc.player != null && mc.player.containerMenu != null && mc.player.containerMenu.containerId != 0) {
@@ -840,7 +840,7 @@ public final class VillagerTradeFSM {
             return;
         }
         if (stateTicks % 10 == 0 && !FarmPacketOps.interactBlock(InteractionHand.MAIN_HAND, box, Direction.UP)) {
-            fail("成品箱交互失败");
+            fail("成品交易箱交互失败");
         }
     }
 

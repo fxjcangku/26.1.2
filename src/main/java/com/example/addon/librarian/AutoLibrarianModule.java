@@ -4,6 +4,7 @@ package com.example.addon.librarian;
 import baritone.api.BaritoneAPI;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.ui.HelpScreen;
 import com.example.addon.librarian.config.AutoLibrarianConfig;
 import com.example.addon.librarian.config.SuccessSound;
 import com.example.addon.librarian.integration.FabricBaritoneMovementService;
@@ -22,6 +23,8 @@ import com.example.addon.librarian.service.MovementStatus;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
@@ -53,34 +56,40 @@ public final class AutoLibrarianModule extends YiyiaddonModule {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        return buildInfoWidget(theme,
-            new String[]{ "§l附魔交易所 · 使用说明" },
-            new String[]{
-                "§e§l▌ 准备",
-                "§f  1. 背包携带：讲台 × N、书 × N、绿宝石 × 足够数量",
-                "§f  2. 在「目标附魔」中设置想要的附魔类型",
-                "§f  3. 站在已搭建好的岩浆块工位阵列附近",
-                "§f  4. 开启模块即自动运行"
-            },
-            new String[]{
-                "§a§l▌ 自动流程",
-                "§f  ① 在搜索半径内寻找失业村民",
-                "§f  ② 识别岩浆块工位，清除障碍方块",
-                "§f  ③ 放置讲台，等待村民接受图书管理员职业",
-                "§f  ④ 读取交易列表，若命中目标附魔则自动购买",
-                "§f  ⑤ 未命中则拆除讲台，刷新村民交易，重复循环"
-            },
-            new String[]{
-                "§b§l▌ 场地要求",
-                "§f  · 每个村民工位：岩浆块 + 相邻空地（用于放置讲台）",
-                "§f  · 支持活版门卡位场地（村民无法逃跑）",
-                "§f  · 安装 Baritone 可自动寻路移动到村民位置"
-            },
-            new String[]{
-                "§c§l▌ 注意",
-                "§f  · 背包缺少讲台/书/绿宝石时模块会报错并自动关闭",
-                "§f  · 绿宝石价格超过「最大价格」上限的交易会跳过"
-            }
+        return buildInfoWidget(theme, table -> {
+            // 使用说明按钮（置顶显眼位置）
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
+            table.row();
+        });
+    }
+
+    /** 构建使用说明内容（点击「查看使用说明」按钮打开） */
+    private String[] buildHelpContent() {
+        return HelpScreen.buildHelpContent(
+            new HelpScreen.HelpSection("准备",
+                "  §8├─ §f背包携带：讲台 × N、书 × N、绿宝石 × 足够数量",
+                "  §8├─ §f在「目标附魔」中设置想要的附魔类型",
+                "  §8├─ §f站在已搭建好的岩浆块工位阵列附近",
+                "  §8└─ §f开启模块即自动运行"
+            ),
+            new HelpScreen.HelpSection("自动流程",
+                "  §a[1] §f在搜索半径内寻找失业村民",
+                "  §a[2] §f识别岩浆块工位，清除障碍方块",
+                "  §a[3] §f放置讲台，等待村民接受图书管理员职业",
+                "  §a[4] §f读取交易列表，若命中目标附魔则自动购买",
+                "  §a[5] §f未命中则拆除讲台，刷新村民交易，重复循环"
+            ),
+            new HelpScreen.HelpSection("场地要求",
+                "  §6▸ §f每个村民工位：岩浆块 + 相邻空地（用于放置讲台）",
+                "  §6▸ §f支持活版门卡位场地（村民无法逃跑）",
+                "  §6▸ §f安装 Baritone 可自动寻路移动到村民位置"
+            ),
+            new HelpScreen.HelpSection("注意",
+                "  §c⚠ §f背包缺少讲台/书/绿宝石时模块会报错并自动关闭",
+                "  §c⚠ §f绿宝石价格超过「最大价格」上限的交易会跳过"
+            )
         );
     }
 

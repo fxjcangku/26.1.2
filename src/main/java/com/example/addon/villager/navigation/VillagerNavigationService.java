@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * 
  * 封装 Baritone 寻路，提供：
  * · 工作站寻路（计算正前方站位）
- * · 容器寻路（绿宝石箱/卸货箱）
+ * · 容器寻路（绿宝石箱/成品交易箱）
  * · 到达判定
  * · 卡死检测
  * · 停止导航
@@ -84,7 +84,7 @@ public final class VillagerNavigationService {
     }
 
     /**
-     * 寻路到容器（绿宝石箱/卸货箱）
+     * 寻路到容器（绿宝石箱/成品交易箱）
      * 
      * @param container 容器坐标
      * @return true 表示成功启动寻路

@@ -20,6 +20,7 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -455,8 +456,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         pauseMiningForFallingBlocks = sgBaritone.add(new BoolSetting.Builder()
             .name("掉落方块暂停")
-            .description("遇到沙子、沙砾等掉落方块时暂停挖掘")
-            .defaultValue(true)
+            .description("遇到沙子、沙砾等掉落方块时暂停挖掘。关闭后不掉方块不暂停，挖矿更流畅（会塌方区域建议手动开启）")
+            .defaultValue(false)
             .onChanged(value -> baritone.updateSetting("pauseMiningForFallingBlocks", value))
             .build());
 
@@ -526,8 +527,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
         // ────────────── 滑块类设置 ──────────────
         mineGoalUpdateInterval = sgBaritone.add(new IntSetting.Builder()
             .name("矿点刷新间隔")
-            .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿，默认10tick约0.5秒）")
-            .defaultValue(10)
+            .description("每隔多少tick重新扫描矿点（值越小越优先挖近矿；过小会导致寻路线乱闪、人物频繁停顿，40tick约2秒最稳定）")
+            .defaultValue(40)
             .min(1)
             .max(100)
             .noSlider()
@@ -536,8 +537,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
             .name("矿点缓存数量")
-            .description("Baritone一次缓存的最大矿点数量，越小越优先挖离自己最近的矿（只保留最近 N 个）")
-            .defaultValue(24)
+            .description("Baritone一次缓存的最大矿点数量，越小越优先挖离自己最近的矿、寻路线越少（只保留最近 N 个，8 最稳定）")
+            .defaultValue(8)
             .min(1)
             .max(256)
             .noSlider()
@@ -1050,7 +1051,9 @@ public final class AutoMinerModule extends YiyiaddonModule {
         if (mc.player == null) return;
         // 静默容器：挖矿运行中打开矿物箱/食物箱屏幕时取消显示（不抢鼠标），
         // 箱子数据仍由 mc.player.containerMenu 同步，卸货/补给照常发包。
-        if (isActive() && event.screen instanceof AbstractContainerScreen<?>) {
+        // 排除背包(InventoryScreen)：玩家手动按 E 打开背包必须放行，不能被模块拦掉。
+        if (isActive() && event.screen instanceof AbstractContainerScreen<?>
+            && !(event.screen instanceof InventoryScreen)) {
             event.setCancelled(true);
         }
     }

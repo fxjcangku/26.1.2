@@ -81,9 +81,10 @@ public class AddonTemplate extends MeteorAddon {
         ThemeModule themeModule = new ThemeModule();
         Modules.get().add(themeModule);
 
-        // 用户统计：实时查看有多少玩家正在使用该扩展
+        // 用户统计：实时查看有多少玩家正在使用该扩展（默认启用，onTick 自动每 3 秒刷新）
         UserStatsModule userStatsModule = new UserStatsModule();
         Modules.get().add(userStatsModule);
+        userStatsModule.enable();
 
         // ── 自动化模块 ──
         // 农场矩阵：自动种植和收割作物

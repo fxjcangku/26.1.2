@@ -67,14 +67,14 @@ public class FumoCommand extends Command {
 
     // ── 坐标设置 ─────────────────────────────────────────────────────────
 
-    private void setPos(String node) {
+    private boolean setPos(String node) {
         AutoEnchantBook module = getModule();
-        if (module == null) return;
-        if (!preparePointContext(module)) return;
+        if (module == null) return false;
+        if (!preparePointContext(module)) return false;
 
         if (hasPosition(module, node)) {
             sendMsg("§c[" + node + "] 已设置，请先使用 §e.fumo remove " + node + " §c后再重新设置！");
-            return;
+            return false;
         }
 
         BlockPos pos;
@@ -85,10 +85,10 @@ public class FumoCommand extends Command {
             // 其他节点记录准星指向的方块
             if (mc.hitResult == null || mc.hitResult.getType() != HitResult.Type.BLOCK) {
                 sendMsg("§c请将准星对准目标方块！");
-                return;
+                return false;
             }
             pos = ((BlockHitResult) mc.hitResult).getBlockPos();
-            if (!isValidTarget(node, pos)) return;
+            if (!isValidTarget(node, pos)) return false;
         }
 
         switch (node) {
@@ -107,6 +107,7 @@ public class FumoCommand extends Command {
         Modules.get().save();
 
         sendMsg("§a§l✓ 绑定成功§r §8▸ §e[" + node + "] §8▸ §d坐标 (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")");
+        return true;
     }
 
     private void removePos(String node) {
@@ -142,6 +143,28 @@ public class FumoCommand extends Command {
         module.clearPoints();
         Modules.get().save();
         sendMsg("§a§l✓ 已清空全部点位、挂机视角及服务器维度绑定");
+    }
+
+    // ── 公开静态方法（供模块 GUI 点位卡片按钮调用）─────────────────────────────
+
+    /**
+     * 设置点位（供扩展附魔配置页面的卡片按钮调用）。
+     * 复用 .fumo set 指令的同一套校验逻辑（容器/附魔台/砂轮判定、覆盖保护、世界绑定）。
+     *
+     * @param node 节点名："书"/"青晶石"/"成品箱"/"附魔台"/"砂轮"/"挂机位"
+     * @return true = 设置成功（可关闭 GUI），false = 设置失败（保留 GUI 让玩家重新对准）
+     */
+    public static boolean setPoint(String node) {
+        return new FumoCommand().setPos(node);
+    }
+
+    /**
+     * 删除点位（供扩展附魔配置页面的卡片按钮调用）。
+     *
+     * @param node 节点名："书"/"青晶石"/"成品箱"/"附魔台"/"砂轮"/"挂机位"
+     */
+    public static void removePoint(String node) {
+        new FumoCommand().removePos(node);
     }
 
     private void printStatus() {

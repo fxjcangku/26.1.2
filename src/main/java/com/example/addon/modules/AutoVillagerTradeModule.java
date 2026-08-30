@@ -21,6 +21,7 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -393,7 +394,9 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         if (mc.player == null) return;
         // 静默容器：交易运行中打开村民交易界面/箱子屏幕时取消显示（不抢鼠标），
         // 交易界面数据仍由 mc.player.containerMenu 同步，SelectTrade/取绿宝石照常发包。
-        if (isActive() && event.screen instanceof AbstractContainerScreen<?>) {
+        // 排除背包(InventoryScreen)：玩家手动按 E 打开背包必须放行，不能被模块拦掉。
+        if (isActive() && event.screen instanceof AbstractContainerScreen<?>
+            && !(event.screen instanceof InventoryScreen)) {
             event.setCancelled(true);
         }
     }
@@ -453,7 +456,7 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             missing.add("§a绿宝石箱§f·未绑定");
         }
         if (CunminCommand.getUnloadChestPos() == null) {
-            missing.add("§b交易成品箱§f·未绑定");
+            missing.add("§b成品交易箱§f·未绑定");
         }
 
         // 5. 目标职业村民检测：搜索半径内必须存在目标职业村民
@@ -642,8 +645,8 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             // 绿宝石箱卡片
             buildLocationCard(theme, cardRow, "绿宝石箱", "emerald_chest");
             
-            // 卸货箱卡片
-            buildLocationCard(theme, cardRow, "交易成品箱", "unload_chest");
+            // 成品交易箱卡片
+            buildLocationCard(theme, cardRow, "成品交易箱", "unload_chest");
             
             // 将两列容器加入主表格
             table.add(cardRow).expandX();
@@ -680,12 +683,12 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
                 "  §8> §e1§8. §f选择模式、目标职业、目标物品",
                 "  §8> §e2§8. §f图书管理员可同时勾选附魔书 §7(自动忽略等级)",
                 "  §8> §e3§8. §f设置价格上限与购买量（组），可调绿宝石补给量",
-                "  §8> §e4§8. §f先绑定绿宝石箱与成品箱再开模块",
+                "  §8> §e4§8. §f先绑定绿宝石箱与成品交易箱再开模块",
                 "  §8> §e5§8. §f自检通过即开始；快速停止键可随时终止"
             ),
             new HelpScreen.HelpSection("点位设置 §7(三种模式通用)",
                 "  §8> §3.cunmin set 绿宝石箱 §8— §7准星对准箱子绑定",
-                "  §8> §3.cunmin set 卸货箱 §8— §7准星对准箱子绑定",
+                "  §8> §3.cunmin set 成品交易箱 §8— §7准星对准箱子绑定",
                 "  §8> §3.cunmin status §8— §7查看绑定状态",
                 "  §8> §3.cunmin remove 绿宝石箱 §8— §7解绑",
                 "  §7§o也可直接点击配置页底部卡片中的「设置」按钮"
