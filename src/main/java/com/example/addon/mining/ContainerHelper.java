@@ -42,7 +42,7 @@ public final class ContainerHelper {
     private AbstractContainerMenu currentMenu = null;
     private int menuStateId = -1;
     private int stableStateTicks = 0;
-    private static final int STABLE_REQUIRED = 3;
+    private static final int STABLE_REQUIRED = 2;
 
     private int openAttempts = 0;
     private BlockPos openingPos = null;
@@ -167,7 +167,7 @@ public final class ContainerHelper {
         }
 
         openingPos = pos;
-        openingCooldown = 10;
+        openingCooldown = 5;
 
         // 直接发包开箱（带 sequence 预测处理），不依赖 mc.gameMode.useItemOn：
         // 鼠标切出窗口/窗口失焦时 useItemOn 的交互会被吞，导致箱子打不开。

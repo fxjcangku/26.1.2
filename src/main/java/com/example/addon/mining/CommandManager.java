@@ -42,7 +42,7 @@ public final class CommandManager {
     // 区块加载检测
     private BlockPos lastPlayerPos = BlockPos.ZERO;
     private int chunksLoadedCount = 0;
-    private static final int CHUNKS_LOADED_REQUIRED = 5;
+    private static final int CHUNKS_LOADED_REQUIRED = 3;
 
     // 虚空坠落检测
     private double lastY = 0;
@@ -150,8 +150,8 @@ public final class CommandManager {
             return false;
         }
 
-        // 前 10 tick 等待服务器响应
-        if (executeTick < 10) {
+        // 前 6 tick 等待服务器响应
+        if (executeTick < 6) {
             return true;
         }
 
@@ -257,9 +257,9 @@ public final class CommandManager {
             return false; // 还在移动，继续等
         }
 
-        // 位置静止超过 3 tick，且玩家在地面
+        // 位置静止超过 2 tick，且玩家在地面
         stationaryTicks++;
-        return stationaryTicks >= 3 && player.onGround();
+        return stationaryTicks >= 2 && player.onGround();
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -725,8 +725,9 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 4：停止寻路，开箱倒货（非容器屏幕占用时定期强制关闭，避免卡死）
+        // 阶段 4：停止寻路，面向箱子后开箱（避免背对开箱）
         module.getBaritone().stop();
+        faceBlock(mineralChest.pos);
 
         if (mc.screen != null && !(mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>)) {
             if (stateTick % 20 == 0) module.getContainer().closeContainer();
@@ -800,8 +801,9 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 4：停止寻路，开箱取食物
+        // 阶段 4：停止寻路，面向箱子后开箱取食物
         module.getBaritone().stop();
+        faceBlock(foodChest.pos);
         
         if (!module.getContainer().isContainerOpen()) {
             // 屏幕被其它界面占用时定期强制关闭，避免永远打不开箱子
@@ -949,24 +951,25 @@ public final class MinerFSM {
                 return;
             }
 
-            if (stateTick - repairSwapRequestedTick < 2) return;
-
             ItemStack offhandTool = mc.player.getOffhandItem();
             boolean toolMoved = ItemStack.isSameItemSameComponents(savedTool, offhandTool);
-            if (!toolMoved) {
+            if (toolMoved) {
+                if (savedWeaponSlot >= 0) {
+                    InvUtils.swap(savedWeaponSlot, false);
+                }
+                repairMode = true;
+                startKillAura();
+                return;
+            }
+
+            // 工具还没到副手：最多等 15 tick（服务端到账通常 1~2 tick），超时才重发，
+            // 避免像旧逻辑那样每 2 tick 就重发一次、把正在移动的光标打乱反而更慢。
+            if (stateTick - repairSwapRequestedTick > 15) {
                 repairSwapRequestedTick = -1;
                 if (repairSwapAttempts >= 3) {
                     if (module.isActive()) module.toggle();
                 }
-                return;
             }
-
-            if (savedWeaponSlot >= 0) {
-                InvUtils.swap(savedWeaponSlot, false);
-            }
-
-            repairMode = true;
-            startKillAura();
             return;
         }
 
@@ -1268,11 +1271,24 @@ public final class MinerFSM {
         while (deltaYaw < -180) deltaYaw += 360;
 
         // 平滑插值
-        float smoothYaw = currentYaw + deltaYaw * 0.1f;
-        float smoothPitch = currentPitch + deltaPitch * 0.1f;
+        float smoothYaw = currentYaw + deltaYaw * 0.3f;
+        float smoothPitch = currentPitch + deltaPitch * 0.3f;
 
         mc.player.setYRot(smoothYaw);
         mc.player.setXRot(smoothPitch);
+    }
+
+    /** 直接把视角转向某个方块（卸货/补给开箱前面向箱子，避免背对开箱） */
+    private void faceBlock(BlockPos pos) {
+        if (mc.player == null) return;
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 center = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        double dx = center.x - eye.x;
+        double dy = center.y - eye.y;
+        double dz = center.z - eye.z;
+        double horiz = Math.sqrt(dx * dx + dz * dz);
+        mc.player.setYRot((float) Math.toDegrees(Math.atan2(-dx, dz)));
+        mc.player.setXRot((float) Math.toDegrees(-Math.atan2(dy, horiz)));
     }
 
     private void startKillAura() {
