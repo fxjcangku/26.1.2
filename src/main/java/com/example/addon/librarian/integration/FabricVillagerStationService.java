@@ -22,6 +22,12 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Optional;
 
+/**
+ * 附魔交易所 · 固定交易位服务实现（Fabric 客户端）。
+ *
+ * <p>根据村民位置与朝向探测可用交易位（岩浆块 + 玩家站位 + 讲台位），
+ * 并执行交易位校验与方块查询。优先选择讲台位空闲的岩浆块，避免多余挖掘。</p>
+ */
 public final class FabricVillagerStationService implements VillagerStationService, MarkerBlockAccess {
     private final MarkerBlockValidator validator = new MarkerBlockValidator(this);
 

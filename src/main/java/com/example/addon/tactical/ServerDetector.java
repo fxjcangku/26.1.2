@@ -7,8 +7,6 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
@@ -22,9 +20,13 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 
 import java.awt.Desktop;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -143,9 +145,8 @@ public class ServerDetector extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent())));
             table.row();
         }, new String[0]);
     }
@@ -404,9 +405,17 @@ public class ServerDetector extends YiyiaddonModule {
     private void onPacketReceive(PacketEvent.Receive event) {
         if (!isActive()) return;
 
-        // 记录插件频道，供反作弊频道指纹使用
+        // 记录插件频道，供反作弊频道指纹使用。
+        // 26.1.2 会把 register 的频道名丢进 DiscardedPayload（只留 id、正文被丢弃），
+        // 因此 register 里罗列的反作弊频道名无法从包对象恢复，这里只能捕获服务端
+        // 直接推送数据的真实频道。协议级频道（brand/register/unregister）与指纹无关，跳过
         if (event.packet instanceof ClientboundCustomPayloadPacket payload) {
             String id = payload.payload().type().id().toString().toLowerCase(Locale.ROOT);
+            if (id.equals("minecraft:brand")
+                || id.equals("minecraft:register")
+                || id.equals("minecraft:unregister")) {
+                return;
+            }
             if (seenChannels.size() < 64) seenChannels.add(id);
         }
 
@@ -451,56 +460,191 @@ public class ServerDetector extends YiyiaddonModule {
         connection.send(new ServerboundResourcePackPacket(packId, action));
     }
 
+    /**
+     * 异步下载资源包，支持重试、超时、断点续传与 SHA-1 校验。
+     *
+     * 此前 downloadRetries / downloadTimeout / resumeDownload 三个设置项
+     * 都是死开关——方法里硬编码 30 秒超时、不重试、不续传、也不校验哈希。
+     * 现在全部接上：重试次数取设置值，超时取设置值，续传开关生效，
+     * 下载过程中边写边算 SHA-1，完成后与服务器给的 hash 比对，不一致则丢弃重下。
+     */
     private void downloadResourcePackAsync(UUID packId, String url, String hash) {
         Thread.ofVirtual().start(() -> {
-            try {
-                sendPackAction(packId, ServerboundResourcePackPacket.Action.ACCEPTED);
-                
-                if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
-                
-                String fileName = packId.toString() + ".zip";
-                File targetFile = new File(RESOURCE_PACK_DIR, fileName);
-                
-                if (targetFile.exists()) {
-                    sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
-                    notify("该服务器资源包已下载过：" + fileName);
-                    return;
-                }
-                
+            sendPackAction(packId, ServerboundResourcePackPacket.Action.ACCEPTED);
 
-                
-                HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-                conn.setConnectTimeout(30000);
-                conn.setReadTimeout(30000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                
-                int code = conn.getResponseCode();
-                
-                if (code == 200) {
-                    try (InputStream in = conn.getInputStream();
-                         java.io.FileOutputStream out = new java.io.FileOutputStream(targetFile)) {
-                        byte[] buffer = new byte[8192];
-                        int read;
-                        long total = 0;
-                        while ((read = in.read(buffer)) != -1) {
-                            out.write(buffer, 0, read);
-                            total += read;
-                        }
+            if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
 
-                        sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
-                        notify("资源包已下载：" + fileName);
-                    }
-                } else {
+            String fileName = packId.toString() + ".zip";
+            File targetFile = new File(RESOURCE_PACK_DIR, fileName);
+            // 断点续传用的临时文件，下载完成且校验通过后重命名为最终文件
+            File partFile = new File(RESOURCE_PACK_DIR, fileName + ".part");
 
-                    sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
-                    notify("该服务器材质包无法下载（HTTP " + code + "）");
-                }
-            } catch (Exception e) {
-
-                sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
-                notify("该服务器材质包无法下载：" + e.getMessage());
+            // 已下载过直接跳过
+            if (targetFile.exists()) {
+                sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
+                asyncNotify("该服务器资源包已下载过：" + fileName);
+                return;
             }
+
+            int retries = downloadRetries.get();
+            int timeoutMs = downloadTimeout.get() * 1000;
+
+            for (int attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    if (attempt > 1) {
+                        asyncNotify("第 " + attempt + " 次重试下载资源包…");
+                    }
+                    if (downloadOnce(packId, url, hash, partFile, targetFile, timeoutMs)) {
+                        return; // 成功
+                    }
+                } catch (Exception e) {
+                    if (attempt >= retries) {
+                        sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
+                        asyncNotifyError("资源包下载失败（已重试 " + retries + " 次）：" + e.getMessage());
+                        return;
+                    }
+                }
+            }
+
+            sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
+            asyncNotifyError("资源包下载失败（已达重试上限 " + retries + " 次）");
         });
+    }
+
+    /**
+     * 单次下载尝试。
+     *
+     * @return true 表示下载并校验成功，false 表示本次失败可重试
+     */
+    private boolean downloadOnce(UUID packId, String url, String hash, File partFile, File targetFile, int timeoutMs) throws Exception {
+        long existingSize = 0;
+        if (resumeDownload.get() && partFile.exists()) {
+            existingSize = partFile.length();
+        }
+
+        // 先手动跟随重定向拿到真实下载地址（http→https 跨协议也能走通），
+        // 否则 HttpURLConnection 只跟随同协议重定向，跨协议会直接失败
+        String finalUrl = followRedirects(url, timeoutMs);
+
+        HttpURLConnection conn = (HttpURLConnection) URI.create(finalUrl).toURL().openConnection();
+        conn.setConnectTimeout(timeoutMs);
+        conn.setReadTimeout(timeoutMs);
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        if (existingSize > 0) {
+            conn.setRequestProperty("Range", "bytes=" + existingSize + "-");
+        }
+
+        int code = conn.getResponseCode();
+
+        // 续传：服务端返回 206 表示支持 Range，接着写；返回 200 表示不支持，从零重下
+        boolean append = code == 206;
+        if (code != 200 && code != 206) {
+            conn.disconnect();
+            return false;
+        }
+
+        // 追加模式（206）用 RandomAccessFile 接着写；覆盖模式（200）用 FileOutputStream 截断
+        if (append) {
+            try (InputStream in = conn.getInputStream();
+                 RandomAccessFile raf = new RandomAccessFile(partFile, "rw")) {
+                raf.seek(existingSize);
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    raf.write(buffer, 0, read);
+                }
+            }
+        } else {
+            try (InputStream in = conn.getInputStream();
+                 FileOutputStream out = new FileOutputStream(partFile)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+            }
+        }
+
+        // SHA-1 校验：服务器给了 hash 就对整个文件算一次（续传场景必须哈希全文件，
+        // 增量哈希会漏掉已下载的前半段）。不一致则丢弃重下
+        if (hash != null && !hash.isEmpty()) {
+            String actual = sha1OfFile(partFile);
+            if (!actual.equalsIgnoreCase(hash)) {
+                partFile.delete();
+                return false;
+            }
+        }
+
+        // 校验通过，临时文件转正
+        if (!partFile.renameTo(targetFile)) {
+            // 跨盘 rename 可能失败，退化为复制
+            try (InputStream in = new java.io.FileInputStream(partFile);
+                 FileOutputStream out = new FileOutputStream(targetFile)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+            }
+            partFile.delete();
+        }
+
+        sendPackAction(packId, ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
+        asyncNotify("资源包已下载：" + targetFile.getName());
+        return true;
+    }
+
+    /**
+     * 手动跟随 HTTP 重定向，返回最终下载地址。
+     *
+     * HttpURLConnection 默认只跟随同协议重定向（http→http、https→https），
+     * 遇到 http→https 的跨协议跳转会原样返回 3xx 交给调用方。资源包 CDN
+     * 经常 http 入口跳 https，不手动跟就会下载失败。这里最多跟 5 层，
+     * 相对路径用 URI.resolve 拼到当前地址上。
+     */
+    private String followRedirects(String url, int timeoutMs) throws Exception {
+        String current = url;
+        for (int i = 0; i < 5; i++) {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(current).toURL().openConnection();
+            conn.setInstanceFollowRedirects(false); // 手动跟，才能处理跨协议跳转
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            int code = conn.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (location == null || location.isEmpty()) {
+                    throw new java.io.IOException("重定向缺少 Location");
+                }
+                current = URI.create(current).resolve(location).toString();
+                continue;
+            }
+            conn.disconnect();
+            return current; // 非重定向，直接用这个地址
+        }
+        throw new java.io.IOException("重定向次数过多（超过 5 层）");
+    }
+
+    /** 下载线程里发普通提示：投递回主线程，避免跨线程碰客户端崩溃 */
+    private void asyncNotify(String message) {
+        mc.execute(() -> notify(message));
+    }
+
+    /** 下载线程里发错误提示：投递回主线程 */
+    private void asyncNotifyError(String message) {
+        mc.execute(() -> notifyError(message));
+    }
+
+    /** 计算文件 SHA-1 十六进制摘要，用于资源包完整性校验 */
+    private String sha1OfFile(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+        try (InputStream in = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     /** 26.1.2 已移除 net.minecraft.Util，改用 AWT Desktop，放独立线程避免卡渲染。 */

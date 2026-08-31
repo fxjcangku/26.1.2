@@ -28,6 +28,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 附魔交易所 · 交易服务实现（Fabric 客户端）。
+ *
+ * <p>负责打开村民交易界面、扫描附魔书报价、选中并购买、取出成品。
+ * 报价只能从 {@code MerchantMenu.getOffers()} 读取，客户端禁止直接读
+ * {@code Villager.getOffers()}，否则会抛异常导致闪退。</p>
+ */
 public final class FabricTradeService implements TradeService {
     private int selectedIndex = -1;
     private boolean ownedByPlugin;

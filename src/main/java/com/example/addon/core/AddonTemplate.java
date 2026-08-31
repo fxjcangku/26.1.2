@@ -27,6 +27,7 @@ import com.example.addon.modules.YiyiaddonTranslationModule;
 import com.example.addon.tactical.FlightBypass;
 import com.example.addon.tactical.AntiKickBypass;
 import com.example.addon.tactical.ServerDetector;
+import com.example.addon.tactical.PacketInstantBreak;
 import com.example.addon.utils.YiyiaddonWatermark;
 import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.example.addon.utils.YiyiaddonTelemetryService;
@@ -124,10 +125,12 @@ public class AddonTemplate extends MeteorAddon {
         // AntiKickBypass：防踢绕过
         // ServerDetector：服务器特征检测，自动调整绕过策略
         // AdminDetector：管理员检测，识别旁观/创造/隐身/隐藏玩家自动断线
+        // PacketInstantBreak：发包秒破，纯发包瞬间破坏方块，防假方块/空气墙，与三模块联动
         Modules.get().add(new FlightBypass());
         Modules.get().add(new AntiKickBypass());
         Modules.get().add(new ServerDetector());
         Modules.get().add(new AdminDetectorModule());
+        Modules.get().add(new PacketInstantBreak());
 
         // ── 自定义指令 ──
         Commands.add(new CommandExample());

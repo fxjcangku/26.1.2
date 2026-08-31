@@ -45,22 +45,16 @@ public class HelpScreen extends WindowScreen {
             list.add(theme.label(line)).expandX();
         }
         
-        // 底部：分隔线 + 6 色主题按钮排，横向铺满空白（对应 5.8 强调色体系，点击均关闭窗口）
+        // 底部关闭按钮
         WTable buttonTable = list.add(theme.table()).expandX().widget();
         buttonTable.add(theme.horizontalSeparator()).expandX();
-        buttonTable.row();
-
-        // 六种强调色按钮横向铺满，避免底部只有一个「关闭」按钮显得空荡
-        String[] themeColors = {"§a绿色", "§b青色", "§e黄色", "§6金色", "§d粉色", "§c红色"};
-        for (String color : themeColors) {
-            WButton btn = buttonTable.add(theme.button(color)).expandX().widget();
-            btn.action = () -> {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null) {
-                    mc.setScreen(null);
-                }
-            };
-        }
+        WButton closeButton = buttonTable.add(theme.button("关闭")).expandX().widget();
+        closeButton.action = () -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.setScreen(null);
+            }
+        };
     }
 
     /**

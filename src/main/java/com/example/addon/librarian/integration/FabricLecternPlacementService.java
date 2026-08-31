@@ -20,6 +20,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * 附魔交易所 · 讲台放置服务实现（Fabric 客户端）。
+ *
+ * <p>负责在固定交易位上放置 / 拆除讲台、清除障碍方块。挖掘采用分步状态机
+ * （选工具 → 到位 → 持续挖掘），放置前会校验岩浆块底座并同步玩家朝向。</p>
+ */
 public final class FabricLecternPlacementService implements LecternPlacementService {
     @Override
     public boolean hasObstacle(VillagerStation station) {

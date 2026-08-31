@@ -1,15 +1,31 @@
 // 附魔交易所 方块坐标模型
 package com.example.addon.librarian.model;
 
-public record BlockPosition(int x, int y, int z) {
+/**
+ * 附魔交易所 · 方块坐标。
+ *
+ * <p>轻量三维坐标值对象，仅承载 X/Y/Z 整数坐标，避免直接依赖 Minecraft 的
+ * {@code BlockPos}，使 model 包脱离游戏 API 也可独立测试。</p>
+ */
+public record BlockPosition(
+    /** X 坐标 */
+    int x,
+    /** Y 坐标 */
+    int y,
+    /** Z 坐标 */
+    int z
+) {
+    /** 沿指定水平方向偏移一格（Y 不变） */
     public BlockPosition offset(HorizontalDirection direction) {
         return new BlockPosition(x + direction.offsetX(), y, z + direction.offsetZ());
     }
 
+    /** 返回下方一格的坐标 */
     public BlockPosition down() {
         return new BlockPosition(x, y - 1, z);
     }
 
+    /** 返回上方一格的坐标 */
     public BlockPosition up() {
         return new BlockPosition(x, y + 1, z);
     }

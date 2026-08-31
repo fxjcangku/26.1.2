@@ -27,19 +27,38 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 附魔交易所 · 核心业务编排器。
+ *
+ * <p>将状态机与各业务服务串联，为每个状态注册对应动作（搜索、移动、放置讲台、
+ * 交易、验证、完成），是附魔交易所的运行时大脑。由模块层按 tick 驱动。</p>
+ */
 public final class AutoLibrarianOrchestrator {
+    /** 业务配置 */
     private final AutoLibrarianConfig config;
+    /** 运行上下文 */
     private final AutoLibrarianContext context;
+    /** 状态机 */
     private final AutoLibrarianStateMachine stateMachine;
+    /** 村民搜索服务 */
     private final VillagerSearchService villagerSearchService;
+    /** 固定交易位服务 */
     private final VillagerStationService villagerStationService;
+    /** 移动服务 */
     private final MovementService movementService;
+    /** 讲台放置服务 */
     private final LecternPlacementService lecternPlacementService;
+    /** 交易服务 */
     private final TradeService tradeService;
+    /** 库存服务 */
     private final InventoryService inventoryService;
+    /** 附魔匹配服务 */
     private final EnchantmentService enchantmentService;
+    /** 调试日志服务 */
     private final DebugLoggerService logger;
+    /** 调试音效服务 */
     private final DebugSoundService sound;
+    /** 本 tick 动作是否已提交（防止重复发包） */
     private boolean actionSubmitted;
 
     public AutoLibrarianOrchestrator(

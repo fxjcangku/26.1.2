@@ -5,15 +5,29 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+/**
+ * 附魔交易所 · 附魔目标。
+ *
+ * <p>表示一个待刷取的附魔目标（附魔 ID + 等级 + 是否要求最高等级），并携带
+ * 运行期进度（是否已完成、锁定的交易报价）与 UI 展示信息（显示名、图标）。</p>
+ */
 public record EnchantmentTarget(
+    /** 附魔标识（如 minecraft:mending） */
     String identifier,
+    /** 目标等级 */
     int level,
+    /** 是否要求该附魔的最高可交易等级 */
     boolean requireMaximumLevel,
+    /** 是否已完成（已成交验证） */
     boolean completed,
+    /** 锁定的交易报价（命中后记录，可为 null） */
     TradeOfferSnapshot tradeOffer,
+    /** 中文显示名 */
     String displayName,
+    /** 图标标识 */
     String iconIdentifier
 ) {
+    /** 附魔/图标标识合法性校验正则 */
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     public EnchantmentTarget {
@@ -34,6 +48,7 @@ public record EnchantmentTarget(
         }
     }
 
+    /** 便捷构造：显示名与图标默认取自附魔标识 */
     public EnchantmentTarget(
         String identifier,
         int level,
@@ -44,10 +59,12 @@ public record EnchantmentTarget(
         this(identifier, level, requireMaximumLevel, completed, tradeOffer, identifier, "minecraft:enchanted_book");
     }
 
+    /** 便捷构造：默认未完成、无锁定报价 */
     public EnchantmentTarget(String identifier, int level, boolean requireMaximumLevel) {
         this(identifier, level, requireMaximumLevel, false, null);
     }
 
+    /** 解析后的目标工厂：要求最高等级并附带中文显示名与图标 */
     public static EnchantmentTarget resolved(
         String identifier,
         String displayName,
@@ -65,24 +82,29 @@ public record EnchantmentTarget(
         );
     }
 
+    /** 返回可交易等级（即当前目标等级） */
     public int maximumTradeLevel() {
         return level;
     }
 
+    /** 返回最小等级（即当前目标等级） */
     public int minimumLevel() {
         return level;
     }
 
+    /** 克隆并锁定指定交易报价 */
     public EnchantmentTarget withTradeOffer(TradeOfferSnapshot currentTradeOffer) {
         return new EnchantmentTarget(
             identifier, level, requireMaximumLevel, completed, currentTradeOffer, displayName, iconIdentifier
         );
     }
 
+    /** 克隆并清除锁定的交易报价 */
     public EnchantmentTarget withoutTradeOffer() {
         return new EnchantmentTarget(identifier, level, requireMaximumLevel, completed, null, displayName, iconIdentifier);
     }
 
+    /** 克隆并标记为已完成（幂等） */
     public EnchantmentTarget asCompleted() {
         return completed
             ? this

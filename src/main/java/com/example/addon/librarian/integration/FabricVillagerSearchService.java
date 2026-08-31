@@ -16,6 +16,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
+/**
+ * 附魔交易所 · 村民搜索服务实现（Fabric 客户端）。
+ *
+ * <p>在玩家附近搜索失业村民，支持按实体 ID / UUID 解析村民、判断职业，
+ * 供状态机锁定目标村民后推进放置讲台流程。</p>
+ */
 public final class FabricVillagerSearchService implements VillagerSearchService {
     private final DebugLoggerService logger;
     private final BooleanSupplier debugEnabled;

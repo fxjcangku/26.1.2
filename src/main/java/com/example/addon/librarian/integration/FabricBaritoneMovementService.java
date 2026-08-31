@@ -12,6 +12,12 @@ import com.example.addon.librarian.service.MovementStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
+/**
+ * 附魔交易所 · Baritone 移动服务实现。
+ *
+ * <p>通过 Baritone 寻路移动到目标村民附近。寻路仅走已有通路（禁止挖方块），
+ * 启动后给予 30 tick 宽限期等待路径计算，避免误判失败。</p>
+ */
 public final class FabricBaritoneMovementService implements MovementService {
     // Baritone 路径计算需要若干 tick，启动后给予 30 tick 的宽限期
     private static final int MOVEMENT_GRACE_TICKS = 30;

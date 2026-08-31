@@ -4,17 +4,34 @@ package com.example.addon.librarian.model;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * 附魔交易所 · 村民目标。
+ *
+ * <p>描述一个被选中用于刷附魔的失业村民及其讲台、交易位、交易进度的完整快照。
+ * 采用不可变设计，所有状态变更都通过 {@code withXxx()} 克隆出新实例，保证
+ * 状态机转换安全。</p>
+ */
 public record VillagerTarget(
+    /** 村民 UUID */
     UUID uuid,
+    /** 客户端实体 ID（未解析时为 -1） */
     int entityId,
+    /** 村民坐标 */
     BlockPosition position,
+    /** 目标状态 */
     VillagerTargetStatus status,
+    /** 讲台状态 */
     LecternStatus lecternStatus,
+    /** 讲台位置（未定位时为 null） */
     BlockPosition lecternPosition,
+    /** 村民朝向 */
     HorizontalDirection direction,
+    /** 交易状态 */
     VillagerTradeStatus tradeStatus,
+    /** 固定交易位（可为 null） */
     VillagerStation station
 ) {
+    /** 未解析实体 ID 常量 */
     public static final int UNRESOLVED_ENTITY_ID = -1;
 
     public VillagerTarget {
@@ -49,6 +66,7 @@ public record VillagerTarget(
         }
     }
 
+    /** 便捷构造：无朝向、无交易位、交易状态为未打开 */
     public VillagerTarget(
         UUID uuid,
         int entityId,
@@ -70,16 +88,19 @@ public record VillagerTarget(
         );
     }
 
+    /** 便捷构造：默认选中状态、讲台未定位 */
     public VillagerTarget(UUID uuid, int entityId, BlockPosition position) {
         this(uuid, entityId, position, VillagerTargetStatus.SELECTED, LecternStatus.UNLOCATED, null);
     }
 
+    /** 克隆并更新村民坐标 */
     public VillagerTarget withPosition(BlockPosition currentPosition) {
         return new VillagerTarget(
             uuid, entityId, currentPosition, status, lecternStatus, lecternPosition, direction, tradeStatus, station
         );
     }
 
+    /** 克隆并解析实体：更新实体 ID、坐标，标记为可用 */
     public VillagerTarget withResolvedEntity(int currentEntityId, BlockPosition currentPosition) {
         return new VillagerTarget(
             uuid,
@@ -94,6 +115,7 @@ public record VillagerTarget(
         );
     }
 
+    /** 克隆并标记为未解析（实体 ID 置 -1） */
     public VillagerTarget asUnresolved() {
         return new VillagerTarget(
             uuid,
@@ -108,6 +130,7 @@ public record VillagerTarget(
         );
     }
 
+    /** 克隆并更新目标状态（未解析时同步置实体 ID） */
     public VillagerTarget withStatus(VillagerTargetStatus currentStatus) {
         int currentEntityId = currentStatus == VillagerTargetStatus.UNRESOLVED ? UNRESOLVED_ENTITY_ID : entityId;
         return new VillagerTarget(
@@ -115,6 +138,7 @@ public record VillagerTarget(
         );
     }
 
+    /** 克隆并更新讲台状态与位置（位置变化时清空交易位） */
     public VillagerTarget withLectern(LecternStatus currentLecternStatus, BlockPosition currentLecternPosition) {
         VillagerStation currentStation = station;
         if (currentStation != null && !currentStation.lecternPosition().equals(currentLecternPosition)) {
@@ -133,6 +157,7 @@ public record VillagerTarget(
         );
     }
 
+    /** 克隆并绑定交易位（同步更新讲台位置与村民朝向） */
     public VillagerTarget withStation(VillagerStation currentStation, LecternStatus currentLecternStatus) {
         Objects.requireNonNull(currentStation, "currentStation");
         return new VillagerTarget(
@@ -148,6 +173,7 @@ public record VillagerTarget(
         );
     }
 
+    /** 克隆并更新交易状态 */
     public VillagerTarget withTradeStatus(VillagerTradeStatus currentTradeStatus) {
         return new VillagerTarget(
             uuid, entityId, position, status, lecternStatus, lecternPosition, direction, currentTradeStatus, station

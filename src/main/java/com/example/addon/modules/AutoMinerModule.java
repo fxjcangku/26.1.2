@@ -166,6 +166,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Boolean> legitMineIncludeDiagonals;
     private final Setting<Boolean> fastBreak;
     private final Setting<Boolean> bypassAnticheat;
+    private final Setting<Integer> breakInterval;
 
     // ─── 显示设置（私有字段，不在界面显示） ───
     private final Setting<Double> espScale;
@@ -403,6 +404,15 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .name("绕过反作弊")
             .description("仅强反作弊服务器（Grim 等）开启：秒破后额外补发 ABORT 包混淆破坏进度，绕过 fastbreak 检测")
             .defaultValue(false)
+            .build());
+
+        breakInterval = sgBaritone.add(new IntSetting.Builder()
+            .name("秒破间隔（tick）")
+            .description("两次秒破之间的最小间隔。挖太快会卡死/产生空气墙，调大更稳（2 tick≈每秒10个方块）")
+            .defaultValue(2)
+            .min(0)
+            .max(20)
+            .noSlider()
             .build());
 
         // ────────────── 开关类设置 ──────────────
@@ -1165,6 +1175,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public boolean getAutoTool() { return autoTool.get(); }
     public boolean getFastBreak() { return fastBreak.get(); }
     public boolean getBypassAnticheat() { return bypassAnticheat.get(); }
+    public int getBreakInterval() { return breakInterval.get(); }
     public boolean isLogisticsBreakBlocks() { return logisticsBreakBlocks.get(); }
     
     public List<Item> getFoodWhitelist() { return foodWhitelist.get(); }
@@ -1293,17 +1304,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  使用说明按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
             table.row();
             
             // ═══════════════════════════════════════════════════════════════════
             //  假矿检测按钮
             // ═══════════════════════════════════════════════════════════════════
-            WButton checkFakeBtn = theme.button("检测假矿");
-            checkFakeBtn.action = this::checkFakeOres;
-            table.add(checkFakeBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "检测假矿", this::checkFakeOres);
             table.row();
             
             // ═══════════════════════════════════════════════════════════════════

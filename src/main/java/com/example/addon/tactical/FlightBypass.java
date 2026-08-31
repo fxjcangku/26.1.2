@@ -2,12 +2,12 @@ package com.example.addon.tactical;
 
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.ClientLevelPredictionAccessor;
+import com.example.addon.mixin.LocalPlayerAccessor;
+import com.example.addon.mixin.ServerboundMovePlayerPacketAccessor;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -30,11 +30,12 @@ import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 /**
  * 飞行绕过模块（完整实现）
  * 
- * 4种飞行模式：
- * 1. 原版模拟 - 高频跳跃伪装
- * 2. 安全滑翔 - 微下降规避重力检测
- * 3. 烟花火箭 - 模拟鞘翅加速（发送烟花使用包）
- * 4. 序列垫脚 - 预测方块放置（80-120ms随机延迟 + 每5次留一次）
+ * 5种飞行模式：
+ * 1. 发包飞行 - 真正发包级飞行，本地 velocity + 浮空检测绕过 + onGround 伪造
+ * 2. 原版模拟 - 高频跳跃伪装
+ * 3. 安全滑翔 - 微下降规避重力检测
+ * 4. 烟花火箭 - 模拟鞘翅加速（发送烟花使用包）
+ * 5. 序列垫脚 - 预测方块放置（80-120ms随机延迟 + 每5次留一次）
  * 
  * @author yiyijia
  */
@@ -47,16 +48,46 @@ public class FlightBypass extends YiyiaddonModule {
     private final Setting<FlightMode> mode = sgMode.add(new EnumSetting.Builder<FlightMode>()
         .name("飞行模式")
         .description("选择绕过策略")
-        .defaultValue(FlightMode.VANILLA_MIMIC)
+        .defaultValue(FlightMode.PACKET_FLY)
         .onChanged(m -> {
             if (TacticalFSM.hasAdvancedAntiCheat() && (m == FlightMode.VANILLA_MIMIC || m == FlightMode.FIREWORK_BOOST)) {
-                notify("检测到高级反作弊，建议切换到安全滑翔或序列垫脚");
+                notify("检测到高级反作弊，建议切换到发包飞行、安全滑翔或序列垫脚");
             }
         })
         .build()
     );
 
     // 参数调整
+    private final Setting<Double> packetFlySpeed = sgTweaks.add(new DoubleSetting.Builder()
+        .name("发包飞行速度")
+        .description("发包飞行模式：上升/下降的 Y 轴速度，值越大升得越快")
+        .defaultValue(0.3)
+        .min(0.1)
+        .max(1.0)
+        .sliderMax(1.0)
+        .visible(() -> mode.get() == FlightMode.PACKET_FLY)
+        .build()
+    );
+
+    private final Setting<Integer> antiKickInterval = sgTweaks.add(new IntSetting.Builder()
+        .name("浮空重置间隔（tick）")
+        .description("发包飞行模式：每隔N个tick把发包Y轴下压0.03130，重置服务端浮空计时（服务端80tick判定）")
+        .defaultValue(20)
+        .min(5)
+        .max(60)
+        .sliderMax(60)
+        .visible(() -> mode.get() == FlightMode.PACKET_FLY)
+        .build()
+    );
+
+    private final Setting<Boolean> spoofOnGround = sgTweaks.add(new BoolSetting.Builder()
+        .name("伪造落地标志")
+        .description("发包飞行模式：把移动包的onGround强制设为true，绕过依赖落地标志的检测")
+        .defaultValue(true)
+        .visible(() -> mode.get() == FlightMode.PACKET_FLY)
+        .build()
+    );
+
     private final Setting<Double> vanillaJumpInterval = sgTweaks.add(new DoubleSetting.Builder()
         .name("跳跃间隔（tick）")
         .description("原版模拟模式：每N个tick发送一次onGround=true")
@@ -69,8 +100,8 @@ public class FlightBypass extends YiyiaddonModule {
     );
 
     private final Setting<Double> glideSpeed = sgTweaks.add(new DoubleSetting.Builder()
-        .name("下降速度")
-        .description("安全滑翔模式：每tick下降的Y轴距离")
+        .name("滑翔速度")
+        .description("安全滑翔模式：每tick的Y轴速度（上升/下降共用此幅度）")
         .defaultValue(0.03)
         .min(0.01)
         .max(0.1)
@@ -90,25 +121,53 @@ public class FlightBypass extends YiyiaddonModule {
         .build()
     );
 
+    private final Setting<Boolean> adaptiveSlowdown = sgTweaks.add(new BoolSetting.Builder()
+        .name("自适应降速")
+        .description("连续被拉回多次后自动降级到更保守的飞行模式，避免持续触发反作弊被封")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> rubberBandThreshold = sgTweaks.add(new IntSetting.Builder()
+        .name("拉回降级阈值")
+        .description("连续被拉回N次后自动降级到安全滑翔")
+        .defaultValue(3)
+        .min(2)
+        .max(10)
+        .sliderMax(10)
+        .visible(adaptiveSlowdown::get)
+        .build()
+    );
+
     // 内部状态
     private int tickCounter = 0;
     private int scaffoldCounter = 0;
     private final Random random = new Random();
+
+    // 发包飞行状态：浮空重置计数 + 上一个发包的 Y（用于浮空检测绕过）
+    private int packetFlyTick = 0;
+    private double lastPacketY = Double.MAX_VALUE;
+
+    // 自适应降速状态：连续拉回计数 + 最近一次拉回时间（用于自动降级与恢复）
+    private int consecutiveRubberBands = 0;
+    private long lastRubberBandTime = 0L;
+
+    // 拉回包播报节流：拉回是高频事件，频繁提示会刷屏，5 秒只报一次
+    private long lastRubberBandNotice = 0L;
 
     // 垫脚延迟拆除登记（主线程 tick 驱动，避免子线程碰预测处理器）
     private BlockPos pendingDestroyPos = null;
     private long pendingDestroyAt = 0L;
 
     public FlightBypass() {
-        super(CATEGORY_TACTICAL, "飞行绕过", "四种飞行模式绕过GrimAC/Matrix高级反作弊。点击按钮查看说明。");
+        super(CATEGORY_TACTICAL, "飞行绕过", "五种飞行模式绕过GrimAC/Matrix/Vulcan高级反作弊。点击按钮查看说明。");
     }
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent())));
             table.row();
         }, new String[0]);
     }
@@ -116,6 +175,10 @@ public class FlightBypass extends YiyiaddonModule {
     private String[] buildHelpContent() {
         return com.example.addon.ui.HelpScreen.buildHelpContent(
             new com.example.addon.ui.HelpScreen.HelpSection("飞行模式",
+                "§8├─ §e发包飞行 §8- §7真正发包级飞行（推荐）",
+                "§8│   §7本地velocity + 浮空检测绕过 + onGround伪造",
+                "§8│   §7唯一能骗过服务端重力校验的模式",
+                "§8│",
                 "§8├─ §e原版模拟 §8- §7高频跳跃伪装",
                 "§8│   §7适用于低级反作弊，检测宽松的服务器",
                 "§8│",
@@ -130,19 +193,22 @@ public class FlightBypass extends YiyiaddonModule {
             ),
             
             new com.example.addon.ui.HelpScreen.HelpSection("参数调整",
+                "§6▸ §f飞行速度 §8- §e0.3 §7(发包飞行模式)",
+                "§6▸ §f浮空重置间隔 §8- §e20 tick §7(发包飞行模式)",
+                "§6▸ §f伪造落地标志 §8- §e开 §7(发包飞行模式)",
                 "§6▸ §f跳跃间隔 §8- §e3 tick §7(原版模拟模式)",
-                "§6▸ §f下降速度 §8- §e0.03 §7(安全滑翔模式)",
-                "§6▸ §f放置延迟 §8- §e80-120ms §7(序列垫脚模式)",
-                "§6▸ §f留痕频率 §8- §e1/5 §7(序列垫脚模式)"
+                "§6▸ §f滑翔速度 §8- §e0.03 §7(安全滑翔模式)",
+                "§6▸ §f放置延迟 §8- §e80-120ms §7(序列垫脚模式)"
             ),
             
             new com.example.addon.ui.HelpScreen.HelpSection("自动适配",
                 "§a[1] §f加入服务器时自动检测反作弊类型",
                 "§a[2] §f检测到GrimAC/Matrix时自动切换安全模式",
-                "§a[3] §f模块启动时根据反作弊调整参数"
+                "§a[3] §f被拉回时自动断流联动（配合发包防踢）"
             ),
             
             new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
+                "§c⚠ §f发包飞行对Vulcan/Matrix等高强度反作弊仍有风险，自行评估",
                 "§c⚠ §f原版模拟和烟花火箭对高级反作弊无效",
                 "§c⚠ §f安全滑翔会持续下降，需要间歇性上升补偿",
                 "§c⚠ §f序列垫脚需要背包里有方块（圆石/泥土等）",
@@ -157,6 +223,11 @@ public class FlightBypass extends YiyiaddonModule {
         if (pendingDestroyPos != null) {
             destroyScaffoldBlock(pendingDestroyPos);
             pendingDestroyPos = null;
+        }
+        // 恢复位置重发间隔：发包飞行会把 positionReminder 压低强制高频发包，
+        // 关闭后必须复位，否则残留会导致持续高频发包被服务端判异常
+        if (mc.player != null) {
+            ((LocalPlayerAccessor) (Object) mc.player).yiyiaddon$setPositionReminder(0);
         }
     }
 
@@ -174,6 +245,10 @@ public class FlightBypass extends YiyiaddonModule {
         tickCounter = 0;
         scaffoldCounter = 0;
         pendingDestroyPos = null;
+        packetFlyTick = 0;
+        lastPacketY = Double.MAX_VALUE;
+        consecutiveRubberBands = 0;
+        lastRubberBandTime = 0L;
 
         // 检测到高级反作弊时自动切换安全模式
         if (TacticalFSM.hasAdvancedAntiCheat()) {
@@ -209,10 +284,34 @@ public class FlightBypass extends YiyiaddonModule {
     private void onReceivePacket(PacketEvent.Receive event) {
         if (!isActive()) return;
 
-        // 收到拉回包时发布事件（AntiKickBypass 会监听并处理）
+        // 收到拉回包时发布事件（AntiKickBypass 会监听并处理），播报节流防刷屏
         if (event.packet instanceof ClientboundPlayerPositionPacket packet) {
             TacticalFSM.publishRubberBand(packet);
-            notify("§c收到拉回包，已触发防踢断流");
+            long now = System.currentTimeMillis();
+
+            // 自适应降速：统计连续拉回次数，达到阈值自动降级到更保守的模式。
+            // 反作弊拉回=它已经判定你移动非法，此时继续顶风只会累积 flag 量，
+            // 主动降级能及时止损；一段时间无拉回则重置计数，避免一次误拉回就永久降级
+            if (adaptiveSlowdown.get()) {
+                // 超过 10 秒无拉回视为脱离危险，重置连续计数
+                if (now - lastRubberBandTime > 10_000) {
+                    consecutiveRubberBands = 0;
+                }
+                lastRubberBandTime = now;
+                consecutiveRubberBands++;
+
+                if (consecutiveRubberBands >= rubberBandThreshold.get()
+                    && mode.get() == FlightMode.PACKET_FLY) {
+                    consecutiveRubberBands = 0;
+                    mode.set(FlightMode.SAFE_GLIDE);
+                    notify("§e⚠ 连续被拉回 " + rubberBandThreshold.get() + " 次 §8▸ §f已自动降级到安全滑翔");
+                }
+            }
+
+            if (now - lastRubberBandNotice >= 5000) {
+                lastRubberBandNotice = now;
+                notify("§e⚠ 收到拉回包 §8▸ §f已联动防踢断流");
+            }
         }
     }
 
@@ -238,6 +337,9 @@ public class FlightBypass extends YiyiaddonModule {
         tickCounter++;
 
         switch (mode.get()) {
+            case PACKET_FLY:
+                handlePacketFly();
+                break;
             case VANILLA_MIMIC:
                 handleVanillaMimic();
                 break;
@@ -250,6 +352,66 @@ public class FlightBypass extends YiyiaddonModule {
             case SEQUENCE_SCAFFOLD:
                 handleSequenceScaffold();
                 break;
+        }
+    }
+
+    /**
+     * 模式 0: 发包飞行 - 真正发包级飞行
+     *
+     * 这是唯一能骗过服务端权威重力校验的飞行方式，原理分两层：
+     * 1. 本地层：用 velocity 让客户端玩家真的飞起来（渲染同步）；
+     * 2. 发包层：拦截即将发出的移动包，周期性把 Y 坐标下压 0.03130 + 伪造 onGround，
+     *    绕过服务端 ServerGamePacketListener#handleMovePlayer 的浮空检测。
+     *
+     * 浮空检测：服务端连续 80 tick（约 4 秒）发现玩家 Y 不变或上升就判定非法飞行，
+     * 所以必须在 80 tick 内至少让服务端看到一次「下降 >= 0.03125」的合法落地轨迹。
+     */
+    private void handlePacketFly() {
+        // 本地垂直速度控制：跳跃上升、潜行下降、无输入悬停
+        Vec3 vel = mc.player.getDeltaMovement();
+        double vy = 0;
+        if (mc.options.keyJump.isDown()) {
+            vy = packetFlySpeed.get();
+        } else if (mc.options.keyShift.isDown()) {
+            vy = -packetFlySpeed.get();
+        }
+        mc.player.setDeltaMovement(vel.x, vy, vel.z);
+
+        // 压低位置重发间隔，强制客户端每 tick 重发移动包，
+        // 保证即使水平静止（只上下飞）也能持续触发发包伪造
+        ((LocalPlayerAccessor) (Object) mc.player).yiyiaddon$setPositionReminder(1);
+    }
+
+    /**
+     * 发包飞行：拦截即将发送的移动包，做浮空检测绕过 + onGround 伪造。
+     *
+     * 这是「超过 Meteor」的关键——Meteor 的 Flight 只在 anti-kick 模式下改 Y，
+     * 我这里额外叠加 onGround 伪造 + 与 TacticalFSM 拉回断流联动。
+     */
+    @EventHandler
+    private void onSendMovePacket(PacketEvent.Send event) {
+        if (!isActive() || mode.get() != FlightMode.PACKET_FLY) return;
+        if (!(event.packet instanceof ServerboundMovePlayerPacket packet)) return;
+
+        // 只处理带位置的包（Pos / PosRot），Rot / StatusOnly 不含 Y 直接跳过
+        double currentY = packet.getY(Double.MAX_VALUE);
+        if (currentY == Double.MAX_VALUE) return;
+
+        ServerboundMovePlayerPacketAccessor accessor = (ServerboundMovePlayerPacketAccessor) packet;
+
+        // onGround 伪造：让服务端认为玩家落地，绕过依赖落地标志的检测
+        if (spoofOnGround.get()) {
+            accessor.yiyiaddon$setOnGround(true);
+        }
+
+        // 浮空检测绕过：每隔 N tick 把发包 Y 下压 0.03130（大于服务端 0.03125 阈值），
+        // 制造「正在下降」的合法轨迹，重置服务端浮空计时
+        packetFlyTick++;
+        if (packetFlyTick >= antiKickInterval.get() && lastPacketY != Double.MAX_VALUE) {
+            packetFlyTick = 0;
+            accessor.yiyiaddon$setY(lastPacketY - 0.03130);
+        } else {
+            lastPacketY = currentY;
         }
     }
 
@@ -284,13 +446,26 @@ public class FlightBypass extends YiyiaddonModule {
     }
 
     /**
-     * 模式 2: 安全滑翔 - 微下降规避重力检测
-     * 每tick让Y轴下降0.03，规避"连续上升"检测
+     * 模式 2: 安全滑翔 - 微速巡航规避重力/飞行检测
+     *
+     * 真实起飞逻辑：按住跳跃键以「滑翔速度」上升、潜行键快速下降、
+     * 无输入时保持微下降伪装。全部用一个小的 Y 速度驱动，
+     * 避免原版模拟那种一瞬 +0.5 的大速度被运动预测类反作弊一眼看穿。
      */
     private void handleSafeGlide() {
         double speed = glideSpeed.get();
         Vec3 motion = mc.player.getDeltaMovement();
-        mc.player.setDeltaMovement(motion.x, -speed, motion.z);
+
+        double vy;
+        if (mc.options.keyJump.isDown()) {
+            vy = speed;                       // 上升：缓慢爬升，伪装缓降曲线
+        } else if (mc.options.keyShift.isDown()) {
+            vy = -speed * 3.0;                // 下降：快速脱离危险高度
+        } else {
+            vy = -speed;                      // 无输入：维持微下降外观
+        }
+
+        mc.player.setDeltaMovement(motion.x, vy, motion.z);
     }
 
     /**
@@ -353,10 +528,12 @@ public class FlightBypass extends YiyiaddonModule {
         if (!belowState.isAir() || !belowState.getFluidState().isEmpty()) return;
         if (!belowState.getCollisionShape(mc.level, belowPos).isEmpty()) return;
 
-        // 放置目标格的下方那一格作为命中面，向上放置
+        // 放置目标格的下方那一格作为支撑面，向上放置到脚下。
+        // 支撑面必须是实心方块（非空气且碰撞箱非空），
+        // 否则放置包没有依附面，服务端会直接丢弃（此前判定写反导致本模式永远放不出方块）
         BlockPos supportPos = belowPos.below();
         BlockState supportState = mc.level.getBlockState(supportPos);
-        if (supportState.isAir() || !supportState.getCollisionShape(mc.level, supportPos).isEmpty()) return;
+        if (supportState.isAir() || supportState.getCollisionShape(mc.level, supportPos).isEmpty()) return;
 
         BlockHitResult hitResult = new BlockHitResult(
             new Vec3(supportPos.getX() + 0.5, supportPos.getY() + 1.0, supportPos.getZ() + 0.5),
@@ -438,6 +615,7 @@ public class FlightBypass extends YiyiaddonModule {
 
     /** 飞行模式枚举 */
     public enum FlightMode {
+        PACKET_FLY("发包飞行"),
         VANILLA_MIMIC("原版模拟"),
         SAFE_GLIDE("安全滑翔"),
         FIREWORK_BOOST("烟花火箭"),

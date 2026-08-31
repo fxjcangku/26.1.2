@@ -433,9 +433,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
             // 使用说明按钮（置顶显眼位置）
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
             table.row();
 
             // 点位卡片区（两行三列，共六个点位）

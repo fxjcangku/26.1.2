@@ -75,6 +75,9 @@ package com.example.addon.convention;
 //   · 所有注释必须使用中文，禁止英文注释（用户看不懂）
 //   · 技术术语可保留英文（Paper / Spigot / Baritone / Windows / API 等）
 //   · 所有代码、脚本、状态机必须写中文注释（类 / 方法 / 关键逻辑）
+//   · 插件代码注释铁律（2026-08-31 明确）：addon 项目内所有 Java 源文件
+//     （modules/ 模块类 + 各独立功能包，含移植进来的代码）的类 / 方法 / 关键逻辑
+//     必须带中文注释，禁止出现无注释的类或方法；每移植一个模块都按此验收
 //   · UI 元素（HUD、聊天消息、设置面板）必须使用中文
 //
 // ── 注释原则 ──────────────────────────────────────────────────────────────
@@ -263,6 +266,10 @@ package com.example.addon.convention;
 //   ── 三、面板按钮 ──────────────────────────────────────────────
 //   一律用 addUniformButton(theme, table, "文字", 回调)，多行按钮用 table.row() 分行。
 //   ✗ 禁止 table.add(theme.button(...)).expandX()。
+//   ✗ 禁止自拼 theme.button(...).expandX().minWidth(任意数字)（2026-08-31 补充）：
+//     手写 minWidth 是魔法数，换按钮文字就列宽不齐；等宽由基类封装统一实现
+//     （minWidth(BUTTON_MIN_WIDTH) + expandWidgetX + group("uniform")，
+//      group("uniform") 让同行按钮取该组最大宽度对齐），任何模块不得绕过基类自己拼。
 //
 //   ── 四、启动自检的缺项播报 ────────────────────────────────────
 //   selfCheck() 必须返回 List<String> 收集全部缺项，交给 reportSelfCheck(missing) 播报。

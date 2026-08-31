@@ -197,9 +197,8 @@ public class AutoLoginModule extends YiyiaddonModule {
         return buildInfoWidget(theme,
             table -> {
                 // 使用说明按钮（置顶显眼位置）
-                WButton helpBtn = theme.button("§e查看使用说明");
-                helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
-                table.add(helpBtn).expandX().minWidth(200);
+                addUniformButton(theme, table, "§e查看使用说明",
+                    () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
                 table.row();
             },
             new String[]{ "§l自动登入 · 配置说明" },

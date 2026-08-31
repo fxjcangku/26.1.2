@@ -6,8 +6,6 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.network.protocol.Packet;
@@ -17,10 +15,8 @@ import net.minecraft.network.protocol.common.custom.BrandPayload;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.entity.player.Input;
-import net.minecraft.world.inventory.RecipeBookType;
 import net.minecraft.world.phys.Vec3;
 
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -106,7 +102,7 @@ public class AntiKickBypass extends YiyiaddonModule {
 
     private final Setting<Boolean> antiAfk = sg3.add(new BoolSetting.Builder()
         .name("防挂机检测")
-        .description("每 10 秒假装你在翻配方书，让服务器以为你在玩")
+        .description("每 5 秒发一个微小转身包刷新服务端的活跃时间戳，让服务器以为你在玩")
         .defaultValue(true)
         .build()
     );
@@ -251,6 +247,13 @@ public class AntiKickBypass extends YiyiaddonModule {
     private boolean rubberBandHandling = false;
     private int rubberBandCooldownTicks = 0;
 
+    // 拉回播报节流：拉回可能连发，5 秒只报一次，避免刷屏
+    private long lastRubberBandNotice = 0L;
+
+    // 模块开启时刻：离开服务器时用它算出本次会话存活时长（不能用限速计时的
+    // lastThrottleResetTime，后者每秒都在刷新，永远算不出真实存活时间）
+    private long moduleStartTime = 0L;
+
     // 拉回分析记录
     private static class RubberBandRecord {
         final boolean flying;
@@ -302,9 +305,8 @@ public class AntiKickBypass extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent())));
             table.row();
         }, new String[0]);
     }
@@ -357,7 +359,8 @@ public class AntiKickBypass extends YiyiaddonModule {
             warning("§c单人世界无需防踢");
             return;
         }
-        
+
+        moduleStartTime = System.currentTimeMillis();
         lastChatSendTime = 0;
         antiAfkTicker = 0;
         digThisSecond.set(0);
@@ -395,19 +398,30 @@ public class AntiKickBypass extends YiyiaddonModule {
         Packet<?> packet = event.packet;
 
         // ① 伪装客户端
+        // Brand 是服务端主动查询的，伪造包必须替换（不能直接放行原包）；
+        // 已伪装成 vanilla 的重发包要放行，否则「拦截→重发→再拦截」会无限递归
         if (fakeBrand.get() && packet instanceof ServerboundCustomPayloadPacket customPayload) {
             CustomPacketPayload payload = customPayload.payload();
-            if (payload instanceof BrandPayload) {
-                event.setCancelled(true);
-                event.connection.send(new ServerboundCustomPayloadPacket(new BrandPayload("vanilla")));
+            if (payload instanceof BrandPayload brandPayload) {
+                if (!"vanilla".equals(brandPayload.brand())) {
+                    event.setCancelled(true);
+                    event.connection.send(new ServerboundCustomPayloadPacket(new BrandPayload("vanilla")));
+                }
                 return;
             }
         }
 
+        // 拦截 mod 频道：非 minecraft 命名空间的频道（fabric:* / meteor-client:* 等）
+        // 会直接暴露客户端装了哪些 mod。此外 minecraft:register / minecraft:unregister
+        // 命名空间虽是 minecraft，但它们的正文就是 mod 频道列表（NUL 分隔），
+        // 反作弊（Vulcan 等）读这里就能拿到 mod 清单，必须一并拦掉，否则伪造客户端形同虚设
         if (blockModChannels.get() && packet instanceof ServerboundCustomPayloadPacket customPayload) {
             CustomPacketPayload payload = customPayload.payload();
             String namespace = payload.type().id().getNamespace();
-            if (!namespace.equals("minecraft")) {
+            String id = payload.type().id().toString();
+            if (!namespace.equals("minecraft")
+                || id.equals("minecraft:register")
+                || id.equals("minecraft:unregister")) {
                 event.setCancelled(true);
                 return;
             }
@@ -420,7 +434,14 @@ public class AntiKickBypass extends YiyiaddonModule {
                 boolean onIce = mc.level.getBlockState(mc.player.blockPosition().below()).getBlock() 
                     instanceof net.minecraft.world.level.block.IceBlock;
                 if (speed > 0.16 && !onIce && !mc.player.isSprinting()) {
-                    event.setCancelled(true);
+                    // 假潜行（shift 标记与移动速度矛盾）会暴露给服务端。
+                    // 不能直接取消整包：Input 包携带全部按键，取消等于当帧
+                    // 前后左右跳跃全丢，移动会瞬停。正确做法是重写包体，
+                    // 保留其它按键、只摘掉 shift 标记
+                    event.packet = new ServerboundPlayerInputPacket(new Input(
+                        input.forward(), input.backward(), input.left(), input.right(),
+                        input.jump(), false, input.sprint()
+                    ));
                     return;
                 }
             }
@@ -460,7 +481,9 @@ public class AntiKickBypass extends YiyiaddonModule {
     private void onGameLeft(GameLeftEvent event) {
         if (!isActive()) return;
 
-        long sessionDuration = System.currentTimeMillis() - lastThrottleResetTime;
+        // 用模块开启时刻计算存活时长。此前误用限速计时器（每秒清零一次），
+        // 导致每次离开服务器都会误报「存活不到 1 分钟」
+        long sessionDuration = System.currentTimeMillis() - moduleStartTime;
         if (sessionDuration < 60_000 && enableAnalysis.get()) {
             notifyError("§c存活不到 1 分钟，可能被踢了");
         }
@@ -495,14 +518,17 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        // ③ 防挂机
+        // ③ 防挂机：每 5 秒发一个微小视角旋转包。
+        // 服务端防挂机判定的是「最后活动时间戳」，RecipeBook 设置包
+        // 不会刷新这个时间戳，发出去等于没发；而任何移动/转身都会刷新它。
+        // 这里用 ±0.5° 的 yaw 抖动模拟「玩家在转身」，服务器侧无感知却会更新活跃时间
         if (antiAfk.get()) {
             antiAfkTicker++;
-            if (antiAfkTicker >= 200) {
+            if (antiAfkTicker >= 100) {
                 antiAfkTicker = 0;
-                mc.player.connection.send(new ServerboundRecipeBookChangeSettingsPacket(
-                    RecipeBookType.CRAFTING, false, false
-                ));
+                float yaw = mc.player.getYRot() + (random.nextFloat() - 0.5f);
+                mc.player.connection.send(new ServerboundMovePlayerPacket.Rot(
+                    yaw, mc.player.getXRot(), mc.player.onGround(), mc.player.horizontalCollision));
             }
         }
 
@@ -591,7 +617,12 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        notify("§e被拉回！已自动处理（发确认包 + 静止包 + 2 秒冷却）");
+        // 播报节流：拉回可能连发，5 秒只报一次，避免刷屏
+        long now = System.currentTimeMillis();
+        if (now - lastRubberBandNotice >= 5000) {
+            lastRubberBandNotice = now;
+            notify("§e⚠ 被拉回 §8▸ §f已自动处理（确认包 + 静止包 + 冷却）");
+        }
     }
 
     private void analyzeRubberBands() {

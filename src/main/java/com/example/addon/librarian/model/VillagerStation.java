@@ -4,14 +4,28 @@ package com.example.addon.librarian.model;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * 附魔交易所 · 固定交易位。
+ *
+ * <p>描述一个失业村民的「刷附魔工位」几何布局：村民 + 岩浆块（标记块）+
+ * 讲台 + 玩家站位。所有坐标由村民坐标与朝向推导，保证几何一致性。</p>
+ */
 public record VillagerStation(
+    /** 村民 UUID */
     UUID villagerUuid,
+    /** 村民坐标 */
     BlockPosition villagerPosition,
+    /** 村民朝向 */
     HorizontalDirection villagerFacing,
+    /** 岩浆块（标记块）坐标，位于村民前方一格 */
     BlockPosition markerBlockPosition,
+    /** 讲台坐标，位于岩浆块上方 */
     BlockPosition lecternPosition,
+    /** 玩家站位坐标，位于岩浆块沿村民朝向继续偏移一格 */
     BlockPosition playerStandPosition,
+    /** 讲台阅读面朝向（与村民朝向相反） */
     HorizontalDirection lecternFacing,
+    /** 交易位验证状态 */
     StationValidationStatus validationStatus
 ) {
     public VillagerStation {
@@ -37,6 +51,7 @@ public record VillagerStation(
         }
     }
 
+    /** 根据村民坐标与朝向推导完整交易位（其余坐标自动计算） */
     public static VillagerStation create(
         UUID villagerUuid,
         BlockPosition villagerPosition,
@@ -56,6 +71,7 @@ public record VillagerStation(
         );
     }
 
+    /** 克隆并更新验证状态 */
     public VillagerStation withValidationStatus(StationValidationStatus currentStatus) {
         return new VillagerStation(
             villagerUuid,
@@ -69,10 +85,12 @@ public record VillagerStation(
         );
     }
 
+    /** 返回村民朝向（别名，语义更清晰） */
     public HorizontalDirection villagerDirection() {
         return villagerFacing;
     }
 
+    /** 返回讲台阅读面朝向（别名，语义更清晰） */
     public HorizontalDirection lecternDirection() {
         return lecternFacing;
     }

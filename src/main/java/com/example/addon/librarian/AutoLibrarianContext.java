@@ -13,11 +13,23 @@ import com.example.addon.librarian.model.VillagerStation;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 附魔交易所 · 运行上下文。
+ *
+ * <p>持有一次运行的全部可变状态：全局任务进度、当前村民周期、讲台刷新尝试、
+ * 交易验证上下文与库存采样序列。通过内部生命周期子类组织不同粒度的状态，
+ * 并对外提供只读查询与受控变更入口。</p>
+ */
 public final class AutoLibrarianContext {
+    /** 全局任务生命周期（目标进度 + 最后失败原因） */
     private final GlobalTaskLifecycle globalTask;
+    /** 当前村民周期生命周期 */
     private final VillagerCycleLifecycle villagerCycle = new VillagerCycleLifecycle();
+    /** 讲台刷新尝试生命周期 */
     private final RefreshAttemptLifecycle refreshAttempt = new RefreshAttemptLifecycle();
+    /** 当前交易验证上下文（交易进行中才非空） */
     private TradeVerificationContext tradeVerification;
+    /** 库存采样序号（单调递增，区分先后快照） */
     private long inventorySampleSequence;
 
     public AutoLibrarianContext(TargetProgress targetProgress) {

@@ -23,8 +23,6 @@ import com.example.addon.librarian.service.MovementStatus;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
@@ -40,11 +38,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 附魔交易所模块（Meteor Module 入口）。
+ *
+ * <p>负责装配设置、业务服务与编排器，处理模块启停、tick 驱动、启动自检、
+ * 状态播报与快捷键暂停。继承 {@link YiyiaddonModule} 以复用统一消息格式。</p>
+ */
 public final class AutoLibrarianModule extends YiyiaddonModule {
+    /** Meteor 设置 */
     private final AutoLibrarianSettings moduleSettings;
+    /** 运行上下文（每次启动重新创建） */
     private AutoLibrarianContext context;
+    /** 业务服务集合 */
     private AutoLibrarianServices services;
+    /** 业务编排器 */
     private AutoLibrarianOrchestrator orchestrator;
+    /** 是否已暂停 */
     private boolean paused = false;
 
     public AutoLibrarianModule() {
@@ -57,10 +66,8 @@ public final class AutoLibrarianModule extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            // 使用说明按钮（置顶显眼位置）
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            // 使用说明按钮（置顶，等宽主题按钮，符合规范 5.7 面板按钮）
+            addUniformButton(theme, table, "§e查看使用说明", () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
             table.row();
         });
     }

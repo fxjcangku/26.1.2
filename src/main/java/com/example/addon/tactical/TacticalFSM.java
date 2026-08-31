@@ -31,8 +31,17 @@ public class TacticalFSM {
     /** 资源包下载状态 */
     private static volatile boolean isDownloadingResourcePack = false;
 
-    /** 拉回包冷却状态 */
-    private static volatile boolean rubberBandCooldown = false;
+    /**
+     * 拉回包冷却截止时间戳（毫秒），0 表示不在冷却。
+     *
+     * 为什么用时间戳而不是布尔值：布尔冷却只会由发包防踢模块的 tick 倒计时解除，
+     * 一旦飞行绕过单独开启而发包防踢没开，拉回一次后冷却标志永远翻不回来，
+     * 飞行模块会被永久冻结。时间戳方案到期自动失效，任何组合下都不会死锁。
+     */
+    private static volatile long rubberBandCooldownUntil = 0L;
+
+    /** 拉回冷却时长：收到拉回包后 2 秒内暂停所有绕过类动作，避免顶风作案 */
+    private static final long RUBBER_BAND_COOLDOWN_MS = 2000L;
 
     /** 服务器卡顿状态 */
     private static volatile boolean serverLagging = false;
@@ -61,8 +70,14 @@ public class TacticalFSM {
         return isDownloadingResourcePack;
     }
 
+    /** 是否处于拉回冷却（调用即检查到期，到期自动解除，不会死锁） */
     public static boolean isRubberBandCooldown() {
-        return rubberBandCooldown;
+        if (rubberBandCooldownUntil == 0L) return false;
+        if (System.currentTimeMillis() >= rubberBandCooldownUntil) {
+            rubberBandCooldownUntil = 0L;
+            return false;
+        }
+        return true;
     }
 
     public static boolean isServerLagging() {
@@ -93,9 +108,9 @@ public class TacticalFSM {
         isDownloadingResourcePack = downloading;
     }
 
-    /** 设置拉回包冷却状态 */
+    /** 设置拉回包冷却状态（true=进入 2 秒冷却，false=立即解除） */
     public static void setRubberBandCooldown(boolean cooldown) {
-        rubberBandCooldown = cooldown;
+        rubberBandCooldownUntil = cooldown ? System.currentTimeMillis() + RUBBER_BAND_COOLDOWN_MS : 0L;
     }
 
     /** 设置服务器卡顿状态 */
@@ -163,7 +178,7 @@ public class TacticalFSM {
         detectedAntiCheat = "未知";
         hasAdvancedAntiCheat = false;
         isDownloadingResourcePack = false;
-        rubberBandCooldown = false;
+        rubberBandCooldownUntil = 0L;
         serverLagging = false;
         currentTps = 20.0;
         downloadingPacks.clear();

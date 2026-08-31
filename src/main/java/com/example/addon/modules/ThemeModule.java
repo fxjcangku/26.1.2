@@ -199,6 +199,14 @@ public final class ThemeModule extends YiyiaddonModule {
                 buttons.row();
                 addButton(theme, buttons, "灰紫夜", Palette.DUSK_LAVENDER);
                 addButton(theme, buttons, "森林雾", Palette.FOREST_MIST);
+                addButton(theme, buttons, "青碧", Palette.TEAL);
+                buttons.row();
+                addButton(theme, buttons, "薰衣草", Palette.LAVENDER);
+                addButton(theme, buttons, "珊瑚", Palette.CORAL);
+                addButton(theme, buttons, "天蓝", Palette.SKY);
+                buttons.row();
+                addButton(theme, buttons, "奶油", Palette.CREAM);
+                addButton(theme, buttons, "石墨", Palette.GRAPHITE);
                 addUniformButton(theme, buttons, "恢复默认", this::restoreDefault);
                 buttons.row();
                 table.add(buttons);
@@ -245,7 +253,13 @@ public final class ThemeModule extends YiyiaddonModule {
         WARM_SAND("暖沙灰", 0xB5A58FFF, 0xD4C8B7FF, 0x897966FF, 0xF7F3ECFF, 0xCDC3B5FF, 0xFFFFFFFF, 0x25211BFF, 0x393229EE, 0x9D8C73FF),
         SAGE("鼠尾草", 0x9BAF8FFF, 0xC3D0B6FF, 0x718264FF, 0xF2F6EDFF, 0xBEC8B6FF, 0xFFFFFFFF, 0x1D231AFF, 0x30392BEE, 0x849873FF),
         DUSK_LAVENDER("灰紫夜", 0x9D96B2FF, 0xC5BED1FF, 0x746D88FF, 0xF3F0F7FF, 0xC2BBCBFF, 0xFFFFFFFF, 0x211E28FF, 0x342F3DEE, 0x88809EFF),
-        FOREST_MIST("森林雾", 0x789B8CFF, 0xA9C2B5FF, 0x527464FF, 0xEDF5F0FF, 0xAFC3B8FF, 0xFFFFFFFF, 0x17221DFF, 0x29382FEE, 0x668979FF);
+        FOREST_MIST("森林雾", 0x789B8CFF, 0xA9C2B5FF, 0x527464FF, 0xEDF5F0FF, 0xAFC3B8FF, 0xFFFFFFFF, 0x17221DFF, 0x29382FEE, 0x668979FF),
+        TEAL("青碧", 0x2BB3A3FF, 0x8AD8CCFF, 0x1B7F73FF, 0xEFF9F7FF, 0xB0CDC6FF, 0xFFFFFFFF, 0x14211FFF, 0x20332FEE, 0x1F8F81FF),
+        LAVENDER("薰衣草", 0xA78BFAFF, 0xCDBCFDFF, 0x7C5EE0FF, 0xF7F4FFFF, 0xC9BEDDFF, 0xFFFFFFFF, 0x1E1A28FF, 0x2E283AEE, 0x8466D4FF),
+        CORAL("珊瑚", 0xFF7A6BFF, 0xFFB4ABFF, 0xD95041FF, 0xFFF6F4FF, 0xDBB9B4FF, 0xFFFFFFFF, 0x261916FF, 0x3A2521EE, 0xCF5A4CFF),
+        SKY("天蓝", 0x5CB3E8FF, 0xA5D2F2FF, 0x3A84B8FF, 0xF1F8FDFF, 0xB4CCDAFF, 0xFFFFFFFF, 0x16222AFF, 0x22343EEE, 0x4289BAFF),
+        CREAM("奶油", 0xE8C97AFF, 0xF3DFAFFF, 0xB8964BFF, 0xFDFAF2FF, 0xD8CCB0FF, 0xFFFFFFFF, 0x262116FF, 0x3A3320EE, 0xC09A4EFF),
+        GRAPHITE("石墨", 0x9AA0A6FF, 0xC6CBCFFF, 0x6E7378FF, 0xF4F5F6FF, 0xB9BDC1FF, 0xFFFFFFFF, 0x1B1D1FFF, 0x2A2D30EE, 0x7A7F84FF);
 
         private final String displayName;
         private final int accent;

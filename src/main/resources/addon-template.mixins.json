@@ -32,6 +32,8 @@
     "MeteorCommandNamesMixin",
     "MeteorCommandRegistrationMixin",
     "ClientLevelPredictionAccessor",
+    "ServerboundMovePlayerPacketAccessor",
+    "LocalPlayerAccessor",
     "KeyboardInvoker",
     "ResourcePackPushMixin",
     "ClientCommandSourceMixin",
