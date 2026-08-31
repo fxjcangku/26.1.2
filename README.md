@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=30&pause=1200&color=00D9FF&center=true&vCenter=true&width=900&lines=yiyiaddon+v1.2;%E6%88%91%E6%98%AF%E4%B8%80%E4%B8%AA%E4%B8%93%E6%B3%A8%E8%87%AA%E5%8A%A8%E5%8C%96%E8%84%9A%E6%9C%AC%E7%A0%94%E7%A9%B6%E7%9A%84%E6%89%A9%E5%B1%95;%E8%87%AA%E5%8A%A8%E6%8C%96%E7%9F%BF+%C2%B7+%E5%85%A8%E4%B8%AD%E6%96%87+%C2%B7+%E6%99%BA%E8%83%BD%E8%87%AA%E5%8A%A8%E5%8C%96" alt="yiyiaddon" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,100:00d9ff&height=180&section=header&text=yiyiaddon&fontSize=56&fontColor=ffffff&animation=fadeIn" alt="yiyiaddon" width="100%" />
 
 <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=minecraft%20automated%20mining%20cinematic%20scene%2C%20futuristic%20holographic%20mining%20drill%2C%20glowing%20diamond%20ore%20in%20dark%20cave%2C%20cyan%20blue%20neon%20tech%20dashboard%2C%20professional%20high%20quality%20digital%20art&image_size=landscape_16_9" alt="yiyiaddon 自动化脚本" width="860" />
 
