@@ -74,6 +74,13 @@ public class AntiKickBypass extends YiyiaddonModule {
         .build()
     );
 
+    private final Setting<Boolean> blockFakeSprint = sg1.add(new BoolSetting.Builder()
+        .name("拦截假疾跑")
+        .description("Tweakeroo 假疾跑会让疾跑标记与移动方向矛盾（后退/无前进仍疾跑），服务器据此判定。此功能摘掉矛盾疾跑标记")
+        .defaultValue(true)
+        .build()
+    );
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  聊天排队 - 防止发消息太快被踢
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -241,11 +248,9 @@ public class AntiKickBypass extends YiyiaddonModule {
     private final AtomicInteger digThisSecond = new AtomicInteger(0);
     private final AtomicInteger interactThisSecond = new AtomicInteger(0);
     private long lastThrottleResetTime = System.currentTimeMillis();
-    private final AtomicInteger throttledCount = new AtomicInteger(0);
 
-    // 拉回处理状态
-    private boolean rubberBandHandling = false;
-    private int rubberBandCooldownTicks = 0;
+    // 动态限速倍率：检测到强反作弊时收紧（1.0=正常，越小越严格），运行时打折不改用户设置
+    private volatile double throttleFactor = 1.0;
 
     // 拉回播报节流：拉回可能连发，5 秒只报一次，避免刷屏
     private long lastRubberBandNotice = 0L;
@@ -365,9 +370,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         antiAfkTicker = 0;
         digThisSecond.set(0);
         interactThisSecond.set(0);
-        throttledCount.set(0);
-        rubberBandHandling = false;
-        rubberBandCooldownTicks = 0;
+        throttleFactor = 1.0;
         shakeTickCounter = 0;
         nextShakeAt = 3 + random.nextInt(6);
         lastPosition = mc.player != null ? mc.player.position() : Vec3.ZERO;
@@ -427,23 +430,38 @@ public class AntiKickBypass extends YiyiaddonModule {
             }
         }
 
-        if (blockFakeSneak.get() && packet instanceof ServerboundPlayerInputPacket inputPacket) {
+        if (packet instanceof ServerboundPlayerInputPacket inputPacket) {
             Input input = inputPacket.input();
-            if (input.shift() && mc.player != null) {
+            boolean newShift = input.shift();
+            boolean newSprint = input.sprint();
+            boolean modified = false;
+
+            // 假潜行：shift 标记与移动速度矛盾（潜行应慢，高速说明假潜行）。
+            // 不能取消整包——Input 包携带全部按键，取消等于当帧前后左右跳跃全丢，
+            // 移动会瞬停。正确做法是重写包体，保留其它按键、只摘掉 shift 标记
+            if (blockFakeSneak.get() && input.shift() && mc.player != null) {
                 double speed = mc.player.getDeltaMovement().horizontalDistance();
-                boolean onIce = mc.level.getBlockState(mc.player.blockPosition().below()).getBlock() 
+                boolean onIce = mc.level.getBlockState(mc.player.blockPosition().below()).getBlock()
                     instanceof net.minecraft.world.level.block.IceBlock;
                 if (speed > 0.16 && !onIce && !mc.player.isSprinting()) {
-                    // 假潜行（shift 标记与移动速度矛盾）会暴露给服务端。
-                    // 不能直接取消整包：Input 包携带全部按键，取消等于当帧
-                    // 前后左右跳跃全丢，移动会瞬停。正确做法是重写包体，
-                    // 保留其它按键、只摘掉 shift 标记
-                    event.packet = new ServerboundPlayerInputPacket(new Input(
-                        input.forward(), input.backward(), input.left(), input.right(),
-                        input.jump(), false, input.sprint()
-                    ));
-                    return;
+                    newShift = false;
+                    modified = true;
                 }
+            }
+
+            // 假疾跑：sprint 标记与移动方向矛盾。正常疾跑必须按住前进键且不能后退，
+            // sprint=true 却无前进输入或正在后退，即 Tweakeroo 假疾跑的特征，摘掉 sprint
+            if (blockFakeSprint.get() && input.sprint() && (!input.forward() || input.backward())) {
+                newSprint = false;
+                modified = true;
+            }
+
+            if (modified) {
+                event.packet = new ServerboundPlayerInputPacket(new Input(
+                    input.forward(), input.backward(), input.left(), input.right(),
+                    input.jump(), newShift, newSprint
+                ));
+                return;
             }
         }
 
@@ -489,22 +507,28 @@ public class AntiKickBypass extends YiyiaddonModule {
         }
     }
 
+    /**
+     * 反作弊检测联动：检测到 Grim/Matrix 时动态收紧发包限速（阈值打五折），
+     * 规避高频挖掘/放置包被服务端判定为自动化而踢出。运行时打折不改用户设置。
+     */
+    @EventHandler
+    private void onAntiCheatDetected(TacticalFSM.AntiCheatDetectedEvent event) {
+        if (!isActive()) return;
+        if (!event.antiCheatName.contains("Grim") && !event.antiCheatName.contains("Matrix")) return;
+
+        if (throttleFactor > 0.5) {
+            throttleFactor = 0.5;
+            notify("检测到 " + event.antiCheatName + "，发包限速收紧到 50%");
+        }
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Tick 处理 - 聊天+防挂机+拉回冷却+视角抖动
+    //  Tick 处理 - 聊天+防挂机+视角抖动
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (!isActive() || mc.player == null) return;
-
-        // 拉回冷却倒计时
-        if (rubberBandHandling) {
-            rubberBandCooldownTicks--;
-            if (rubberBandCooldownTicks <= 0) {
-                rubberBandHandling = false;
-                TacticalFSM.setRubberBandCooldown(false);
-            }
-        }
 
         // ② 聊天排队
         if (enableChatQueue.get() && !chatQueue.isEmpty()) {
@@ -550,15 +574,20 @@ public class AntiKickBypass extends YiyiaddonModule {
             lastThrottleResetTime = now;
         }
 
+        // 服务器卡顿 / 拉回冷却时，直接丢弃挖掘与放置包，避免顶风作案被踢。
+        // 此时即使不超过限速阈值，继续发包也只会加重反作弊 flag 量
+        boolean stressed = TacticalFSM.isServerLagging() || TacticalFSM.isRubberBandCooldown();
+
         if (limitDigging.get() && packet instanceof ServerboundPlayerActionPacket action) {
             ServerboundPlayerActionPacket.Action type = action.getAction();
             if (type == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
                 || type == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK) {
                 
                 currentlyDigging = true;
-                if (digThisSecond.get() >= maxDigPerSecond.get()) {
+                // 动态限速：强反作弊时按 throttleFactor 收紧阈值（运行时打折，不改用户设置）
+                int effectiveMax = (int) Math.max(2, maxDigPerSecond.get() * throttleFactor);
+                if (stressed || digThisSecond.get() >= effectiveMax) {
                     event.cancel();
-                    throttledCount.incrementAndGet();
                     return true;
                 }
                 digThisSecond.incrementAndGet();
@@ -569,9 +598,9 @@ public class AntiKickBypass extends YiyiaddonModule {
             || packet instanceof ServerboundUseItemPacket)) {
             
             currentlyPlacing = true;
-            if (interactThisSecond.get() >= maxInteractPerSecond.get()) {
+            int effectiveMax = (int) Math.max(2, maxInteractPerSecond.get() * throttleFactor);
+            if (stressed || interactThisSecond.get() >= effectiveMax) {
                 event.setCancelled(true);
-                throttledCount.incrementAndGet();
                 return true;
             }
             interactThisSecond.incrementAndGet();
@@ -587,8 +616,9 @@ public class AntiKickBypass extends YiyiaddonModule {
     private void handleRubberBand(ClientboundPlayerPositionPacket packet) {
         // ⑤ 拉回处理
         mc.player.connection.send(new ServerboundAcceptTeleportationPacket(packet.id()));
-        rubberBandHandling = true;
-        rubberBandCooldownTicks = 40;
+        // 进入拉回冷却：交给 TacticalFSM 时间戳统一管理，2 秒自动到期。
+        // 不用本地 tick 倒计时——那套机制结束时会强制 setRubberBandCooldown(false)，
+        // 飞行绕过若同时收到拉回包，其刚设置的冷却会被一并误清，导致拉回防御失效
         TacticalFSM.setRubberBandCooldown(true);
 
         for (int i = 0; i < 3; i++) {

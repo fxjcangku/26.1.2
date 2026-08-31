@@ -5,9 +5,11 @@ import com.mojang.brigadier.tree.CommandNode;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
+import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -137,6 +139,9 @@ public class ServerDetector extends YiyiaddonModule {
     private int rubberBandTotal = 0;
 
     private boolean detectionDone = false;
+
+    // TPS 采样计数：每 20 tick 采样一次服务器 TPS，发布卡顿状态给其余模块
+    private int tpsCheckTick = 0;
 
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。点击按钮查看说明。");
@@ -269,6 +274,26 @@ public class ServerDetector extends YiyiaddonModule {
         TacticalFSM.reset();
         seenChannels.clear();
         detectionDone = false;
+        tpsCheckTick = 0;
+    }
+
+    /**
+     * 服务器 TPS 采样：每 20 tick（约 1 秒）读一次 Meteor 的 TickRate 工具，
+     * 把卡顿状态发布到 TacticalFSM。此前 publishServerLagging 无人调用，
+     * serverLagging 永远为 false，导致各模块「服务器卡顿自停」形同虚设。
+     */
+    @EventHandler
+    private void onTick(TickEvent.Pre event) {
+        if (!isActive() || mc.level == null) return;
+
+        tpsCheckTick++;
+        if (tpsCheckTick < 20) return;
+        tpsCheckTick = 0;
+
+        float tps = TickRate.INSTANCE.getTickRate();
+        // tps <= 0 表示未进服或数据未就绪，不能据此判卡顿，跳过
+        if (tps <= 0) return;
+        TacticalFSM.publishServerLagging(tps);
     }
 
     private void performDetection() {
@@ -287,14 +312,46 @@ public class ServerDetector extends YiyiaddonModule {
             TacticalFSM.setDetectedAntiCheat(antiCheat);
         }
 
+        // 侦测完成：合并成单条多行报告，只带一次模块前缀，避免逐条刷屏
         if (announceDetection.get()) {
-            notify("服务端核心：" + highlightServer(core));
-            if ("未发现".equals(antiCheat)) {
-                notify("反作弊：" + highlightText("未发现指纹") + "（不等于没有）");
-            } else if (!"未检测".equals(antiCheat)) {
-                notify("反作弊：§c§l" + antiCheat);
+            notify(buildDetectionReport(core, antiCheat));
+        }
+    }
+
+    /**
+     * 组装侦测报告（单条多行消息块）。
+     *
+     * 排版规范：正文统一「标签 §8▸ 值」，标签固定宽度对齐；
+     * 风险等级用 §a✓ / §e⚠ / §c✗ 图标统一，反作弊命中红色高亮。
+     */
+    private String buildDetectionReport(String core, String antiCheat) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("§b§l━━ 服务端侦测报告 ━━§r\n");
+
+        // 服务器核心：未知/未检测用灰色弱化，命中用金色高亮
+        boolean coreUnknown = "未知".equals(core) || "未检测".equals(core);
+        sb.append("§7服务器核心 §8▸ ").append(coreUnknown ? "§8" + core : highlightServer(core)).append("\n");
+
+        // 反作弊：未检测灰色 / 未发现绿色提示 / 命中红色高亮
+        if ("未检测".equals(antiCheat)) {
+            sb.append("§7反作弊   §8▸ §8未检测");
+        } else if ("未发现".equals(antiCheat)) {
+            sb.append("§7反作弊   §8▸ ").append(highlightText("未发现指纹")).append(" §8（不等于没有）");
+        } else {
+            sb.append("§7反作弊   §8▸ §c§l").append(antiCheat);
+        }
+
+        // 风险等级：只在反作弊命中时播报，高风险标 ✗、中低风险标 ⚠
+        if (!"未检测".equals(antiCheat) && !"未发现".equals(antiCheat)) {
+            sb.append("\n§7风险等级 §8▸ ");
+            if (ServerFingerprints.isHighRisk(antiCheat)) {
+                sb.append("§c§l✗ 高风险 §8（已自动降级飞行）");
+            } else {
+                sb.append("§e§l⚠ 中低风险");
             }
         }
+
+        return sb.toString();
     }
 
     /**
@@ -434,6 +491,9 @@ public class ServerDetector extends YiyiaddonModule {
                 sendPackAction(packet.id(), ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED);
                 notify("已拦截资源包（暴力绕过）");
             } else if (mode == ResourcePackMode.AUTO_DOWNLOAD) {
+                // 必须取消原版处理，否则包会继续走 handleResourcePackPush 弹窗/下载，
+                // 与自己异步下载形成双重处理
+                event.setCancelled(true);
                 downloadResourcePackAsync(packet.id(), packet.url(), packet.hash());
             }
         }

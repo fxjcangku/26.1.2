@@ -2,6 +2,7 @@ package com.example.addon.modules;
 
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.tactical.TacticalFSM;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -180,6 +181,20 @@ public class AutoBoneMeal extends YiyiaddonModule {
     private final Setting<Boolean> swingHand = sgBypass.add(new BoolSetting.Builder()
         .name("摆动手臂")
         .description("催熟成功后播放挥手动画（关闭可减少服务端行为特征）。")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> respectLag = sgBypass.add(new BoolSetting.Builder()
+        .name("服务器卡顿自停")
+        .description("检测到服务器 TPS 过低或被拉回时暂停催熟发包，避免雪上加霜被踢。")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> autoThrottle = sgBypass.add(new BoolSetting.Builder()
+        .name("反作弊自动降速")
+        .description("检测到 Grim/Matrix 等高强度反作弊时自动提高动作节流，规避右键连点检测。")
         .defaultValue(true)
         .build()
     );
@@ -374,6 +389,11 @@ public class AutoBoneMeal extends YiyiaddonModule {
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.level == null || mc.gameMode == null
                 || mc.getConnection() == null) return;
+
+        // 服务器卡顿 / 拉回冷却时暂停催熟，避免顶风作案被踢
+        if (respectLag.get() && (TacticalFSM.isServerLagging() || TacticalFSM.isRubberBandCooldown())) {
+            return;
+        }
 
         candidates.clear();
 
@@ -590,6 +610,21 @@ public class AutoBoneMeal extends YiyiaddonModule {
         mc.getConnection().send(
             new ServerboundMovePlayerPacket.Rot(yaw, pitch, mc.player.onGround(), mc.player.horizontalCollision)
         );
+    }
+
+    /**
+     * 反作弊检测联动：检测到 Grim/Matrix 时自动抬高动作节流，
+     * 规避高频右键连点被服务端判定为自动化交互而踢出。
+     */
+    @EventHandler
+    private void onAntiCheatDetected(TacticalFSM.AntiCheatDetectedEvent event) {
+        if (!isActive() || !autoThrottle.get()) return;
+        if (!event.antiCheatName.contains("Grim") && !event.antiCheatName.contains("Matrix")) return;
+
+        if (tickDelay.get() < 3) {
+            tickDelay.set(3);
+            notify("检测到 " + event.antiCheatName + "，已自动提高动作节流到 3 Tick");
+        }
     }
 
     // ================================================================

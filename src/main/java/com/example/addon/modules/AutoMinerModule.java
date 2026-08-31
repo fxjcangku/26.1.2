@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.Blocks;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.Set;
 
@@ -96,12 +97,31 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final SettingGroup sgBaritone = settings.createGroup("Baritone调优", false);
 
     // ─── 目标选择（互斥） ───
-    private final Setting<Block> overworldOreTarget;
-    private final Setting<Block> netherOreTarget;
+    private final Setting<Item> overworldOreTarget;
+    private final Setting<Item> netherOreTarget;
     private final Setting<Block> blockTarget;
 
     // ─── 采集模式 ───
     private final Setting<LootMode> lootMode;
+
+    // ─── 时运产物映射（烧制产物 → 矿石方块）───
+    // 主世界矿石：时运挖矿的最终烧制产物 → 对应的矿石方块
+    private static final Map<String, String> OVERWORLD_FORTUNE = Map.ofEntries(
+        Map.entry("minecraft:iron_ingot", "minecraft:iron_ore"),
+        Map.entry("minecraft:gold_ingot", "minecraft:gold_ore"),
+        Map.entry("minecraft:copper_ingot", "minecraft:copper_ore"),
+        Map.entry("minecraft:redstone", "minecraft:redstone_ore"),
+        Map.entry("minecraft:lapis_lazuli", "minecraft:lapis_ore"),
+        Map.entry("minecraft:diamond", "minecraft:diamond_ore"),
+        Map.entry("minecraft:emerald", "minecraft:emerald_ore"),
+        Map.entry("minecraft:coal", "minecraft:coal_ore")
+    );
+    // 下界矿石：时运挖矿的最终烧制产物 → 对应的矿石方块（下界金矿烧成金锭）
+    private static final Map<String, String> NETHER_FORTUNE = Map.ofEntries(
+        Map.entry("minecraft:netherite_ingot", "minecraft:ancient_debris"),
+        Map.entry("minecraft:gold_ingot", "minecraft:nether_gold_ore"),
+        Map.entry("minecraft:quartz", "minecraft:nether_quartz_ore")
+    );
 
     // ─── 种子挖矿 ───
     private final Setting<Boolean> seedMiningEnabled;
@@ -184,29 +204,23 @@ public final class AutoMinerModule extends YiyiaddonModule {
         
         lootMode = sgTarget.add(new EnumSetting.Builder<LootMode>()
             .name("采集模式")
-            .description("精准采集：按原矿方块判定计数；时运：按掉落物判定计数（下界残骸两模式共用）")
+            .description("精准采集：目标选择器显示原矿；时运：目标选择器显示烧制产物（锭）。切换模式时自动同步目标")
             .defaultValue(LootMode.FORTUNE)
+            .onChanged(this::syncTargetsOnModeSwitch)
             .build());
 
-        overworldOreTarget = sgTarget.add(new BlockSetting.Builder()
+        overworldOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("主世界矿石")
-            .description("选择主世界矿石（含深层变种）")
-            .defaultValue(Blocks.AIR)
-            .filter(block -> {
-                String id = BuiltInRegistries.BLOCK.getKey(block).toString();
-                return id.contains("_ore") && !id.contains("nether") && !id.contains("ancient");
-            })
+            .description("时运模式选烧制产物（铁锭/金锭等），精准采集选原矿（铁矿石等）")
+            .defaultValue(Items.AIR)
+            .filter(this::isOverworldTargetItem)
             .build());
 
-        netherOreTarget = sgTarget.add(new BlockSetting.Builder()
+        netherOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("下界矿石")
-            .description("选择下界矿石（下界金矿、下界石英矿、远古残骸）")
-            .defaultValue(Blocks.AIR)
-            .filter(block -> {
-                String id = BuiltInRegistries.BLOCK.getKey(block).toString();
-                return id.contains("nether") && (id.contains("ore") || id.contains("quartz")) 
-                    || id.contains("ancient_debris");
-            })
+            .description("时运模式选烧制产物（下界合金锭/金锭/石英），精准采集选原矿（下界残骸等）")
+            .defaultValue(Items.AIR)
+            .filter(this::isNetherTargetItem)
             .build());
 
         blockTarget = sgTarget.add(new BlockSetting.Builder()
@@ -719,11 +733,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
      * 维度不匹配时不仅警告，还会直接停止模块，避免浪费时间挖空气。
      */
     private void reportStartupInfo() {
-        // 目标矿物
-        Block target = getTargetBlock();
-        String targetName = BaritoneChatTranslations.translateBlockId(
-            BuiltInRegistries.BLOCK.getKey(target).toString());
-        int variantCount = getTargetBlocks().size();
+        // 目标矿物（时运模式显示烧制产物名，精准采集显示原矿名）
+        String targetName = getTargetDisplayName();
 
         // [维度限制已临时关闭] 启动时不再按维度拦截，便于测试状态机（后续按需恢复）
         // if (mc.level != null) {
@@ -758,9 +769,6 @@ public final class AutoMinerModule extends YiyiaddonModule {
         report.append("§a§l✓ 自动挖矿 · 启动报告");
         report.append("\n§7当前维度　§8▸ ").append(highlightText(getDimensionName())).append("§r");
         report.append("\n§7目标矿物　§8▸ ").append(highlightText(targetName)).append("§r");
-        if (variantCount > 1) {
-            report.append("§7（含深层变种）");
-        }
         report.append("\n§7采集模式　§8▸ ")
               .append(highlightText(isSilkTouchMode() ? "精准采集" : "时运")).append("§r");
         report.append("\n§7挖矿模式　§8▸ ")
@@ -788,6 +796,28 @@ public final class AutoMinerModule extends YiyiaddonModule {
         }
 
         notify(report.toString());
+    }
+
+    /**
+     * 获取当前目标的显示名。
+     * 产物（主世界/下界矿石）显示玩家选中的物品中文名（时运=锭，精准=原矿），
+     * 普通方块显示方块中文名。
+     */
+    private String getTargetDisplayName() {
+        Item overworld = overworldOreTarget.get();
+        if (overworld != null && overworld != Items.AIR) {
+            return new ItemStack(overworld).getHoverName().getString();
+        }
+        Item nether = netherOreTarget.get();
+        if (nether != null && nether != Items.AIR) {
+            return new ItemStack(nether).getHoverName().getString();
+        }
+        Block block = blockTarget.get();
+        if (block != null && block != Blocks.AIR) {
+            return BaritoneChatTranslations.translateBlockId(
+                BuiltInRegistries.BLOCK.getKey(block).toString());
+        }
+        return "未选择";
     }
 
     /**
@@ -888,14 +918,14 @@ public final class AutoMinerModule extends YiyiaddonModule {
         List<String> missing = new ArrayList<>();
 
         // 目标选择检测
-        Block overworld = overworldOreTarget.get();
-        Block nether = netherOreTarget.get();
+        Item overworld = overworldOreTarget.get();
+        Item nether = netherOreTarget.get();
         Block block = blockTarget.get();
 
         int selectedCount = 0;
-        if (overworld != null && !overworld.equals(Blocks.AIR)) selectedCount++;
-        if (nether != null && !nether.equals(Blocks.AIR)) selectedCount++;
-        if (block != null && !block.equals(Blocks.AIR)) selectedCount++;
+        if (overworld != null && overworld != Items.AIR) selectedCount++;
+        if (nether != null && nether != Items.AIR) selectedCount++;
+        if (block != null && block != Blocks.AIR) selectedCount++;
 
         if (selectedCount == 0) {
             missing.add("§e目标§f·未选择");
@@ -1073,15 +1103,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // ═══════════════════════════════════════════════════════════════════
 
     public Block getTargetBlock() {
-        Block overworld = overworldOreTarget.get();
-        if (overworld != null && !overworld.equals(Blocks.AIR)) return overworld;
-        
-        Block nether = netherOreTarget.get();
-        if (nether != null && !nether.equals(Blocks.AIR)) return nether;
-        
+        Item overworld = overworldOreTarget.get();
+        if (overworld != null && overworld != Items.AIR) {
+            return blockForTarget(overworld, false);
+        }
+
+        Item nether = netherOreTarget.get();
+        if (nether != null && nether != Items.AIR) {
+            return blockForTarget(nether, true);
+        }
+
         Block block = blockTarget.get();
-        if (block != null && !block.equals(Blocks.AIR)) return block;
-        
+        if (block != null && block != Blocks.AIR) return block;
+
         return Blocks.AIR;
     }
 
@@ -1093,6 +1127,85 @@ public final class AutoMinerModule extends YiyiaddonModule {
     /** 是否开启潜影盒打包机模式（容器放满后等红石换盒重开，直到背包目标矿放完才 RTP） */
     public boolean isShulkerPackerEnabled() {
         return shulkerPacker.get();
+    }
+
+    /** 主世界矿石目标产物是否符合当前采集模式（时运=烧制产物，精准=原矿） */
+    private boolean isOverworldTargetItem(Item item) {
+        if (item == null) return false;
+        String id = BuiltInRegistries.ITEM.getKey(item).toString();
+        if (isSilkTouchMode()) {
+            // 精准采集：主世界原矿物品（排除深层变种与下界矿）
+            return id.startsWith("minecraft:") && id.endsWith("_ore")
+                && !id.contains("deepslate") && !id.contains("nether");
+        }
+        // 时运：烧制产物（锭等）
+        return OVERWORLD_FORTUNE.containsKey(id);
+    }
+
+    /** 下界矿石目标产物是否符合当前采集模式（时运=烧制产物，精准=原矿） */
+    private boolean isNetherTargetItem(Item item) {
+        if (item == null) return false;
+        String id = BuiltInRegistries.ITEM.getKey(item).toString();
+        if (isSilkTouchMode()) {
+            return id.equals("minecraft:nether_gold_ore")
+                || id.equals("minecraft:nether_quartz_ore")
+                || id.equals("minecraft:ancient_debris");
+        }
+        return NETHER_FORTUNE.containsKey(id);
+    }
+
+    /** 目标产物物品 → 目标矿石方块（按当前采集模式反查） */
+    private Block blockForTarget(Item item, boolean nether) {
+        if (item == null || item == Items.AIR) return Blocks.AIR;
+        String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
+        if (isSilkTouchMode()) {
+            // 精准采集：原矿物品本身对应方块
+            return Block.byItem(item);
+        }
+        // 时运：烧制产物（锭/石英）→ 矿石方块
+        String oreId = nether ? NETHER_FORTUNE.get(itemId) : OVERWORLD_FORTUNE.get(itemId);
+        if (oreId == null) return Blocks.AIR;
+        return BuiltInRegistries.BLOCK.getValue(Identifier.parse(oreId));
+    }
+
+    /** 切换采集模式时，把两个目标产物自动同步成等价产物（保持挖同一个矿） */
+    private void syncTargetsOnModeSwitch(LootMode newMode) {
+        boolean silk = newMode == LootMode.SILK_TOUCH;
+        Item ow = overworldOreTarget.get();
+        if (ow != null && ow != Items.AIR) {
+            overworldOreTarget.set(equivalentItem(ow, silk, false));
+        }
+        Item ne = netherOreTarget.get();
+        if (ne != null && ne != Items.AIR) {
+            netherOreTarget.set(equivalentItem(ne, silk, true));
+        }
+    }
+
+    /** 旧模式产物 → 新模式等价产物（silk=true 表示新模式是精准采集） */
+    private Item equivalentItem(Item item, boolean silk, boolean nether) {
+        if (item == null || item == Items.AIR) return Items.AIR;
+        String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
+
+        if (silk) {
+            // 旧=时运（锭），新=精准采集 → 反查矿石方块 → 原矿物品
+            String oreId = nether ? NETHER_FORTUNE.get(itemId) : OVERWORLD_FORTUNE.get(itemId);
+            if (oreId != null) {
+                Block ore = BuiltInRegistries.BLOCK.getValue(Identifier.parse(oreId));
+                return ore.asItem();
+            }
+            return item;
+        }
+        // 旧=精准采集（原矿物品），新=时运 → 方块 → 反查烧制产物
+        Block ore = Block.byItem(item);
+        if (ore == Blocks.AIR) return item;
+        String oreBlockId = BuiltInRegistries.BLOCK.getKey(ore).toString();
+        Map<String, String> map = nether ? NETHER_FORTUNE : OVERWORLD_FORTUNE;
+        for (Map.Entry<String, String> e : map.entrySet()) {
+            if (e.getValue().equals(oreBlockId)) {
+                return BuiltInRegistries.ITEM.getValue(Identifier.parse(e.getKey()));
+            }
+        }
+        return item;
     }
 
     /** 目标矿石家族是否包含该方块（含深层/浅层变种，下界矿与普通方块无变种） */

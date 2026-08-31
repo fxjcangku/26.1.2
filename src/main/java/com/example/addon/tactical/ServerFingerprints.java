@@ -125,6 +125,20 @@ final class ServerFingerprints {
         ANTICHEAT_COMMANDS.put("horizon", "Horizon");
         ANTICHEAT_COMMANDS.put("lightanticheat", "LightAntiCheat");
         ANTICHEAT_COMMANDS.put("lac", "LightAntiCheat");
+        ANTICHEAT_COMMANDS.put("soaroma", "SoaromaSAC");
+        ANTICHEAT_COMMANDS.put("soaromasac", "SoaromaSAC");
+        ANTICHEAT_COMMANDS.put("watchturtle", "WatchTurtle");
+        ANTICHEAT_COMMANDS.put("turtleac", "WatchTurtle");
+        ANTICHEAT_COMMANDS.put("alice", "Alice");
+        ANTICHEAT_COMMANDS.put("reflex", "Reflex");
+        ANTICHEAT_COMMANDS.put("janitor", "Janitor");
+        ANTICHEAT_COMMANDS.put("godseye", "GodsEye");
+        ANTICHEAT_COMMANDS.put("dcheck", "DCheck");
+        ANTICHEAT_COMMANDS.put("wolfac", "WolfAC");
+        ANTICHEAT_COMMANDS.put("firefly", "Firefly");
+        ANTICHEAT_COMMANDS.put("agc", "AGC");
+        ANTICHEAT_COMMANDS.put("antiaura", "AntiAura");
+        ANTICHEAT_COMMANDS.put("kauripp", "Kauri");
 
         // 已停更但小服仍有部署
         ANTICHEAT_COMMANDS.put("aac", "AAC（已停更）");
@@ -133,6 +147,11 @@ final class ServerFingerprints {
         ANTICHEAT_COMMANDS.put("ncp", "NoCheatPlus（已停更）");
         ANTICHEAT_COMMANDS.put("warden", "Warden（已停更）");
         ANTICHEAT_COMMANDS.put("wraith", "Wraith（已停更）");
+        ANTICHEAT_COMMANDS.put("hawk", "Hawk（已停更）");
+        ANTICHEAT_COMMANDS.put("anticheatreloaded", "AntiCheatReloaded（已停更）");
+        ANTICHEAT_COMMANDS.put("acr", "AntiCheatReloaded（已停更）");
+        ANTICHEAT_COMMANDS.put("ness", "NESS（已停更）");
+        ANTICHEAT_COMMANDS.put("nochat", "NoCheat（已停更）");
 
         // 国内常见
         ANTICHEAT_COMMANDS.put("funnyac", "FunnyAC（国内）");
@@ -141,6 +160,16 @@ final class ServerFingerprints {
         ANTICHEAT_COMMANDS.put("catac", "CatAC（国内）");
         ANTICHEAT_COMMANDS.put("mochaac", "MochaAC（国内）");
         ANTICHEAT_COMMANDS.put("rainac", "RainAC（国内）");
+        ANTICHEAT_COMMANDS.put("flareac", "FlareAC（国内）");
+        ANTICHEAT_COMMANDS.put("sakuraac", "SakuraAC（国内）");
+        ANTICHEAT_COMMANDS.put("goodac", "GoodAC（国内）");
+        ANTICHEAT_COMMANDS.put("nekoac", "NekoAC（国内）");
+        ANTICHEAT_COMMANDS.put("lolac", "LolAC（国内）");
+        ANTICHEAT_COMMANDS.put("iceac", "IceAC（国内）");
+        ANTICHEAT_COMMANDS.put("mangoac", "MangoAC（国内）");
+        ANTICHEAT_COMMANDS.put("arteryac", "ArteryAC（国内）");
+        ANTICHEAT_COMMANDS.put("fairyac", "FairyAC（国内）");
+        ANTICHEAT_COMMANDS.put("xkac", "XKAC（国内）");
 
         // 辅助类：不是反作弊本体，但常与反作弊同时出现，值得报出来
         ANTICHEAT_COMMANDS.put("illegalstack", "IllegalStack（物品校验）");
@@ -179,6 +208,13 @@ final class ServerFingerprints {
             || lower.contains("vulcan")
             || lower.contains("polar")
             || lower.contains("themis")
-            || lower.contains("verus");
+            || lower.contains("verus")
+            || lower.contains("soaroma")
+            || lower.contains("watchturtle")
+            || lower.contains("alice")
+            || lower.contains("reflex")
+            || lower.contains("janitor")
+            || lower.contains("godseye")
+            || lower.contains("agc");
     }
 }
