@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
 import meteordevelopment.meteorclient.settings.*;
@@ -269,8 +270,9 @@ public class PacketInstantBreak extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            addUniformButton(theme, table, "§e查看使用说明",
-                () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent())));
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
             table.row();
         }, new String[0]);
     }

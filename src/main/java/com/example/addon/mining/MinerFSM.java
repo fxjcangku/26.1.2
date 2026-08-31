@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -49,6 +50,7 @@ public final class MinerFSM {
     private BlockPos teleportStartPos = BlockPos.ZERO;
     private int teleportTimeout = 0;
     private int teleportRetries = 0;
+    private int teleportCooldownTicks = 0;   // RTP 冷却剩余 tick（服务器 RTP 有冷却，失败后等冷却再重试）
     private static final int MAX_TELEPORT_RETRIES = 3; // 传送失败最多自动重试 3 次
 
     // 种子模式采集数据
@@ -58,6 +60,10 @@ public final class MinerFSM {
     private int seedBreakTicks = 0;                            // 当前方块破坏耗时
     private Direction seedBreakFace = Direction.UP;            // 锁定后的破坏面（start/continue 必须一致，否则服务端重置破坏进度）
     private int seedPathRetries = 0;                           // 同一目标寻路重发次数
+
+    // 普通模式 mine 进程退出自愈：连续重启失败判定附近无矿，RTP 换区
+    private int mineRestartCount = 0;    // mine 退出重启计数
+    private int mineRestartCooldown = 0; // 重启后冷却 tick（等 mine 启动，避免误判又退出）
 
     // 修补模式数据
     private ItemStack savedTool = ItemStack.EMPTY;
@@ -101,6 +107,14 @@ public final class MinerFSM {
     // 自动捡取掉落物
     private ItemEntity pickupTarget = null;
     private int pickupTimeout = 0;
+    // 捡取失败黑名单：掉落物卡角落捡不起来时记录位置，避免反复寻路捡同一个
+    private final Set<BlockPos> pickupBlacklist = new HashSet<>();
+    private static final int MAX_PICKUP_BLACKLIST = 64; // 黑名单上限，防止无限增长
+
+    // 岩浆避险：附近有岩浆时停止挖矿并寻路到安全位置
+    private boolean lavaEscapeActive = false;   // 岩浆脱困寻路进行中
+    private int lavaEscapeTicks = 0;            // 岩浆脱困已持续 tick
+    private boolean diedInLava = false;         // 死亡时是否在岩浆里（复活后跳过 back 用）
 
     public MinerFSM(AutoMinerModule module) {
         this.module = module;
@@ -113,12 +127,15 @@ public final class MinerFSM {
         teleportStartPos = BlockPos.ZERO;
         teleportTimeout = 0;
         teleportRetries = 0;
+        teleportCooldownTicks = 0;
         seedVisited.clear();
         seedTarget = null;
         seedBreakState = 0;
         seedBreakTicks = 0;
         seedBreakFace = Direction.UP;
         seedPathRetries = 0;
+        mineRestartCount = 0;
+        mineRestartCooldown = 0;
         savedTool = ItemStack.EMPTY;
         savedWeapon = ItemStack.EMPTY;
         savedToolSlot = -1;
@@ -144,6 +161,10 @@ public final class MinerFSM {
         stuckResetCount = 0;
         pickupTarget = null;
         pickupTimeout = 0;
+        pickupBlacklist.clear();
+        lavaEscapeActive = false;
+        lavaEscapeTicks = 0;
+        diedInLava = false;
     }
 
     public void tick() {
@@ -207,6 +228,14 @@ public final class MinerFSM {
         }
         if (newState == MinerState.MINING) {
             module.getBaritone().updateSetting("allowBreak", module.getAllowBreak());
+            // 新一轮挖矿开始，清零 mine 退出重启计数
+            mineRestartCount = 0;
+            mineRestartCooldown = 0;
+            // 下界挖矿自动开启岩浆透视并提示一次
+            if (module.isInNether() && !module.isLavaEspEnabled()) {
+                module.enableLavaEsp();
+                module.info("§e⚠ 检测到下界挖矿 §8▸ 已自动开启岩浆透视");
+            }
         }
 
         if (newState == MinerState.REPAIR) {
@@ -241,6 +270,15 @@ public final class MinerFSM {
     private void tickGoWild() {
         CommandManager cmdMgr = module.getCmdManager();
 
+        // RTP 冷却等待中：等服务器冷却结束再重发指令（避免冷却期空发失败）
+        if (teleportCooldownTicks > 0) {
+            teleportCooldownTicks--;
+            if (teleportCooldownTicks == 0) {
+                stateTick = 0; // 冷却结束，下一 tick 重新从阶段 1 发指令
+            }
+            return;
+        }
+
         // 阶段 1：记录传送前位置并发送传送命令
         if (stateTick == 1) {
             // 只有首次尝试需要记录起点，重试时起点不变（人还在原地）
@@ -266,12 +304,12 @@ public final class MinerFSM {
             return;
         }
 
-        // 阶段 4：超时仍在原地 → 自动重发传送指令（最多 3 次），仍失败才停机
+        // 阶段 4：超时仍在原地 → 进入 RTP 冷却等待，冷却结束后重发（最多 3 次），仍失败才停机
         if (stateTick > teleportTimeout) {
             if (teleportRetries < MAX_TELEPORT_RETRIES) {
                 teleportRetries++;
-                module.error("§e⚠ 传送未生效 §8▸ 自动重试 " + teleportRetries + "/" + MAX_TELEPORT_RETRIES);
-                stateTick = 0; // 回到阶段 1 重新发指令
+                teleportCooldownTicks = module.getRtpCooldown() * 20;
+                module.error("§e⚠ 传送未生效 §8▸ 等待 " + module.getRtpCooldown() + " 秒冷却后重试 " + teleportRetries + "/" + MAX_TELEPORT_RETRIES);
                 return;
             }
             module.error("§c✗ 传送失败 §8▸ 已重试 " + MAX_TELEPORT_RETRIES + " 次，自动停止挖矿");
@@ -363,10 +401,27 @@ public final class MinerFSM {
             // 普通模式自愈：仅当 Baritone mine 进程意外退出时才重启。
             // 正常挖掘中并非时刻处于寻路状态（扫描/破坏时 isPathing 为 false），
             // 不能一见「没在寻路」就重启，否则每几秒重扫一遍矿、打断破坏进度。
-            if (stateTick > 120 && stateTick % 60 == 0
-                && !module.getBaritone().isPathing()
-                && !module.getBaritone().isMiningActive()) {
-                module.getBaritone().startMining(module.getTargetBlocks());
+            if (stateTick > 120) {
+                if (mineRestartCooldown > 0) {
+                    // 重启后冷却：等 mine 进程启动，避免启动延迟被误判成「又退出」
+                    mineRestartCooldown--;
+                } else if (!module.getBaritone().isPathing() && !module.getBaritone().isMiningActive()) {
+                    // mine 进程真的退出了：重启并播报；连续 3 次仍退出判定附近无矿，RTP 换区
+                    mineRestartCount++;
+                    if (mineRestartCount >= 3) {
+                        module.info("§e⚠ 附近目标矿已挖完 §8▸ 重新前往野外换区域");
+                        mineRestartCount = 0;
+                        mineRestartCooldown = 0;
+                        transitionTo(MinerState.GO_WILD);
+                        return;
+                    }
+                    module.info("§e⚠ 挖矿进程已退出 §8▸ 正在重启（" + mineRestartCount + "/3）");
+                    module.getBaritone().startMining(module.getTargetBlocks());
+                    mineRestartCooldown = 100; // 重启后等 5 秒再判断
+                } else {
+                    // 正在正常挖掘，清零重启计数
+                    mineRestartCount = 0;
+                }
             }
         }
 
@@ -487,6 +542,53 @@ public final class MinerFSM {
                 waterEscapeTicks = 0;
                 module.getBaritone().stop();
                 module.error("§c✗ 水中脱困超时 §8▸ 重新前往野外");
+                transitionTo(MinerState.GO_WILD);
+                return;
+            }
+            return; // 脱困寻路中，暂停其它挖矿逻辑
+        }
+
+        // 岩浆避险：脚下/相邻有岩浆就停止挖矿并寻路到安全位置，避免被烧/掉进去
+        if (!lavaEscapeActive && stateTick % 10 == 0 && hasLavaNear(1)) {
+            module.getBaritone().stop();
+            BlockPos safe = findNearestSafeSpot();
+            if (safe != null) {
+                var baritone = module.getBaritone().getBaritoneInstance();
+                if (baritone != null) {
+                    baritone.getCustomGoalProcess().setGoalAndPath(new GoalGetToBlock(safe));
+                    lavaEscapeActive = true;
+                    lavaEscapeTicks = 0;
+                    module.info("§e⚠ 附近检测到岩浆 §8▸ 寻路到安全位置");
+                } else {
+                    module.error("§c✗ Baritone 未加载 §8▸ 重新前往野外");
+                    transitionTo(MinerState.GO_WILD);
+                    return;
+                }
+            } else {
+                module.error("§c✗ 附近全是岩浆 §8▸ 重新前往野外");
+                transitionTo(MinerState.GO_WILD);
+                return;
+            }
+        }
+
+        // 岩浆脱困推进：已远离岩浆则恢复挖矿；超时仍未脱困则 RTP 兜底
+        if (lavaEscapeActive) {
+            lavaEscapeTicks++;
+            if (!hasLavaNear(1)) {
+                lavaEscapeActive = false;
+                lavaEscapeTicks = 0;
+                module.getBaritone().stop();
+                module.info("§a✓ 已远离岩浆 §8▸ 继续挖矿");
+                if (!seedMode) {
+                    module.getBaritone().startMining(module.getTargetBlocks());
+                }
+                return;
+            }
+            if (lavaEscapeTicks > 400) { // 20 秒仍未脱困，RTP 兜底
+                lavaEscapeActive = false;
+                lavaEscapeTicks = 0;
+                module.getBaritone().stop();
+                module.error("§c✗ 岩浆脱困超时 §8▸ 重新前往野外");
                 transitionTo(MinerState.GO_WILD);
                 return;
             }
@@ -621,6 +723,47 @@ public final class MinerFSM {
         return null;
     }
 
+    /** 玩家周围 radius 格内是否有岩浆方块（岩浆避险用） */
+    private boolean hasLavaNear(int radius) {
+        if (mc.player == null || mc.level == null) return false;
+        BlockPos c = mc.player.blockPosition();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (mc.level.getBlockState(c.offset(dx, dy, dz)).getBlock() == Blocks.LAVA) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 找附近无岩浆、可站立的安全位置（岩浆脱困用），返回脚下固体方块 */
+    private BlockPos findNearestSafeSpot() {
+        if (mc.player == null || mc.level == null) return null;
+        BlockPos feet = mc.player.blockPosition();
+        for (int r = 1; r <= 16; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+                    for (int dy = -2; dy <= 2; dy++) {
+                        BlockPos p = feet.offset(dx, dy, dz);
+                        // 脚下固体、身体空气、脚/身/头三格都无岩浆
+                        if (mc.level.getBlockState(p).getBlock() != Blocks.LAVA
+                            && !mc.level.getBlockState(p).isAir()
+                            && mc.level.getBlockState(p.above()).isAir()
+                            && mc.level.getBlockState(p.above()).getBlock() != Blocks.LAVA
+                            && mc.level.getBlockState(p.above(2)).getBlock() != Blocks.LAVA) {
+                            return p;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /** 就位后锁定视角，走原版破坏进度流程（start → continue → 服务端回包确认） */
     private void breakSeedBlock() {
         if (mc.gameMode == null || mc.player == null || mc.level == null || seedTarget == null) return;
@@ -737,6 +880,7 @@ public final class MinerFSM {
         for (ItemEntity item : items) {
             ItemStack stack = item.getItem();
             if (stack.isEmpty()) continue;
+            if (pickupBlacklist.contains(item.blockPosition())) continue; // 卡角落捡不起来的位置，跳过
             String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             if (!acceptIds.contains(id)) continue;
             double d = item.distanceToSqr(mc.player);
@@ -775,7 +919,11 @@ public final class MinerFSM {
         // 已有捡取目标：消失/超时/太远 → 放弃并恢复挖矿
         pickupTimeout++;
         if (pickupTarget.isRemoved() || !pickupTarget.isAlive()
-            || pickupTimeout > 600 || pickupTarget.distanceTo(mc.player) > 16) {
+            || pickupTimeout > 300 || pickupTarget.distanceTo(mc.player) > 16) {
+            // 超时/太远说明掉落物卡角落捡不起来，记黑名单避免反复寻路捡同一个
+            if (pickupTimeout > 300 || pickupTarget.distanceTo(mc.player) > 16) {
+                addPickupBlacklist(pickupTarget.blockPosition());
+            }
             pickupTarget = null;
             module.getBaritone().stop();
             if (!module.isSeedMiningEnabled()) {
@@ -784,6 +932,14 @@ public final class MinerFSM {
             return false;
         }
         return true;
+    }
+
+    /** 掉落物卡角落捡不起来时，记录位置进黑名单（满了清空重来，避免无限增长） */
+    private void addPickupBlacklist(BlockPos pos) {
+        pickupBlacklist.add(pos);
+        if (pickupBlacklist.size() > MAX_PICKUP_BLACKLIST) {
+            pickupBlacklist.clear();
+        }
     }
 
     private void checkToolDurabilityWarning() {
@@ -927,14 +1083,22 @@ public final class MinerFSM {
         //     return;
         // }
 
-        // 阶段 1：传送到矿物箱
+        // 阶段 1：传送到矿物箱（指令已在自检强制填写，此处直接执行）
         if (stateTick == 1) {
+            teleportStartPos = mc.player.blockPosition(); // 记录传送起点，用于检测指令是否生效
             cmdMgr.executeCommand(module.getUnloadCommand());
             return;
         }
 
         // 阶段 2：等待传送完成
         if (cmdMgr.isCommandExecuting()) {
+            return;
+        }
+
+        // 阶段 2.5：检测传送是否生效（原地没动 = 指令无效，停机而非继续走到箱子）
+        if (stateTick > 40 && mc.player.blockPosition().distSqr(teleportStartPos) < 4) {
+            module.error("§c✗ 卸货指令无效（未传送）§8▸ 自动停止模块");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -1044,14 +1208,22 @@ public final class MinerFSM {
         //     return;
         // }
 
-        // 阶段 1：传送到补给点
+        // 阶段 1：传送到补给点（指令已在自检强制填写，此处直接执行）
         if (stateTick == 1) {
+            teleportStartPos = mc.player.blockPosition(); // 记录传送起点，用于检测指令是否生效
             cmdMgr.executeCommand(module.getSupplyCommand());
             return;
         }
 
         // 阶段 2：等待传送完成
         if (cmdMgr.isCommandExecuting()) {
+            return;
+        }
+
+        // 阶段 2.5：检测传送是否生效（原地没动 = 指令无效，停机）
+        if (stateTick > 40 && mc.player.blockPosition().distSqr(teleportStartPos) < 4) {
+            module.error("§c✗ 补给指令无效（未传送）§8▸ 自动停止模块");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -1166,14 +1338,22 @@ public final class MinerFSM {
 
         CommandManager cmdMgr = module.getCmdManager();
 
-        // 阶段 1：传送到挂机点
+        // 阶段 1：传送到挂机点（指令已在自检强制填写，此处直接执行）
         if (stateTick == 1) {
+            teleportStartPos = mc.player.blockPosition(); // 记录传送起点，用于检测指令是否生效
             cmdMgr.executeCommand(module.getAFKCommand());
             return;
         }
 
         // 阶段 2：等待传送完成
         if (cmdMgr.isCommandExecuting()) {
+            return;
+        }
+
+        // 阶段 2.5：检测传送是否生效（原地没动 = 指令无效，停机）
+        if (stateTick > 40 && mc.player.blockPosition().distSqr(teleportStartPos) < 4) {
+            module.error("§c✗ 挂机修补指令无效（未传送）§8▸ 自动停止模块");
+            if (module.isActive()) module.toggle();
             return;
         }
 
@@ -1285,6 +1465,8 @@ public final class MinerFSM {
         if (stateTick == 1) {
             tryMeteorAutoRespawn();
             module.getSoundNotifier().notifyDeath();
+            // 死亡后玩家位置还停在死亡点，检测脚下是否有岩浆（在岩浆湖里死亡）
+            diedInLava = hasLavaNear(1);
             module.error("§c✗ 已调用流星自动重生模块");
         }
 
@@ -1310,6 +1492,12 @@ public final class MinerFSM {
 
         // 阶段 1：执行死亡重返指令
         if (stateTick == 1) {
+            // 死亡点在岩浆里：不执行 back（会再回岩浆湖），直接去野外安全点
+            if (diedInLava) {
+                module.info("§e⚠ 死亡点有岩浆 §8▸ 跳过重返指令，直接前往野外");
+                transitionTo(MinerState.GO_WILD);
+                return;
+            }
             cmdMgr.executeCommand(module.getRespawnCommand());
             return;
         }

@@ -264,12 +264,16 @@ package com.example.addon.convention;
 //     §9§l▌ 高级功能/连接相关  蓝  §4§l▌ 安全提醒  深红
 //
 //   ── 三、面板按钮 ──────────────────────────────────────────────
-//   一律用 addUniformButton(theme, table, "文字", 回调)，多行按钮用 table.row() 分行。
-//   ✗ 禁止 table.add(theme.button(...)).expandX()。
-//   ✗ 禁止自拼 theme.button(...).expandX().minWidth(任意数字)（2026-08-31 补充）：
-//     手写 minWidth 是魔法数，换按钮文字就列宽不齐；等宽由基类封装统一实现
-//     （minWidth(BUTTON_MIN_WIDTH) + expandWidgetX + group("uniform")，
-//      group("uniform") 让同行按钮取该组最大宽度对齐），任何模块不得绕过基类自己拼。
+//   按钮必须「铺满整行」，一律走 expandX().minWidth(200)：
+//     · 推荐封装 addUniformButton(theme, table, "文字", 回调)
+//     · 等价直接内联 WButton b = theme.button("文字"); b.action=回调;
+//       table.add(b).expandX().minWidth(200);
+//   多行按钮用 table.row() 分行。
+//   铺满原理：expandX() 同时开启 expandCellX（单元格吃剩余空间）+
+//     expandWidgetX（按钮填满单元格），minWidth(200) 兜底最小宽度。
+//   ✗ 禁止用 expandWidgetX() 单独铺宽（只 expandWidgetX 不 expandCellX，
+//     单元格停在内容宽度，按钮会缩成一团）。
+//   ✗ 禁止 group("uniform")（对独占一行的说明按钮无意义，反而干扰点击判定）。
 //
 //   ── 四、启动自检的缺项播报 ────────────────────────────────────
 //   selfCheck() 必须返回 List<String> 收集全部缺项，交给 reportSelfCheck(missing) 播报。

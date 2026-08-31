@@ -31,6 +31,7 @@
     "MeteorCommandsTranslationMixin",
     "MeteorCommandNamesMixin",
     "MeteorCommandRegistrationMixin",
+    "MeteorComponentMessageMixin",
     "ClientLevelPredictionAccessor",
     "ServerboundMovePlayerPacketAccessor",
     "LocalPlayerAccessor",

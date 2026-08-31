@@ -113,4 +113,17 @@ public class AutoMinerModule_ESP {
         // 渲染方块框线
         event.renderer.box(pos, adjustedColor, adjustedColor, ShapeMode.Lines, 0);
     }
+
+    /**
+     * 渲染附近岩浆方块（橙红色框线 + 半透明填充，透视岩浆用）
+     */
+    public static void renderLava(Render3DEvent event, Set<BlockPos> lavaPositions, double lineWidth) {
+        if (mc.player == null || lavaPositions == null || lavaPositions.isEmpty()) return;
+        for (BlockPos pos : lavaPositions) {
+            double distSq = mc.player.blockPosition().distSqr(pos);
+            if (distSq > 128 * 128) continue;
+            // 岩浆用醒目的橙红色
+            event.renderer.box(pos, new Color(255, 90, 0, 190), new Color(255, 50, 0, 40), ShapeMode.Lines, 0);
+        }
+    }
 }

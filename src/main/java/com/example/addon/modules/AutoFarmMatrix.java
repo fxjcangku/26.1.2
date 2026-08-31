@@ -1260,8 +1260,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  使用说明按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            addUniformButton(theme, table, "§e查看使用说明",
-                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
             table.row();
             
             // ═══════════════════════════════════════════════════════════════════

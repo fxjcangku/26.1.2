@@ -242,6 +242,8 @@ tasks {
     }
 
     withType<JavaCompile>().configureEach {
+        // 源码统一 UTF-8（中文注释/字符串），Windows 下 javac 默认 GBK 会导致中文乱码编译报错
+        options.encoding = "UTF-8"
         options.compilerArgs.addAll(
             listOf(
                 "-Xlint:deprecation",

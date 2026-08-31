@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -207,7 +208,9 @@ public final class ThemeModule extends YiyiaddonModule {
                 buttons.row();
                 addButton(theme, buttons, "奶油", Palette.CREAM);
                 addButton(theme, buttons, "石墨", Palette.GRAPHITE);
-                addUniformButton(theme, buttons, "恢复默认", this::restoreDefault);
+                WButton restoreBtn = theme.button("恢复默认");
+                restoreBtn.action = this::restoreDefault;
+                buttons.add(restoreBtn).expandX().minWidth(200);
                 buttons.row();
                 table.add(buttons);
                 table.row();
@@ -239,7 +242,9 @@ public final class ThemeModule extends YiyiaddonModule {
     }
 
     private void addButton(GuiTheme theme, WTable table, String title, Palette selected) {
-        addUniformButton(theme, table, title, () -> select(selected));
+        WButton button = theme.button(title);
+        button.action = () -> select(selected);
+        table.add(button).expandX().minWidth(200);
     }
 
     public enum Palette {

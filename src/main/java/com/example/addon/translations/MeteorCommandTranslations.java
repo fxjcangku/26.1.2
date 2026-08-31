@@ -6,10 +6,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 
 public final class MeteorCommandTranslations {
     private static final Map<String, String> COMMAND_NAMES = Map.ofEntries(
@@ -145,6 +149,18 @@ public final class MeteorCommandTranslations {
 
     private static final Pattern MODULE_NOT_FOUND = Pattern.compile("Module with name (?:['\"])?(.+?)(?:['\"])? doesn't exist\\.");
 
+    /** 动态拼接消息的正则模板（HighwayBuilder、Notebot、ServerSpoof 等） */
+    private static final List<Template> MESSAGE_TEMPLATES = List.of(
+        template("Unable to perform restock for '(.+)'\\.", "无法为 '$1' 执行补货。"),
+        template("Starting new restock task for (.+)", "开始为 $1 执行新的补货任务。"),
+        template("Found less than the minimum amount of pickaxes required: (.+)", "镐的数量低于最低要求：$1。"),
+        template("Loading song '(.+)' timed out\\.", "加载歌曲 '$1' 超时。"),
+        template("Song '(.+)' has been loaded to the memory! Took (.+)ms", "歌曲 '$1' 已加载到内存！耗时 $2ms"),
+        template("Loading song '(.+)' was cancelled\\.", "加载歌曲 '$1' 已取消。"),
+        template("An error occurred while loading song '(.+)'\\. See the logs for more details", "加载歌曲 '$1' 时出错，详情见日志。"),
+        template("Invalid resource pack URL: (.+)", "无效的资源包 URL：$1")
+    );
+
     private MeteorCommandTranslations() {}
 
     public static String translateCommandName(String commandName) {
@@ -224,7 +240,191 @@ public final class MeteorCommandTranslations {
             .replace("Could not find an item with that name!", "找不到该名称的物品！")
             .replace("Sneak to un-spectate.", "按下潜行键退出旁观。")
             .replace("The swarm module must be active to use this command.", "必须启用蜂群模块才能使用此命令。")
-            .replace("Set as Baritone goal", "设为 Baritone 目标");
+            .replace("Set as Baritone goal", "设为 Baritone 目标")
+            .replace("Added (highlight)%s (default)to friends.", "已将 (highlight)%s (default)添加为好友。")
+            .replace("Already friends with that player.", "该玩家已是你的好友。")
+            .replace("Not friends with that player.", "该玩家不是你的好友。")
+            .replace("Removed (highlight)%s (default)from friends.", "已将 (highlight)%s (default)移出好友列表。")
+            .replace("Failed to remove that friend.", "移除好友失败。")
+            .replace("--- Friends ((highlight)%s(default)) ---", "--- 好友 ((highlight)%s(default)) ---")
+            .replace("Couldn't find a Fake Player with that name.", "找不到该名称的假人。")
+            .replace("Removed Fake Player %s.", "已移除假人 %s。")
+            .replace("--- Fake Players ((highlight)%s(default)) ---", "--- 假人 ((highlight)%s(default)) ---")
+            .replace("--- Bound Modules ((highlight)%d(default)) ---", "--- 已绑定模块 ((highlight)%d(default)) ---")
+            .replace("--- Commands ((highlight)%d(default)) ---", "--- 命令 ((highlight)%d(default)) ---")
+            .replace("--- Modules ((highlight)%d(default)) ---", "--- 模块 ((highlight)%d(default)) ---")
+            .replace("No active keypress handlers.", "没有正在运行的按键处理器。")
+            .replace("Cleared all keypress handlers.", "已清除所有按键处理器。")
+            .replace("Active keypress handlers: ", "正在运行的按键处理器：")
+            .replace("(highlight)%d(default) - (highlight)%s %d(default) ticks left out of (highlight)%d(default).", "(highlight)%d(default) - (highlight)%s 剩余 %d tick，共 (highlight)%d(default) 个。")
+            .replace("Index out of range.", "索引超出范围。")
+            .replace("Removed keypress handler.", "已移除按键处理器。")
+            .replace("You need to hold a (highlight)buried treasure map(default)!", "你需要手持 (highlight)藏宝图(default)！")
+            .replace("Couldn't locate the map icons!", "无法定位地图图标！")
+            .replace("Couldn't locate the buried treasure!", "无法定位埋藏的宝藏！")
+            .replace("You need to hold a (highlight)woodland explorer map(default)!", "你需要手持 (highlight)林地探险家地图(default)！")
+            .replace("Couldn't locate the mansion!", "无法定位林地府邸！")
+            .replace("Couldn't locate the monument!", "无法定位海底神殿！")
+            .replace("No monument found. Try using an (highlight)ocean explorer map(default) for more success.", "未找到海底神殿。可尝试使用 (highlight)海洋探险家地图(default) 提高成功率。")
+            .replace("Locating this structure without an (highlight)ocean explorer map(default) requires Baritone.", "不使用 (highlight)海洋探险家地图(default) 定位此结构需要 Baritone。")
+            .replace("Please throw the first Eye of Ender", "请扔出第一颗末影之眼")
+            .replace("No stronghold found nearby. You can use (highlight)Ender Eyes(default) for more success.", "附近未找到要塞。使用 (highlight)末影之眼(default) 可提高成功率。")
+            .replace("No Eyes of Ender found in hotbar.", "快捷栏中没有末影之眼。")
+            .replace("You need to be in the nether to locate a nether fortress.", "你需要身处下界才能定位下界要塞。")
+            .replace("Locating this structure requires Baritone.", "定位此结构需要 Baritone。")
+            .replace("No nether fortress found.", "未找到下界要塞。")
+            .replace("You need to be in the end to locate an end city.", "你需要身处末地才能定位末地城。")
+            .replace("No end city found.", "未找到末地城。")
+            .replace("You need to hold a (highlight)lodestone(default) compass!", "你需要手持 (highlight)磁石(default)指南针！")
+            .replace("Couldn't get the components data. Are you holding a (highlight)lodestone(default) compass?", "无法获取组件数据。你手持的是 (highlight)磁石(default)指南针吗？")
+            .replace("Couldn't get the lodestone's target!", "无法获取磁石的目标位置！")
+            .replace("Locate canceled", "定位已取消")
+            .replace("Only %d block(s) found. This search might be a false positive.", "仅找到 %d 个方块，本次搜索可能是误判。")
+            .replace("%s Eye of Ender's trajectory saved.", "第 %s 颗末影之眼的轨迹已保存。")
+            .replace("Please throw the second Eye Of Ender from a different location.", "请从另一个位置扔出第二颗末影之眼。")
+            .replace("Missing position data", "缺少位置数据")
+            .replace("Unable to calculate intersection.", "无法计算交汇点。")
+            .replace("Recording started", "开始录制")
+            .replace("Song saved.", "歌曲已保存。")
+            .replace("Couldn't create the file.", "无法创建文件。")
+            .replace("Error while bruteforcing a note level! Sound: ", "暴力尝试音符等级时出错！声音：")
+            .replace("Can't find the instrument from sound! Sound: ", "无法从声音识别乐器！声音：")
+            .replace("There was an error fetching that users name history.", "获取该玩家曾用名时出错。")
+            .replace("The waypoint (highlight)'%s'(default) has been deleted.", "路径点 (highlight)'%s'(default) 已删除。")
+            .replace("Created waypoint with name: (highlight)%s(default)", "已创建路径点：(highlight)%s(default)")
+            .replace("Set mainhand stack count to %s.", "已将主手物品数量设置为 %s。")
+            .replace("Creative mode only.", "仅限创造模式。")
+            .replace("You must hold an item in your main hand.", "你需要主手持有物品。")
+            .replace("Reloading systems, this may take a while.", "正在重载系统，可能需要一些时间。")
+            .replace("No macros are currently scheduled.", "当前没有排期的宏。")
+            .replace("Cleared all scheduled macros.", "已清除所有排期宏。")
+            .replace("This macro is not currently scheduled.", "该宏当前未排期。")
+            .replace("Cleared scheduled macro.", "已清除排期宏。")
+            .replace("Loaded profile (highlight)%s(default).", "已加载配置档 (highlight)%s(default)。")
+            .replace("Saved profile (highlight)%s(default).", "已保存配置档 (highlight)%s(default)。")
+            .replace("Deleted profile (highlight)%s(default).", "已删除配置档 (highlight)%s(default)。")
+            .replace("Reset all settings.", "已重置所有设置。")
+            .replace("Reset all module settings", "已重置所有模块设置")
+            .replace("Reset all GUI settings.", "已重置所有界面设置。")
+            .replace("Reset bind.", "已重置按键绑定。")
+            .replace("Reset all binds.", "已重置所有按键绑定。")
+            .replace("Reset all elements.", "已重置所有 HUD 元素。")
+            .replace("Current TPS: %s%.2f(default).", "当前 TPS：%s%.2f(default)。")
+            .replace("Singleplayer", "单人游戏")
+            .replace("Version: %s", "版本：%s")
+            .replace("Couldn't obtain any server information.", "无法获取任何服务器信息。")
+            .replace("Port: %d", "端口：%d")
+            .replace("Type: %s", "类型：%s")
+            .replace("Motd: %s", "描述：%s")
+            .replace("unknown", "未知")
+            .replace("Protocol version: %d", "协议版本：%d")
+            .replace("Difficulty: %s (Local: %.2f)", "难度：%s（本地：%.2f）")
+            .replace("Day: %d", "天数：%d")
+            .replace("Permission level: %s", "权限等级：%s")
+            .replace("Plugins (%d): %s ", "插件（%d）：%s ")
+            .replace("No plugins found.", "未找到插件。")
+            .replace("An error occurred while trying to find plugins.", "查找插件时出错。")
+            .replace("Error writing map texture", "写入地图纹理时出错")
+            .replace("Setting (highlight)%s(default) is (highlight)%s(default).", "设置 (highlight)%s(default) 的当前值为 (highlight)%s(default)。")
+            .replace("Setting (highlight)%s(default) changed to (highlight)%s(default).", "设置 (highlight)%s(default) 已更改为 (highlight)%s(default)。")
+            .replace("Are you sure you want to connect to '%s:%s'?", "确定要连接到 '%s:%s' 吗？")
+            .replace("No pending swarm connections.", "没有待确认的蜂群连接。")
+            .replace("Connected to (highlight)%s.", "已连接到 (highlight)%s。")
+            .replace("Connected to (highlight)%s", "已连接到 (highlight)%s")
+            .replace("Error connecting to swarm host.", "连接蜂群主机时出错。")
+            .replace("--- Swarm Connections (highlight)(%s/%s)(default) ---", "--- 蜂群连接 (highlight)(%s/%s)(default) ---")
+            .replace("(highlight)Worker %s(default): %s.", "(highlight)工作端 %s(default)：%s。")
+            .replace("No active connections", "没有活动连接")
+            .replace("The follow host command must be used by the host.", "follow 命令必须由蜂群主机执行。")
+            .replace("Visible: §aTrue", "可见：是")
+            .replace("Visible: §cFalse", "可见：否")
+            // 蜂群（Swarm）
+            .replace("Server not found at %s on port %s.", "在 %s 端口 %s 上未找到服务器。")
+            .replace("Connected to Swarm host on at %s on port %s.", "已连接到 %s 端口 %s 的蜂群主机。")
+            .replace("Received command: (highlight)%s", "收到命令：(highlight)%s")
+            .replace("Error fetching command.", "获取命令时出错。")
+            .replace("Error in connection to host.", "与主机连接出错。")
+            .replace("Disconnected from host.", "已与主机断开连接。")
+            .replace("Couldn't start a server on port %s.", "无法在端口 %s 启动服务器。")
+            .replace("Listening for incoming connections on port %s.", "正在端口 %s 监听传入连接。")
+            .replace("Error making a connection to worker.", "连接工作端时出错。")
+            .replace("Server closed on port %s.", "端口 %s 的服务器已关闭。")
+            .replace("New worker connected on %s.", "新工作端已连接：%s。")
+            .replace("Encountered error when sending command.", "发送命令时遇到错误。")
+            .replace("Error creating a connection with %s on port %s.", "与 %s 端口 %s 建立连接时出错。")
+            .replace("Worker disconnected on ip: %s.", "工作端已断开，IP：%s。")
+            // 提醒（Notifier）
+            .replace("(highlight)%s(default) has entered your visual range!", "(highlight)%s(default) 进入了你的可视范围！")
+            .replace("(highlight)%s(default) has left your visual range!", "(highlight)%s(default) 离开了你的可视范围！")
+            .replace("(highlight)%s (default)popped (highlight)%d (default)%s.", "(highlight)%s (default)已触发 (highlight)%d (default)次不死图腾。")
+            .replace("(highlight)%s (default)died after popping (highlight)%d (default)%s.", "(highlight)%s (default)在触发 (highlight)%d (default)次不死图腾后死亡。")
+            // 高速建造（HighwayBuilder）
+            .replace("No empty slots.", "没有空槽位。")
+            .replace("Cannot find pickaxe without silk touch to mine ender chests.", "找不到没有精准采集的镐来挖掘末影箱。")
+            .replace("No empty slots for restocking items.", "没有空槽位用于补充物品。")
+            .replace("Invalid restocking action.", "无效的补货操作。")
+            .replace("Invalid block at container restocking position?", "容器补货位置的方块无效？")
+            .replace("No bow found to destroy crystal traps with. Toggling the setting off.", "未找到用于摧毁水晶陷阱的弓，正在关闭该设置。")
+            .replace("Detected potential hangup on a crystal. Adding it to ignore list and continuing forward.", "检测到水晶可能导致卡顿，已将其加入忽略列表并继续前进。")
+            .replace("No empty space in hotbar.", "快捷栏没有空位。")
+            .replace("Out of blocks to place.", "没有可放置的方块了。")
+            // 音符盒（Notebot）
+            .replace("Malformed line %d", "第 %d 行格式错误")
+            .replace("Invalid character at line %d", "第 %d 行存在无效字符")
+            .replace("Note at tick %d out of range.", "第 %d tick 的音符超出范围。")
+            // 其他
+            .replace("Caught exception: %s", "捕获到异常：%s")
+            .replace("Could not copy to clipboard: Out of memory.", "无法复制到剪贴板：内存不足。")
+            // 路径点（WaypointCommand）
+            .replace("No created waypoints.", "尚未创建任何路径点。")
+            .replace("Name: (highlight)'%s'(default), Dimension: (highlight)%s(default), Pos: (highlight)%s(default)", "名称：(highlight)'%s'(default)，维度：(highlight)%s(default)，位置：(highlight)%s(default)")
+            .replace("Name: ", "名称：")
+            .replace("Actual Dimension: ", "实际维度：")
+            .replace("Position: ", "位置：")
+            // 音符盒（Notebot）
+            .replace("File not found", "找不到文件")
+            .replace("File is in wrong format. Decoder not found.", "文件格式错误，未找到解码器。")
+            .replace("Loading song \"%s\".", "正在加载歌曲 \"%s\"。")
+            .replace("Delaying check for noteblocks", "延迟检查音符盒")
+            .replace("Loading done.", "加载完成。")
+            // 自动熔炉（AutoSmelter）
+            .replace("You do not have any items in your inventory that can be smelted. Disabling.", "背包中没有可烧炼的物品，正在关闭。")
+            .replace("You do not have any fuel in your inventory. Disabling.", "背包中没有燃料，正在关闭。")
+            .replace("Your inventory is full. Disabling.", "背包已满，正在关闭。")
+            // 自动命名牌（AutoNametag）
+            .replace("No Nametag in Hotbar", "快捷栏中没有命名牌")
+            // 数据包记录（PacketLogger）
+            .replace("Failed to initialize packet logging: %s", "初始化数据包记录失败：%s")
+            .replace("Failed to write to packet log file: %s. File logging disabled.", "写入数据包日志文件失败：%s，已禁用文件记录。")
+            // 钻地（Burrow）
+            .replace("Already burrowed, disabling.", "已处于钻地状态，正在关闭。")
+            .replace("Not in a hole, disabling.", "不在坑中，正在关闭。")
+            .replace("Not enough headroom to burrow, disabling.", "上方空间不足，无法钻地，正在关闭。")
+            .replace("No burrow block found, disabling.", "未找到钻地方块，正在关闭。")
+            .replace("Waiting for manual jump.", "等待手动跳跃。")
+            // 防挂机（AntiAFK）
+            .replace("Message list is empty, disabling messages...", "消息列表为空，正在禁用消息……")
+            // Component 级输出（经 sendMsg(Component) 路径）
+            .replace("Found stash at ", "发现储藏点于 ")
+            .replace("It looks like there are coordinates in your message! ", "你的消息中似乎包含坐标！")
+            .replace(" joined.", " 加入了游戏。")
+            .replace(" left.", " 离开了游戏。");
+    }
+
+    /**
+     * 翻译 Component 级聊天消息（Meteor 通过 sendMsg(Component) 输出的消息）。
+     *
+     * 逐叶子节点翻译文本，保留每个节点的样式与 hover/click 交互事件，
+     * 避免整体替换导致按钮、寻路点击等事件丢失。
+     */
+    public static Component translateComponent(Component component) {
+        if (!YiyiaddonTranslator.enabled() || component == null) return component;
+        MutableComponent translated = Component.empty();
+        component.visit((style, text) -> {
+            translated.append(Component.literal(translateChatMessage(text)).withStyle(style));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return translated;
     }
 
     private static String translateDynamicErrors(String message) {
@@ -232,8 +432,20 @@ public final class MeteorCommandTranslations {
         if (matcher.find()) {
             return matcher.replaceFirst(Matcher.quoteReplacement("名为 " + matcher.group(1) + " 的模块不存在。"));
         }
+        for (Template template : MESSAGE_TEMPLATES) {
+            Matcher templateMatcher = template.pattern().matcher(message);
+            if (templateMatcher.find()) {
+                return templateMatcher.replaceAll(template.replacement());
+            }
+        }
         return message;
     }
+
+    private static Template template(String regex, String replacement) {
+        return new Template(Pattern.compile(regex), replacement);
+    }
+
+    private record Template(Pattern pattern, String replacement) {}
 
     public static String translate(String name, String fallback) {
         if (!YiyiaddonTranslator.enabled()) return fallback;

@@ -116,10 +116,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
         Map.entry("minecraft:emerald", "minecraft:emerald_ore"),
         Map.entry("minecraft:coal", "minecraft:coal_ore")
     );
-    // 下界矿石：时运挖矿的最终烧制产物 → 对应的矿石方块（下界金矿烧成金锭）
+    // 下界矿石：时运挖矿的掉落物 → 对应的矿石方块（下界金矿掉金粒，不是金锭）
     private static final Map<String, String> NETHER_FORTUNE = Map.ofEntries(
         Map.entry("minecraft:netherite_ingot", "minecraft:ancient_debris"),
-        Map.entry("minecraft:gold_ingot", "minecraft:nether_gold_ore"),
+        Map.entry("minecraft:gold_nugget", "minecraft:nether_gold_ore"),
         Map.entry("minecraft:quartz", "minecraft:nether_quartz_ore")
     );
 
@@ -147,6 +147,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<Integer> hungerThreshold;
     private final Setting<Integer> durabilityThreshold;
     private final Setting<Integer> teleportDelay;
+    private final Setting<Integer> rtpCooldown;   // RTP 冷却时间（服务器限制，传送失败后等冷却再重试）
     private final Setting<Boolean> shulkerPacker; // 潜影盒打包机：卸货填满潜影盒+换盒重开
 
     // ─── 保留白名单（不丢弃） ───
@@ -160,6 +161,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
     // ─── Baritone 设置 ───
     private final Setting<Boolean> avoidLava;
+    private final Setting<Boolean> lavaEsp;
+    private final Setting<Integer> lavaEspRange;
     private final Setting<Boolean> mobAvoidance;
     private final Setting<Integer> mobAvoidanceRadius;
     private final Setting<Boolean> allowBreak;
@@ -194,6 +197,10 @@ public final class AutoMinerModule extends YiyiaddonModule {
     private final Setting<SettingColor> foodChestColor;
     private final Setting<SettingColor> afkPointColor;
 
+    // ─── 岩浆透视缓存（节流扫描，避免每帧全量扫方块） ───
+    private Set<BlockPos> cachedLavaPositions = new HashSet<>();
+    private int lastLavaScanTick = -1;
+
     public AutoMinerModule() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动挖矿",
             "Baritone驱动全自动挖矿，物流循环，耐久修补，死亡自愈。点击按钮查看说明。");
@@ -218,7 +225,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         netherOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("下界矿石")
-            .description("时运模式选烧制产物（下界合金锭/金锭/石英），精准采集选原矿（下界残骸等）")
+            .description("时运模式选烧制产物（下界合金锭/金粒/石英），精准采集选原矿（下界残骸等）")
             .defaultValue(Items.AIR)
             .filter(this::isNetherTargetItem)
             .build());
@@ -281,7 +288,16 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .description("执行传送指令后等待秒数")
             .defaultValue(8)
             .min(1)
-            .max(30)
+            .max(120)
+            .noSlider()
+            .build());
+
+        rtpCooldown = sgCommand.add(new IntSetting.Builder()
+            .name("RTP冷却时长")
+            .description("服务器 RTP 传送冷却秒数：传送失败后等这么久再重试，避免冷却期空发指令")
+            .defaultValue(60)
+            .min(1)
+            .max(3600)
             .noSlider()
             .build());
 
@@ -471,6 +487,21 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .onChanged(value -> baritone.updateSetting("avoidLava", value))
             .build());
 
+        lavaEsp = sgBaritone.add(new BoolSetting.Builder()
+            .name("岩浆透视")
+            .description("高亮显示附近岩浆方块，挖矿时更直观看到岩浆位置")
+            .defaultValue(true)
+            .build());
+
+        lavaEspRange = sgBaritone.add(new IntSetting.Builder()
+            .name("岩浆透视范围")
+            .description("透视岩浆的扫描半径（格）")
+            .defaultValue(8)
+            .min(2)
+            .max(16)
+            .noSlider()
+            .build());
+
         mobAvoidance = sgBaritone.add(new BoolSetting.Builder()
             .name("怪物规避")
             .description("提高怪物附近路径代价，尽量绕开危险区域")
@@ -561,8 +592,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
 
         mineMaxOreLocationsCount = sgBaritone.add(new IntSetting.Builder()
             .name("矿点缓存数量")
-            .description("Baritone一次缓存的最大矿点数量，越小越优先挖离自己最近的矿、寻路线越少（只保留最近 N 个，8 最稳定）")
-            .defaultValue(8)
+            .description("Baritone一次缓存的最大矿点数量。太少会找不到矿（寻路失败），太多会路闪。64 缓存充足且稳定")
+            .defaultValue(64)
             .min(1)
             .max(256)
             .noSlider()
@@ -840,6 +871,21 @@ public final class AutoMinerModule extends YiyiaddonModule {
         return dim != null && dim.toString().contains(idFragment);
     }
 
+    /** 当前是否在下界维度（下界挖矿自动开岩浆透视用） */
+    public boolean isInNether() {
+        return mc.level != null && mc.level.dimension().toString().contains("the_nether");
+    }
+
+    /** 岩浆透视是否已开启 */
+    public boolean isLavaEspEnabled() {
+        return lavaEsp.get();
+    }
+
+    /** 开启岩浆透视 */
+    public void enableLavaEsp() {
+        lavaEsp.set(true);
+    }
+
     @Override
     public void onDeactivate() {
         baritone.stop();
@@ -1063,6 +1109,19 @@ public final class AutoMinerModule extends YiyiaddonModule {
     @EventHandler
     private void onRender3D(Render3DEvent event) {
         if (mc.player == null || mc.level == null) return;
+
+        // 岩浆透视（独立于种子挖矿，模块激活即显示）
+        if (lavaEsp.get()) {
+            int tick = mc.player.tickCount;
+            if (tick - lastLavaScanTick >= 10) { // 每 10 tick 重扫一次，避免每帧全量扫方块
+                lastLavaScanTick = tick;
+                cachedLavaPositions = scanLava(lavaEspRange.get());
+            }
+            if (!cachedLavaPositions.isEmpty()) {
+                AutoMinerModule_ESP.renderLava(event, cachedLavaPositions, 2.0);
+            }
+        }
+
         if (!seedMiningEnabled.get()) return;
 
         // 获取玩家周围的预测矿石位置
@@ -1079,6 +1138,24 @@ public final class AutoMinerModule extends YiyiaddonModule {
                 2.0
             );
         }
+    }
+
+    /** 扫描玩家周围 radius 格的岩浆方块位置（岩浆透视用） */
+    private Set<BlockPos> scanLava(int radius) {
+        Set<BlockPos> result = new HashSet<>();
+        if (mc.player == null || mc.level == null) return result;
+        BlockPos c = mc.player.blockPosition();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos p = c.offset(dx, dy, dz);
+                    if (mc.level.getBlockState(p).getBlock() == Blocks.LAVA) {
+                        result.add(p);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     @EventHandler
@@ -1132,6 +1209,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     /** 主世界矿石目标产物是否符合当前采集模式（时运=烧制产物，精准=原矿） */
     private boolean isOverworldTargetItem(Item item) {
         if (item == null) return false;
+        // 允许空气（未选择）：否则 load 时 AIR 被 filter 排除会回退到第一个产物（红石粉）
+        if (item == Items.AIR) return true;
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
         if (isSilkTouchMode()) {
             // 精准采集：主世界原矿物品（排除深层变种与下界矿）
@@ -1145,6 +1224,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
     /** 下界矿石目标产物是否符合当前采集模式（时运=烧制产物，精准=原矿） */
     private boolean isNetherTargetItem(Item item) {
         if (item == null) return false;
+        // 允许空气（未选择）：避免 load 时被 filter 排除后回退到第一个产物
+        if (item == Items.AIR) return true;
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
         if (isSilkTouchMode()) {
             return id.equals("minecraft:nether_gold_ore")
@@ -1261,7 +1342,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             case "coal_ore", "deepslate_coal_ore" -> "minecraft:coal";
             case "diamond_ore", "deepslate_diamond_ore" -> "minecraft:diamond";
             case "emerald_ore", "deepslate_emerald_ore" -> "minecraft:emerald";
-            case "gold_ore", "deepslate_gold_ore", "nether_gold_ore" -> "minecraft:raw_gold";
+            case "gold_ore", "deepslate_gold_ore" -> "minecraft:raw_gold";
+            case "nether_gold_ore" -> "minecraft:gold_nugget";
             case "iron_ore", "deepslate_iron_ore" -> "minecraft:raw_iron";
             case "copper_ore", "deepslate_copper_ore" -> "minecraft:raw_copper";
             case "nether_quartz_ore" -> "minecraft:quartz";
@@ -1283,6 +1365,7 @@ public final class AutoMinerModule extends YiyiaddonModule {
     public int getHungerThreshold() { return hungerThreshold.get(); }
     public int getDurabilityThreshold() { return durabilityThreshold.get(); }
     public int getTeleportDelay() { return teleportDelay.get(); }
+    public int getRtpCooldown() { return rtpCooldown.get(); }
     public int getMineGoalUpdateInterval() { return mineGoalUpdateInterval.get(); }
     public boolean getAllowBreak() { return allowBreak.get(); }
     public boolean getAutoTool() { return autoTool.get(); }
@@ -1417,14 +1500,17 @@ public final class AutoMinerModule extends YiyiaddonModule {
             // ═══════════════════════════════════════════════════════════════════
             //  使用说明按钮（置顶显眼位置）
             // ═══════════════════════════════════════════════════════════════════
-            addUniformButton(theme, table, "§e查看使用说明",
-                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
             table.row();
             
             // ═══════════════════════════════════════════════════════════════════
             //  假矿检测按钮
             // ═══════════════════════════════════════════════════════════════════
-            addUniformButton(theme, table, "检测假矿", this::checkFakeOres);
+            WButton checkFakeBtn = theme.button("检测假矿");
+            checkFakeBtn.action = this::checkFakeOres;
+            table.add(checkFakeBtn).expandX().minWidth(200);
             table.row();
             
             // ═══════════════════════════════════════════════════════════════════

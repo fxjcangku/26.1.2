@@ -28,6 +28,17 @@ import com.example.addon.tactical.FlightBypass;
 import com.example.addon.tactical.AntiKickBypass;
 import com.example.addon.tactical.ServerDetector;
 import com.example.addon.tactical.PacketInstantBreak;
+import com.example.addon.autochest.AutoChestCommand;
+import com.example.addon.autochest.AutoChestModule;
+import com.example.addon.autochest.ContainerTypeSetting;
+import com.example.addon.autochest.InfoTextSetting;
+import com.example.addon.autochest.ItemQuantitySetting;
+import com.example.addon.itemid.EntityIdManager;
+import com.example.addon.itemid.IdCommand;
+import com.example.addon.itemid.IdConfigModule;
+import com.example.addon.itemid.IdIdentifyModule;
+import com.example.addon.itemid.ItemIdManager;
+import com.example.addon.itemid.ItemTargetSetting;
 import com.example.addon.utils.YiyiaddonWatermark;
 import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.example.addon.utils.YiyiaddonTelemetryService;
@@ -58,6 +69,7 @@ public class AddonTemplate extends MeteorAddon {
     public static final Category CATEGORY = new Category("§c§lyiyiaddon §a§l工具", () -> DisplayItemUtils.toStack(Items.WRITABLE_BOOK));
     public static final Category CATEGORY_AUTOMATION = new Category("§c§lyiyiaddon §e§l自动化", () -> DisplayItemUtils.toStack(Items.REDSTONE));
     public static final Category CATEGORY_TACTICAL = new Category("§c§lyiyiaddon §b§l绕过", () -> DisplayItemUtils.toStack(Items.SHIELD));
+    public static final Category CATEGORY_ASSIST = new Category("§c§lyiyiaddon §d§l辅助", () -> DisplayItemUtils.toStack(Items.CHEST));
     public static final HudGroup HUD_GROUP = new HudGroup("示例");
 
     @Override
@@ -120,6 +132,20 @@ public class AddonTemplate extends MeteorAddon {
         EnchantmentSelectSetting.register();
         Modules.get().add(new AutoEnchantBook());
 
+        // ── 辅助模块 ──
+        // ID识别 → ID配置管理 → 自动箱子，三功能共享同一份 ID 配置数据源
+        ItemIdManager itemIdManager = new ItemIdManager();
+        EntityIdManager entityIdManager = new EntityIdManager();
+        ItemTargetSetting.register();
+        InfoTextSetting.register();
+        ContainerTypeSetting.register();
+        ItemQuantitySetting.register();
+        Modules.get().add(new IdIdentifyModule(itemIdManager));
+        Modules.get().add(new IdConfigModule(itemIdManager, entityIdManager));
+        Modules.get().add(new AutoChestModule(itemIdManager));
+        Commands.add(new AutoChestCommand());
+        Commands.add(new IdCommand(itemIdManager, entityIdManager));
+
         // ── 反作弊绕过模块 ──
         // FlightBypass：飞行绕过
         // AntiKickBypass：防踢绕过
@@ -164,6 +190,7 @@ public class AddonTemplate extends MeteorAddon {
         Modules.registerCategory(CATEGORY);
         Modules.registerCategory(CATEGORY_AUTOMATION);
         Modules.registerCategory(CATEGORY_TACTICAL);
+        Modules.registerCategory(CATEGORY_ASSIST);
     }
 
     @Override

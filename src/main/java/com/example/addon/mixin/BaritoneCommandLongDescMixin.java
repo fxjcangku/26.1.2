@@ -50,6 +50,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
     "baritone.command.defaults.SaveAllCommand",
     "baritone.command.defaults.SelCommand",
     "baritone.command.defaults.SetCommand",
+    "baritone.command.defaults.SchematicaCommand",
     "baritone.command.defaults.SurfaceCommand",
     "baritone.command.defaults.ThisWayCommand",
     "baritone.command.defaults.TunnelCommand",

@@ -106,7 +106,9 @@ public class FumoCommand extends Command {
 
         Modules.get().save();
 
-        sendMsg("§a§l✓ 绑定成功§r §8▸ §e[" + node + "] §8▸ §d坐标 (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")");
+        sendMsg("§a§l✓ 绑定成功§r §8▸ §e[" + node + "] §8▸ §d坐标 (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"
+            + " §8▸ §7维度 §a" + dimensionName(module.pointDimension)
+            + " §8▸ §7服务器 §6" + (module.pointServer == null ? "未知" : module.pointServer));
         return true;
     }
 
@@ -254,6 +256,15 @@ public class FumoCommand extends Command {
     private String fmt(BlockPos pos) {
         if (pos == null) return "§c未设置";
         return "§a(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+    }
+
+    /** 维度 ID 转中文名：overworld → 主世界，nether → 下界，end → 末地 */
+    private String dimensionName(String dimension) {
+        if (dimension == null) return "未知维度";
+        if (dimension.contains("overworld")) return "主世界";
+        if (dimension.contains("nether")) return "下界";
+        if (dimension.contains("end")) return "末地";
+        return dimension;
     }
 
     private void sendMsg(String msg) {

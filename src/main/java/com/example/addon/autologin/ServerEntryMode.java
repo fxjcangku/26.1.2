@@ -8,7 +8,7 @@ public enum ServerEntryMode {
     DIRECT("直接进入"),                    // 直接连接当前服务器
     MENU_TRANSFER("菜单传送"),             // 通过服务器菜单切换
     SUBSERVER_NETWORK("子服网络"),         // 识别并进入目标子服
-    LEYUAN_CUSTOM("乐源服定制");           // 乐源服专属定制路线
+    LEYUAN_CUSTOM("自用配置");             // 自用配置专属定制路线
 
     private final String title;
 

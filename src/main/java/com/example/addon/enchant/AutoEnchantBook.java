@@ -80,7 +80,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).sliderMax(50).build());
 
     private final Setting<Integer> GUI操作延迟 = sgBasic.add(new IntSetting.Builder()
-        .name("GUI操作延迟(Tick)").description("所有 GUI 点击之间的等待 Tick 数").defaultValue(3).min(1).max(10).sliderMax(10).build());
+        .name("GUI操作延迟(Tick)").description("所有 GUI 点击之间的等待 Tick 数").defaultValue(1).min(1).max(10).sliderMax(10).build());
 
     private final Setting<Integer> 书本补给组数 = sgBasic.add(new IntSetting.Builder()
         .name("书本补给组数").description("每次去书箱抓取的组数（1组=64本）").defaultValue(1).min(1).max(10).sliderMax(5).build());
@@ -320,6 +320,15 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private int enchantedBookSlot = -1;
     private boolean hangoutViewRestored;
 
+    // 空白书合并子状态：砂轮洗练后把背包里分散的空白书堆叠合并到一起
+    private int mergeBookSrc   = -1;   // 待合并来源槽位（玩家背包 0-35）
+    private int mergeBookDst   = -1;   // 待合并目标槽位
+    private int mergeBookStep  = 0;    // 0 待找 / 1 已拿起 / 2 已放上 / 3 归还剩余
+
+    // 补给空箱/取物失败重试计数：服务器延迟高时箱子可能暂时同步不到，重试几次再停机
+    private static final int 补给重试上限 = 3;
+    private int 补给重试次数 = 0;
+
     private final List<String> activeTasks = new ArrayList<>();
 
     private final EnchantmentSelectSetting 剑附魔选择;
@@ -433,13 +442,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
             // 使用说明按钮（置顶显眼位置）
-            addUniformButton(theme, table, "§e查看使用说明",
-                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
             table.row();
 
             // 点位卡片区（两行三列，共六个点位）
             WTable row1 = theme.table();
-            buildPointCard(theme, row1, "书", "书");
+            buildPointCard(theme, row1, "空白书", "书");
             buildPointCard(theme, row1, "青晶石", "青晶石");
             buildPointCard(theme, row1, "成品箱", "成品箱");
             table.add(row1).expandX();
@@ -636,6 +646,10 @@ public class AutoEnchantBook extends YiyiaddonModule {
         guiTick = 0;
         guiPhase = 0;
         hangoutViewRestored = false;
+        mergeBookSrc = -1;
+        mergeBookDst = -1;
+        mergeBookStep = 0;
+        补给重试次数 = 0;
         int vanillaTasks = countSelectedTasks(
             sgVanillaArmor, sgVanillaMelee, sgVanillaTool, sgVanillaBow,
             sgVanillaFishing, sgVanillaTrident, sgVanillaCrossbow, sgVanillaCommon
@@ -686,7 +700,10 @@ public class AutoEnchantBook extends YiyiaddonModule {
         // 容器数据仍由 mc.player.containerMenu 同步，状态机直接通过菜单发包操作。
         if (shouldSuppressScreen(event.screen)) {
             event.setCancelled(true);
-            guiPhase = 0;
+            // 补给状态用 guiPhase 区分书/青金石（>=10 为青金石），重置会破坏 isLapis 判断
+            if (state != State.RESTOCKING) {
+                guiPhase = 0;
+            }
             guiTick = GUI操作延迟.get();
         }
     }
@@ -790,12 +807,13 @@ public class AutoEnchantBook extends YiyiaddonModule {
             toggle();
             return;
         }
-        if (arrivedAt(posEnchant)) {
+        if (canOpenNow(posEnchant)) {
+            stopBaritone();
             if (needRestock() || countInInventory(Items.LAPIS_LAZULI) < 3) { setState(State.WALK_TO_RESTOCK); return; }
             guiTick = 0; guiPhase = 0;
             setState(State.ENCHANTING);
         } else {
-            walkTo(posEnchant);
+            walkToBlock(posEnchant);
         }
     }
 
@@ -847,13 +865,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
                     return;
                 }
                 int invSlot = containerSlotOf(handler, bookSlot);
-                mc.gameMode.handleContainerInput(syncId, invSlot, 0, ContainerInput.PICKUP, mc.player);
+                // 用 QUICK_MOVE 只移送 1 本空白书进附魔槽，避免整叠拿起导致剩余书本散落背包
+                mc.gameMode.handleContainerInput(syncId, invSlot, 0, ContainerInput.QUICK_MOVE, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 1;
             }
             case 1 -> {
-                if (!mc.player.containerMenu.getCarried().is(Items.BOOK)) return;
-                mc.gameMode.handleContainerInput(syncId, 0, 0, ContainerInput.PICKUP, mc.player);
+                // 等待附魔槽同步到 1 本空白书后再取青金石
+                if (!handler.getSlot(0).getItem().is(Items.BOOK)) return;
                 guiTick = GUI操作延迟.get();
                 guiPhase = 2;
             }
@@ -991,11 +1010,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     private void tickWalkToGrind() {
-        if (arrivedAt(posGrindstone)) {
+        if (canOpenNow(posGrindstone)) {
+            stopBaritone();
             guiTick = 0; guiPhase = 0;
             setState(State.GRINDING);
         } else {
-            walkTo(posGrindstone);
+            walkToBlock(posGrindstone);
         }
     }
 
@@ -1044,6 +1064,18 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 guiPhase = 2;
             }
             case 2 -> {
+                // 把背包里分散的空白书合并到同一堆叠，避免分开放
+                if (mergeBooksStep(handler, syncId)) {
+                    guiTick = GUI操作延迟.get();
+                } else {
+                    mergeBookSrc = -1;
+                    mergeBookDst = -1;
+                    mergeBookStep = 0;
+                    guiTick = GUI操作延迟.get();
+                    guiPhase = 3;
+                }
+            }
+            case 3 -> {
                 mc.player.closeContainer();
                 guiTick = GUI操作延迟.get();
                 setState(State.IDLE);
@@ -1052,11 +1084,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     private void tickWalkToStore() {
-        if (arrivedAt(posOutput)) {
+        if (canOpenNow(posOutput)) {
+            stopBaritone();
             guiTick = 0; guiPhase = 0;
             setState(State.STORING);
         } else {
-            walkTo(posOutput);
+            walkToBlock(posOutput);
         }
     }
 
@@ -1115,18 +1148,20 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     private void tickWalkToRestock() {
         if (needBookRestock()) {
-            if (arrivedAt(posBook)) {
+            if (canOpenNow(posBook)) {
+                stopBaritone();
                 guiTick = 0; guiPhase = 0;
                 setState(State.RESTOCKING);
             } else {
-                walkTo(posBook);
+                walkToBlock(posBook);
             }
         } else if (needLapisRestock()) {
-            if (arrivedAt(posLapis)) {
+            if (canOpenNow(posLapis)) {
+                stopBaritone();
                 setState(State.RESTOCKING);
                 guiPhase = 10;
             } else {
-                walkTo(posLapis);
+                walkToBlock(posLapis);
             }
         } else {
             setState(State.IDLE);
@@ -1175,6 +1210,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 int movedCount = stack.getCount();
                 mc.gameMode.handleContainerInput(syncId, i, 0, ContainerInput.QUICK_MOVE, mc.player);
                 grabbed += movedCount;
+                补给重试次数 = 0;
                 guiTick = GUI操作延迟.get();
                 return;
             }
@@ -1182,6 +1218,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
         String name = isLapis ? "青金石" : "空白书";
         mc.player.closeContainer();
+        // 空箱可能是服务器延迟导致物品还没同步，重试几次再停机，避免误判
+        if (++补给重试次数 < 补给重试上限) {
+            notify("§e⚠ " + name + "补给箱暂时没拿到，正在重试（第 " + 补给重试次数 + " 次）...");
+            setState(State.WALK_TO_RESTOCK);
+            guiPhase = isLapis ? 10 : 0;
+            return;
+        }
+        补给重试次数 = 0;
         notifyError(name + "补给箱已空！自动停机。");
         toggle();
     }
@@ -1383,6 +1427,55 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
     }
 
+    /**
+     * 单步推进空白书合并：每 tick 只发一次点击（拿起→放上→归还），
+     * 直到背包里所有同种空白书都堆叠满，返回 false 表示本轮已无更多可合并堆叠。
+     */
+    private boolean mergeBooksStep(AbstractContainerMenu handler, int syncId) {
+        // 已锁定一对待合并堆叠时，按子步骤推进三连点击
+        if (mergeBookSrc >= 0 && mergeBookDst >= 0) {
+            switch (mergeBookStep) {
+                case 1 -> {
+                    // 拿起来源整叠
+                    mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, mergeBookSrc), 0, ContainerInput.PICKUP, mc.player);
+                    mergeBookStep = 2;
+                    return true;
+                }
+                case 2 -> {
+                    // 放到目标堆叠上（自动合并，超出上限的留在光标）
+                    mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, mergeBookDst), 0, ContainerInput.PICKUP, mc.player);
+                    mergeBookStep = 3;
+                    return true;
+                }
+                case 3 -> {
+                    // 归还光标剩余到来源槽，结束本次合并
+                    mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, mergeBookSrc), 0, ContainerInput.PICKUP, mc.player);
+                    mergeBookSrc = -1;
+                    mergeBookDst = -1;
+                    mergeBookStep = 0;
+                    return true;
+                }
+            }
+        }
+
+        // 寻找下一对可合并的空白书堆叠：目标必须未满，来源须与目标同种
+        for (int dst = 0; dst < 36; dst++) {
+            ItemStack target = mc.player.getInventory().getItem(dst);
+            if (!target.is(Items.BOOK) || target.getCount() >= target.getMaxStackSize()) continue;
+            for (int src = 0; src < 36; src++) {
+                if (src == dst) continue;
+                ItemStack source = mc.player.getInventory().getItem(src);
+                if (source.getCount() >= source.getMaxStackSize()) continue;
+                if (!ItemStack.isSameItemSameComponents(source, target)) continue;
+                mergeBookSrc = src;
+                mergeBookDst = dst;
+                mergeBookStep = 1;
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ── 静默容器菜单就绪判断 ─────────────────────────────────────────────
     // 静默模式下不再打开 GUI Screen，改为判断 mc.player.containerMenu 是否已同步为目标菜单。
 
@@ -1401,10 +1494,42 @@ public class AutoEnchantBook extends YiyiaddonModule {
         return mc.player != null && mc.player.containerMenu instanceof ChestMenu;
     }
 
-    private boolean arrivedAt(BlockPos pos) {
-        if (pos == null) return false;
-        double dist = Math.sqrt(mc.player.distanceToSqr(Vec3.atCenterOf(pos)));
-        return dist <= 4.0;
+    /** 玩家能否直接交互到该方块：眼睛到方块中心在交互距离内，且未站在方块正上方 */
+    private boolean canOpenNow(BlockPos pos) {
+        if (pos == null || mc.player == null || mc.level == null) return false;
+        // 站在方块正上方时开箱/开附魔台/开砂轮会失败，须寻路到正面
+        if (mc.player.blockPosition().equals(pos)) return false;
+        double range = mc.player.blockInteractionRange() + 0.5;
+        return mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(pos)) <= range;
+    }
+
+    /** 寻找方块正面站位：水平相邻且可站立的空气块，优先离玩家最近的方位 */
+    private BlockPos frontStandPos(BlockPos pos) {
+        if (pos == null || mc.level == null) return pos;
+        BlockPos playerPos = mc.player.blockPosition();
+        BlockPos best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (int dy = 0; dy >= -1; dy--) {
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos stand = pos.relative(dir).above(dy);
+                if (isStandable(stand)) {
+                    double dx = stand.getX() - playerPos.getX();
+                    double dz = stand.getZ() - playerPos.getZ();
+                    double d = dx * dx + dz * dz;
+                    if (d < bestDist) { bestDist = d; best = stand; }
+                }
+            }
+            if (best != null) break;
+        }
+        return best != null ? best : pos;
+    }
+
+    /** 坐标是否可作为站立点：本体与上方均为空气，下方有落脚方块 */
+    private boolean isStandable(BlockPos pos) {
+        if (mc.level == null) return false;
+        return mc.level.getBlockState(pos).isAir()
+            && mc.level.getBlockState(pos.above()).isAir()
+            && !mc.level.getBlockState(pos.below()).isAir();
     }
 
     private boolean arrivedAtHangout() {
@@ -1420,20 +1545,22 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
     }
 
-    private void walkTo(BlockPos pos) {
+    /** 寻路到方块正面站位（站在相邻块而不是方块本体上方），避免开箱/开附魔台失败 */
+    private void walkToBlock(BlockPos pos) {
         if (pos == null) return;
-        if (!isPathing()) {
-            BaritoneAPI.getProvider().getPrimaryBaritone()
-                .getCustomGoalProcess().setGoalAndPath(
-                    new baritone.api.pathing.goals.GoalNear(pos, 2));
-        }
+        if (isPathing()) return;
+        BlockPos stand = frontStandPos(pos);
+        BaritoneAPI.getProvider().getPrimaryBaritone()
+            .getCustomGoalProcess().setGoalAndPath(
+                new baritone.api.pathing.goals.GoalBlock(stand));
     }
 
     private void interactBlock(BlockPos pos) {
         if (pos == null) return;
-        if (!arrivedAt(pos)) return;
+        if (!canOpenNow(pos)) return;
         // 直接发包开箱/开附魔台/开砂轮，带 sequence 预测处理。
         // 窗口失焦时 mc.gameMode.useItemOn 会被吞导致开箱失败，发包方式不受影响。
+        // 命中面固定顶面（UP）：侧面命中会因站位高低/贴墙导致服务端 raycast 拒绝，顶面最稳。
         FarmPacketOps.interactBlock(InteractionHand.MAIN_HAND, pos, Direction.UP);
     }
 

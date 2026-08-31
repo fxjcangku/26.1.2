@@ -5,6 +5,8 @@ import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.misc.AutoReconnect;
 import net.minecraft.network.chat.Component;
@@ -62,7 +64,9 @@ public final class CometDisconnectModule extends YiyiaddonModule {
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
             // 手动断线按钮：点击立即断开服务器连接
-            addUniformButton(theme, table, "§c立即断线", () -> disconnect("手动触发自动断线"));
+            WButton btn = theme.button("§c立即断线");
+            btn.action = () -> disconnect("手动触发自动断线");
+            table.add(btn).expandX().minWidth(200);
             table.row();
         },
         new String[]{"§l自动断线 · 使用说明"},

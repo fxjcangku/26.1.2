@@ -23,6 +23,8 @@ import com.example.addon.librarian.service.MovementStatus;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
@@ -66,8 +68,10 @@ public final class AutoLibrarianModule extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            // 使用说明按钮（置顶，等宽主题按钮，符合规范 5.7 面板按钮）
-            addUniformButton(theme, table, "§e查看使用说明", () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
+            // 使用说明按钮（置顶显眼位置）
+            WButton helpBtn = theme.button("§e查看使用说明");
+            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+            table.add(helpBtn).expandX().minWidth(200);
             table.row();
         });
     }

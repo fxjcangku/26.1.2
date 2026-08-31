@@ -230,30 +230,6 @@ public abstract class YiyiaddonModule extends Module {
         return t;
     }
 
-    /** 说明面板按钮的统一最小宽度，保证同一面板内所有按钮等宽 */
-    protected static final double BUTTON_MIN_WIDTH = 90;
-
-    /**
-     * 添加等宽按钮到说明面板
-     *
-     * WTable 的列宽取该列内容的最大值，若用 expandX() 只有第一列会吃掉剩余空间，
-     * 导致同一行的按钮宽度不一致（第一列很长、后面按文字长度收缩）。
-     * 这里改用 minWidth 统一列宽 + expandWidgetX 让按钮填满单元格，
-     * 三列布局才会真正等宽。
-     *
-     * @param theme  Meteor GUI 主题
-     * @param table  面板表格
-     * @param title  按钮文字
-     * @param action 点击回调
-     */
-    protected void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
-        WButton button = theme.button(title);
-        button.action = action;
-        // group("uniform") 让同一面板内所有按钮列等宽：WTable 会取该组最大宽度统一分配，
-        // 避免 3 字按钮与 4 字按钮因文字长度不同而出现列宽不一。
-        table.add(button).minWidth(BUTTON_MIN_WIDTH).expandWidgetX().group("uniform");
-    }
-
     /**
      * 带自定义头部的说明面板构建
      *
@@ -289,6 +265,22 @@ public abstract class YiyiaddonModule extends Module {
         }
 
         return t;
+    }
+
+    /** 说明面板按钮的统一最小宽度，兜底防止按钮过窄（铺满由 expandX 保证） */
+    protected static final double BUTTON_MIN_WIDTH = 200;
+
+    /**
+     * 添加铺满整行的说明面板按钮。
+     *
+     * expandX() 同时开启 expandCellX 与 expandWidgetX：expandCellX 让单元格
+     * 吃掉整行剩余空间，expandWidgetX 再让按钮填满单元格，二者缺一不可。
+     * minWidth 仅兜底最小宽度；禁止 group("uniform")（独占一行无意义）。
+     */
+    protected void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
+        WButton button = theme.button(title);
+        button.action = action;
+        table.add(button).expandX().minWidth(BUTTON_MIN_WIDTH);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

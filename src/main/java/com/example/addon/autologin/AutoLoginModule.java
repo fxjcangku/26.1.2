@@ -23,6 +23,7 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.core.component.DataComponents;
@@ -144,6 +145,7 @@ public class AutoLoginModule extends YiyiaddonModule {
     private boolean leyuanRecoveryActive;
     private int leyuanRecoveryElapsedTicks;
     private LeyuanRouteState leyuanRecoveryResumeState = LeyuanRouteState.IDLE;
+    private boolean leyuanReenterPending;   // 路线完成后被踢回登入服，重连后需重新从头回服
 
     public AutoLoginModule() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动登入", "自动注册、登录、断线重连、进服后执行指令序列。详细参考下面使用说明。");
@@ -197,8 +199,9 @@ public class AutoLoginModule extends YiyiaddonModule {
         return buildInfoWidget(theme,
             table -> {
                 // 使用说明按钮（置顶显眼位置）
-                addUniformButton(theme, table, "§e查看使用说明",
-                    () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
+                WButton helpBtn = theme.button("§e查看使用说明");
+                helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
+                table.add(helpBtn).expandX().minWidth(200);
                 table.row();
             },
             new String[]{ "§l自动登入 · 配置说明" },
@@ -228,17 +231,17 @@ public class AutoLoginModule extends YiyiaddonModule {
                 "  §a[4] §f断线后按自动重连设置恢复上一次服务器连接",
                 "  §a[5] §f到达目标区域并稳定等待后，可执行一次目标区域指令"
             ),
-            new HelpScreen.HelpSection("乐源服定制路线",
-                "  §b▸ §f选择「乐源服定制」后，「启用乐源服功能」控制首次进服路线",
+            new HelpScreen.HelpSection("自用配置",
+                "  §b▸ §f选择「自用配置」后，「启用自用配置」控制首次进服路线",
                 "  §b▸ §f「挂机区自动回服」是独立开关，可单独检测挂机区并启动回服",
                 "  §b▸ §f回服顺序固定：返回主城大区 §8→ §7世界传送 §8→ §7资源大区 §8→ §7资源二区",
-                "  §b▸ §f默认用欢迎页「书本直达主城」入口，也可切换为扫描乐源城入口",
+                "  §b▸ §f默认用欢迎页「书本直达主城」入口，也可切换为扫描自用入口",
                 "  §b▸ §f主城菜单优先用快捷栏物品，失败时可用 Shift＋F 兜底"
             ),
             new HelpScreen.HelpSection("路线与指令",
                 "  §8├─ §f通用子服路线仅用于直接进入以外的前三种普通模式",
                 "  §8├─ §f开启「检测服务器子服」后，子服连接沿用大厅认证状态",
-                "  §8├─ §f乐源路线通过侧边栏关键词确认主城、挂机区和最终目标",
+                "  §8├─ §f自用路线通过侧边栏关键词确认主城、挂机区和最终目标",
                 "  §8├─ §f挂机区菜单延迟只影响首次菜单打开，不影响登录和其他路线",
                 "  §8└─ §f每步等待和单步超时均按 §e20 tick = 1 秒 §f计算"
             ),
@@ -249,7 +252,7 @@ public class AutoLoginModule extends YiyiaddonModule {
             ),
             new HelpScreen.HelpSection("注意事项",
                 "  §c⚠ §f自动登录与自动注册同时开启：老账号关「自动注册」，新账号关「自动登录」",
-                "  §c⚠ §f乐源定制路线仅适用于该服务器，请勿用于其他服务器",
+                "  §c⚠ §f自用配置路线仅适用于该服务器，请勿用于其他服务器",
                 "  §c⚠ §f密码明文存储在配置文件中，请勿在公共电脑使用"
             )
         );
@@ -309,6 +312,7 @@ public class AutoLoginModule extends YiyiaddonModule {
         detectSubserverPreviously = cfg.detectSubserver.get();
         pendingSubserverScanTicks = 0;
         resetSubserverWorkflow();
+        leyuanReenterPending = false;
         state = AutoLoginState.IDLE;
     }
 
@@ -469,6 +473,12 @@ public class AutoLoginModule extends YiyiaddonModule {
             markLeyuanTransition();
             return;
         }
+        // 乐源路线已完成/空闲时被踢出重连：回到登入服后重新从头执行回服路线
+        if (leyuanReenterPending) {
+            leyuanReenterPending = false;
+            startLeyuanRoute();
+            return;
+        }
         if (networkHandler != null && networkHandler == sessionNetworkHandler) {
             if (subserverTransitionExpected && authFlowCompleted && cfg.detectSubserver.get()) {
                 pendingSubserverScanTicks = SUBSERVER_SCAN_DELAY_TICKS;
@@ -532,6 +542,12 @@ public class AutoLoginModule extends YiyiaddonModule {
             handleDisconnect();
             return;
         }
+        // 乐源路线运行中静默容器菜单：取消屏幕显示（不抢鼠标），菜单数据仍由 containerMenu 同步发包点击
+        if (isLeyuanRouteRunning() && event.screen instanceof AbstractContainerScreen<?>
+                && !(event.screen instanceof InventoryScreen)) {
+            event.setCancelled(true);
+            return;
+        }
         // 用户手动点击「返回服务器列表」或回到主菜单时，取消待执行的重连
         if (state == AutoLoginState.RECONNECT_WAIT
                 && (event.screen instanceof JoinMultiplayerScreen || event.screen instanceof TitleScreen)) {
@@ -549,7 +565,8 @@ public class AutoLoginModule extends YiyiaddonModule {
             String raw = event.getMessage().getString();
             if (ChatAnalyzer.stripColors(raw).contains("[Jeraddon]")) return;
 
-            if (cfg.noLoginDetection.get() && ChatAnalyzer.isLoginSuccess(raw)) {
+            if (cfg.noLoginDetection.get() && ChatAnalyzer.isLoginSuccess(raw)
+                    && (state == AutoLoginState.WORLD_LOAD_WAIT || state == AutoLoginState.DETECTING_AUTH)) {
                 cfg.autoLogin.set(false);
                 authFlowCompleted = true;
                 allowActiveAuthPrompt = false;
@@ -566,8 +583,9 @@ public class AutoLoginModule extends YiyiaddonModule {
             AuthRule rule = ChatAnalyzer.analyze(raw);
             if (rule == null) return;
             if (cfg.noLoginDetection.get() && rule.type == AuthRule.Type.LOGIN && !cfg.autoLogin.get()) {
+                cfg.noLoginDetection.set(false);
                 cfg.autoLogin.set(true);
-                notify("检测到服务器登录提示，免登录已失效，已开启自动登录。");
+                notify("检测到服务器登录提示，免登录已失效，已关闭免检测并开启自动登录。");
             }
             if (!cfg.autoLogin.get() && !cfg.autoRegister.get()) return;
 
@@ -660,6 +678,9 @@ public class AutoLoginModule extends YiyiaddonModule {
         if (recoveringLeyuan) {
             leyuanRecoveryResumeState = leyuanRouteState;
             if (!leyuanRecoveryActive) leyuanRecoveryElapsedTicks = 0;
+        } else {
+            // 乐源路线已完成/空闲时被踢出（如 out_of_order_chat），重连回登入服后需重新从头回服
+            leyuanReenterPending = cfg.usesLeyuanRoute();
         }
         waitingForReconnectStability = false;
         reconnectStableTicks = 0;
@@ -898,7 +919,7 @@ public class AutoLoginModule extends YiyiaddonModule {
             notify("等了太久还没完成“" + stage + "”，已停止操作，防止误点。");
             return;
         }
-        if (mc.screen == null && leyuanStateTicks > cfg.leyuanStepDelay.get() + 20) {
+        if (!leyuanMenuOpen() && leyuanStateTicks > cfg.leyuanStepDelay.get() + 20) {
             if (leyuanRouteState == LeyuanRouteState.CLICK_LOGIN_SURVIVAL) {
                 setLeyuanState(LeyuanRouteState.OPEN_LOGIN_MENU, cfg.leyuanStepDelay.get());
                 return;
@@ -948,7 +969,7 @@ public class AutoLoginModule extends YiyiaddonModule {
                 if (cfg.leyuanWelcomeEntryMode.get() == LeyuanWelcomeEntryMode.BOOK_DIRECT) {
                     leyuanLastScreenFingerprint = 0;
                     setLeyuanState(LeyuanRouteState.SCAN_WELCOME, 0);
-                } else if (mc.screen == null) {
+                } else if (!leyuanMenuOpen()) {
                     captureLeyuanStageOrigin();
                     leyuanScanBaseYaw = mc.player.getYRot();
                     leyuanScanBasePitch = mc.player.getXRot();
@@ -1049,7 +1070,7 @@ public class AutoLoginModule extends YiyiaddonModule {
 
     private boolean openLeyuanMenu() {
         if (!canRunLeyuanMenu()) return false;
-        if (mc.screen instanceof AbstractContainerScreen<?>) {
+        if (leyuanMenuOpen()) {
             leyuanMenuUseCooldown = 0;
             leyuanLastScreenFingerprint = 0;
             return true;
@@ -1115,7 +1136,7 @@ public class AutoLoginModule extends YiyiaddonModule {
             return;
         }
         boolean hasClock = findLeyuanMenuItemSlot() >= 0;
-        if (!cfg.leyuanCityMenuFallback.get() || mc.screen != null || leyuanCityMenuFallbackAttempts >= 2
+        if (!cfg.leyuanCityMenuFallback.get() || leyuanMenuOpen() || leyuanCityMenuFallbackAttempts >= 2
             || (hasClock && leyuanStateTicks < cfg.leyuanCityMenuFallbackDelay.get())
             || (leyuanCityMenuFallbackAttempts > 0 && leyuanStateTicks < leyuanCityMenuFallbackRetryTick)) return;
         KeyMapping.set(shiftKey, true);
@@ -1149,9 +1170,9 @@ public class AutoLoginModule extends YiyiaddonModule {
 
     private boolean clickLeyuanMenuKeywords(List<String> keywords) {
         if (!canRunLeyuanMenu()) return false;
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen) || mc.gameMode == null) return false;
-        AbstractContainerMenu handler = screen.getMenu();
-        int fingerprint = leyuanScreenFingerprint(screen, handler);
+        AbstractContainerMenu handler = leyuanActiveMenu();
+        if (handler == null) return false;
+        int fingerprint = leyuanMenuFingerprint(handler);
         if (fingerprint == leyuanLastScreenFingerprint) return false;
         for (int i = 0; i < handler.slots.size(); i++) {
             Slot slot = handler.getSlot(i);
@@ -1164,12 +1185,10 @@ public class AutoLoginModule extends YiyiaddonModule {
     }
 
     private boolean clickLeyuanDirectMainCityBook() {
-        if (cfg.leyuanWelcomeEntryMode.get() != LeyuanWelcomeEntryMode.BOOK_DIRECT
-            || !(mc.screen instanceof AbstractContainerScreen<?> screen)
-            || mc.gameMode == null) return false;
-
-        AbstractContainerMenu handler = screen.getMenu();
-        int fingerprint = leyuanScreenFingerprint(screen, handler);
+        if (cfg.leyuanWelcomeEntryMode.get() != LeyuanWelcomeEntryMode.BOOK_DIRECT) return false;
+        AbstractContainerMenu handler = leyuanActiveMenu();
+        if (handler == null) return false;
+        int fingerprint = leyuanMenuFingerprint(handler);
         if (fingerprint == leyuanLastScreenFingerprint) return false;
 
         for (int slotIndex : LEYUAN_DIRECT_MAIN_CITY_BOOK_SLOTS) {
@@ -1186,8 +1205,8 @@ public class AutoLoginModule extends YiyiaddonModule {
         return false;
     }
 
-    private int leyuanScreenFingerprint(AbstractContainerScreen<?> screen, AbstractContainerMenu handler) {
-        int result = 31 * handler.containerId + normalizeMatchText(screen.getTitle().getString()).hashCode();
+    private int leyuanMenuFingerprint(AbstractContainerMenu handler) {
+        int result = 31 * handler.containerId;
         for (Slot slot : handler.slots) {
             if (slot.container == mc.player.getInventory()) continue;
             result = 31 * result + normalizeMatchText(slot.getItem().getHoverName().getString()).hashCode();
@@ -1349,6 +1368,24 @@ public class AutoLoginModule extends YiyiaddonModule {
             || leyuanRouteState == LeyuanRouteState.CLICK_TARGET_SERVER);
     }
 
+    /** 乐源菜单是否已打开（静默判断 containerMenu，不依赖真实屏幕，失焦也有效） */
+    private boolean leyuanMenuOpen() {
+        return mc.player != null && mc.player.containerMenu != null
+            && mc.player.containerMenu != mc.player.inventoryMenu;
+    }
+
+    /** 当前活动的菜单容器：优先静默 containerMenu，其次屏幕菜单，无则 null */
+    private AbstractContainerMenu leyuanActiveMenu() {
+        if (mc.player == null || mc.gameMode == null) return null;
+        if (mc.player.containerMenu != null && mc.player.containerMenu != mc.player.inventoryMenu) {
+            return mc.player.containerMenu;
+        }
+        if (mc.screen instanceof AbstractContainerScreen<?> screen) {
+            return screen.getMenu();
+        }
+        return null;
+    }
+
     private void setLeyuanState(LeyuanRouteState next, int delay) {
         leyuanRouteState = next;
         leyuanStateTicks = 0;
@@ -1499,7 +1536,7 @@ public class AutoLoginModule extends YiyiaddonModule {
             confirmTargetArea("侧边栏已识别 " + matchedKeyword);
             return;
         }
-        if (!cfg.requireTargetKeyword.get() && targetTransitionObserved && !(mc.screen instanceof AbstractContainerScreen<?>)) {
+        if (!cfg.requireTargetKeyword.get() && targetTransitionObserved && !leyuanMenuOpen()) {
             confirmTargetArea(cfg.serverEntryMode.get() == ServerEntryMode.MENU_TRANSFER ? "已检测到世界或维度变化" : "已检测到子服切换");
         }
     }
