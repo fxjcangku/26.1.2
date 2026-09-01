@@ -1,10 +1,8 @@
 package com.example.addon.modules;
 
 import baritone.api.BaritoneAPI;
-import com.example.addon.autochest.InfoTextSetting;
 import com.example.addon.commands.CunminCommand;
 import com.example.addon.core.AddonTemplate;
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.ui.HelpScreen;
 import com.example.addon.villager.fsm.VillagerTradeFSM;
@@ -106,10 +104,8 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         .name("运行模式")
         .description("选择交易模式")
         .defaultValue(Mode.LOCAL)
-        .onChanged(m -> SettingUiHelper.reloadScreen())
         .build()
     );
-    private final InfoTextSetting 运行模式当前值 = SettingUiHelper.currentValueLine(sgGeneral, "当前运行模式", mode);
 
     private final Setting<Boolean> drainMode = sgGeneral.add(new BoolSetting.Builder()
         .name("榨干模式(按钮)")
@@ -132,10 +128,9 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         .name("目标职业")
         .description("选择村民职业")
         .defaultValue(ProfessionChoice.图书管理员)
-        .onChanged(value -> { updateItemSettings(); SettingUiHelper.reloadScreen(); })
+        .onChanged(value -> updateItemSettings())
         .build()
     );
-    private final InfoTextSetting 目标职业当前值 = SettingUiHelper.currentValueLine(sgGeneral, "当前目标职业", profession);
 
     private final Setting<Integer> searchRange = sgGeneral.add(new IntSetting.Builder()
         .name("村民搜索范围")

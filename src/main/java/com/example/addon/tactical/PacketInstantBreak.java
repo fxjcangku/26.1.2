@@ -1,6 +1,5 @@
 package com.example.addon.tactical;
 
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.ClientLevelPredictionAccessor;
 import com.example.addon.modules.AutoMinerModule;
@@ -84,17 +83,13 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .name("目标模式")
         .description("瞄准破坏：按住左键瞄准目标方块发包挖掘；范围自动：自动扫描周围方块批量发包挖掘")
         .defaultValue(TargetMode.AIM)
-        .onChanged(m -> SettingUiHelper.reloadScreen())
         .build());
-    { SettingUiHelper.currentValueLine(sgTarget, "当前目标模式", targetMode); }
 
     private final Setting<BreakMode> breakMode = sgTarget.add(new EnumSetting.Builder<BreakMode>()
         .name("破坏方式")
         .description("秒破：START+STOP 立即发送，服务端不校验挖掘速度时可用；原版速度：按真实工具速度推进，任何服务器都稳；自定义倍速：按倍率加速推进")
         .defaultValue(BreakMode.INSTANT)
-        .onChanged(m -> SettingUiHelper.reloadScreen())
         .build());
-    { SettingUiHelper.currentValueLine(sgTarget, "当前破坏方式", breakMode); }
 
     private final Setting<Double> speedMultiplier = sgTarget.add(new DoubleSetting.Builder()
         .name("速度倍率")
@@ -189,10 +184,8 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .name("框线样式")
         .description("进度框的渲染样式：仅线条 / 仅面 / 线+面")
         .defaultValue(EspStyle.BOTH)
-        .onChanged(s -> SettingUiHelper.reloadScreen())
         .visible(render::get)
         .build());
-    { SettingUiHelper.currentValueLine(sgRender, "当前框线样式", espStyle, render::get); }
 
     private final Setting<Boolean> shrinkProgress = sgRender.add(new BoolSetting.Builder()
         .name("进度收缩")
@@ -247,10 +240,8 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .name("标签内容")
         .description("百分比标签展示的内容：仅百分比 / 百分比+方块名 / 百分比+剩余tick")
         .defaultValue(LabelStyle.PERCENT)
-        .onChanged(s -> SettingUiHelper.reloadScreen())
         .visible(() -> render.get() && showPercent.get())
         .build());
-    { SettingUiHelper.currentValueLine(sgRender, "当前标签内容", labelStyle, () -> render.get() && showPercent.get()); }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  内部状态

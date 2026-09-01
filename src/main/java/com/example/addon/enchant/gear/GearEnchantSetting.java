@@ -215,7 +215,13 @@ public final class GearEnchantSetting extends StringListSetting {
         Identifier id = Identifier.tryParse(gearId);
         if (id == null) return ItemStack.EMPTY;
         Item item = BuiltInRegistries.ITEM.getValue(id);
-        return (item == null || item == Items.AIR) ? ItemStack.EMPTY : item.getDefaultInstance();
+        if (item == null || item == Items.AIR) return ItemStack.EMPTY;
+        // 主菜单等环境组件未绑定时 getDefaultInstance 会 NPE，兜底返回空堆
+        try {
+            return item.getDefaultInstance();
+        } catch (NullPointerException e) {
+            return ItemStack.EMPTY;
+        }
     }
 
     private String summaryText() {

@@ -119,6 +119,15 @@ public final class TargetMatcher {
                 }
             }
         }
+        // 互斥补充：装备带的目标外附魔与方案目标附魔冲突（如时运镐在精准采集方案下，
+        // fortune 与目标 silk_touch 互斥），应判垃圾送砂轮，避免铁砧合并后「太昂贵」
+        for (String actualId : actual.keySet()) {
+            for (TargetProfile.TargetEnchantment t : profile.activeTargets()) {
+                if (!actualId.equals(t.id()) && db.conflictsWith(actualId, t.id())) {
+                    conflicts.add(actualId);
+                }
+            }
+        }
 
         // 不可达：活动必需附魔无法从 30 级附魔台获得且当前未满足（§18 / §19）
         Set<String> unreachable = new LinkedHashSet<>();
@@ -149,6 +158,21 @@ public final class TargetMatcher {
     public static boolean isJunk(ItemStack stack, TargetProfile profile) {
         Result r = match(stack, profile);
         return r.junk() || !r.worthKeeping();
+    }
+
+    /** 是否最终达标（COMPLETE）：全部活动目标满级且无禁止/互斥/不可达残留，最终验收专用 */
+    public static boolean isComplete(ItemStack stack, TargetProfile profile) {
+        return match(stack, profile).complete();
+    }
+
+    /** 是否必需附魔全部满级（太昂贵降级验收：放弃可选附魔、只保必需核心），仍拒绝禁止/互斥/不可达 */
+    public static boolean isRequiredComplete(ItemStack stack, TargetProfile profile) {
+        Result r = match(stack, profile);
+        if (r.junk() || r.state() == State.UNREACHABLE) return false;
+        for (TargetProfile.TargetEnchantment t : profile.requiredTargets()) {
+            if (!r.satisfied().contains(t.id())) return false;
+        }
+        return !profile.requiredTargets().isEmpty();
     }
 
     /** 生成中文明细（状态播报与报告用） */

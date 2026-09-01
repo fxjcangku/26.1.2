@@ -4,7 +4,6 @@ import com.example.addon.ui.HelpScreen;
 
 import com.example.addon.commands.WKCommand;
 import com.example.addon.core.AddonTemplate;
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mining.*;
 import com.example.addon.translations.BaritoneChatTranslations;
@@ -214,9 +213,8 @@ public final class AutoMinerModule extends YiyiaddonModule {
             .name("采集模式")
             .description("精准采集：目标选择器显示原矿；时运：目标选择器显示掉落物（粗铁/粗金/粗铜等）。切换模式时自动同步目标")
             .defaultValue(LootMode.FORTUNE)
-            .onChanged(mode -> { syncTargetsOnModeSwitch(mode); SettingUiHelper.reloadScreen(); })
+            .onChanged(this::syncTargetsOnModeSwitch)
             .build());
-        { SettingUiHelper.currentValueLine(sgTarget, "当前采集模式", lootMode); }
 
         overworldOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("主世界矿石")

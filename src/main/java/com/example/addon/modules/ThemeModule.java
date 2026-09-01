@@ -1,7 +1,6 @@
 package com.example.addon.modules;
 
 import com.example.addon.core.AddonTemplate;
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.GuiThemes;
@@ -34,11 +33,9 @@ public final class ThemeModule extends YiyiaddonModule {
         .defaultValue(Palette.SAKURA)
         .onChanged(value -> {
             if (isActive()) apply(value);
-            SettingUiHelper.reloadScreen();
         })
         .build()
     );
-    { SettingUiHelper.currentValueLine(sgGeneral, "当前配色", palette); }
 
     public ThemeModule() {
         super(AddonTemplate.CATEGORY, "界面主题", "一键切换 Meteor 界面和 HUD 的配色方案，支持多种主题并可随时切换。");

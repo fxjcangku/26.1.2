@@ -6,6 +6,7 @@ import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.settings.IVisible;
 import meteordevelopment.meteorclient.settings.StringListSetting;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.List;
@@ -32,10 +33,19 @@ public final class CustomEnchantSetting extends StringListSetting {
         // 附魔书图标行（自带光效，与 BOOK/GEAR 选择器统一）
         WHorizontalList header = table.add(theme.horizontalList()).expandX().widget();
         header.spacing = 6;
-        header.add(theme.item(Items.ENCHANTED_BOOK.getDefaultInstance()));
+        header.add(theme.item(enchantedBookIcon()));
         table.row();
         // 内联编辑列表（复用 Meteor 官方 StringListSetting.fillTable）
         WTable wtable = table.add(theme.table()).expandX().widget();
         StringListSetting.fillTable(theme, wtable, setting);
+    }
+
+    /** 附魔书官方图标堆：主菜单等环境组件未绑定时 getDefaultInstance 会 NPE，兜底返回空堆 */
+    private static ItemStack enchantedBookIcon() {
+        try {
+            return Items.ENCHANTED_BOOK.getDefaultInstance();
+        } catch (NullPointerException e) {
+            return ItemStack.EMPTY;
+        }
     }
 }

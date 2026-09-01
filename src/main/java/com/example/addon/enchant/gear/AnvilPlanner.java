@@ -63,17 +63,18 @@ public final class AnvilPlanner {
 
         List<AnvilStep> steps = new ArrayList<>();
         int order = 1;
-        ItemStack current = base.copy();
-        // 逐件判定材料装备：互补且不互斥才合并，否则跳过（上层砂轮磨掉）
-        for (ItemStack material : gears) {
-            if (material == base) continue;
+        // 材料按「相对主装备的提升价值」降序：先补缺失附魔、再升级等级不足，
+        // 减少无谓合并，压低 prior work penalty 与铁砧次数
+        for (ItemStack material : sortedMaterials(profile, base, baseEnch, gears)) {
             Map<String, Integer> matEnch = EnchantEvaluationService.readEnchantments(material);
             if (!isComplementary(baseEnch, matEnch, profile)) continue;
             if (hasConflict(baseEnch, matEnch)) continue;
             String contrib = primaryContribution(material, profile);
-            steps.add(new AnvilStep(order++, current.copy(), material.copy(), contrib, targetLevelOf(profile, contrib)));
+            steps.add(new AnvilStep(order++, base.copy(), material.copy(), contrib, targetLevelOf(profile, contrib)));
             // 模拟合并后的附魔集合，供后续材料判定使用（仅逻辑模拟，不算 XP）
             mergeInto(baseEnch, matEnch);
+            // 全部活动目标已达标即停止：不再多余合并，避免无谓 XP 与铁砧次数
+            if (allSatisfied(baseEnch, profile)) break;
         }
         return new AnvilPlan(steps, DEFAULT_MAX_OPERATIONS);
     }
@@ -92,12 +93,14 @@ public final class AnvilPlanner {
         return best;
     }
 
-    /** 装备对目标的贡献分数：命中目标附魔的数量 */
+    /** 装备对目标的贡献分数：命中 +1，再按等级加权（等级越贴近目标越值钱，选主装备更准） */
     public static int contributionScore(ItemStack gear, TargetProfile profile) {
         Map<String, Integer> ench = EnchantEvaluationService.readEnchantments(gear);
         int score = 0;
         for (TargetProfile.TargetEnchantment target : profile.activeTargets()) {
-            if (ench.containsKey(target.id())) score++;
+            Integer level = ench.get(target.id());
+            if (level == null) continue;
+            score += 1 + Math.min(level, target.level());
         }
         return score;
     }
@@ -125,8 +128,9 @@ public final class AnvilPlanner {
             Integer matLevel = matEnch.get(target.id());
             if (matLevel == null) continue;
             Integer baseLevel = baseEnch.get(target.id());
-            if (baseLevel == null) return true;            // 主装备缺失 → 互补
-            if (baseLevel < target.level()) return true;   // 主装备等级不足 → 互补
+            if (baseLevel == null) return true;                 // 主装备缺失 → 互补
+            if (baseLevel >= target.level()) continue;          // 已达标 → 无需再补
+            if (matLevel >= baseLevel) return true;             // 材料等级不低于主装备 → 合成有提升
         }
         return false;
     }
@@ -155,18 +159,56 @@ public final class AnvilPlanner {
         return holder.orElse(null);
     }
 
-    /** 模拟附魔合并（仅用于规划排序，不算 XP）：相同附魔取较高 +1，不同附魔叠加 */
+    /** 模拟附魔合并（仅用于规划排序，不算 XP）：遵循原版铁砧规则 */
     private static void mergeInto(Map<String, Integer> target, Map<String, Integer> source) {
         for (Map.Entry<String, Integer> e : source.entrySet()) {
             String id = e.getKey();
             int level = e.getValue();
             Integer existing = target.get(id);
             if (existing == null) {
-                target.put(id, level);
-            } else if (existing >= level) {
-                target.put(id, existing + 1);
+                target.put(id, level);          // 新增附魔
+            } else if (existing.equals(level)) {
+                target.put(id, existing + 1);   // 同等级合并 → 等级 +1
+            } else if (level > existing) {
+                target.put(id, level);          // 材料等级更高 → 取较高者
             }
+            // level < existing：无提升，保持原样
         }
+    }
+
+    /** 材料按相对主装备的提升价值降序排列（先补缺失，再升级等级不足） */
+    private static List<ItemStack> sortedMaterials(TargetProfile profile, ItemStack base,
+                                                   Map<String, Integer> baseEnch, List<ItemStack> gears) {
+        List<ItemStack> list = new ArrayList<>();
+        for (ItemStack gear : gears) {
+            if (gear != base) list.add(gear);
+        }
+        list.sort((a, b) -> Integer.compare(
+            improvement(baseEnch, EnchantEvaluationService.readEnchantments(b), profile),
+            improvement(baseEnch, EnchantEvaluationService.readEnchantments(a), profile)));
+        return list;
+    }
+
+    /** 材料相对主装备的提升价值：新增缺失附魔 +2，升级等级不足 +1 */
+    private static int improvement(Map<String, Integer> base, Map<String, Integer> mat, TargetProfile profile) {
+        int value = 0;
+        for (TargetProfile.TargetEnchantment t : profile.activeTargets()) {
+            Integer ml = mat.get(t.id());
+            if (ml == null) continue;
+            Integer bl = base.get(t.id());
+            if (bl == null) value += 2;                       // 缺失 → 直接补上
+            else if (bl < t.level() && ml >= bl) value += 1;  // 等级不足且材料可升级
+        }
+        return value;
+    }
+
+    /** 主装备附魔集合是否已满足全部活动目标（用于提前终止合并） */
+    private static boolean allSatisfied(Map<String, Integer> ench, TargetProfile profile) {
+        for (TargetProfile.TargetEnchantment t : profile.activeTargets()) {
+            Integer level = ench.get(t.id());
+            if (level == null || level < t.level()) return false;
+        }
+        return true;
     }
 
     /** 查某附魔在目标方案里的目标等级 */

@@ -1,7 +1,5 @@
 package com.example.addon.tactical;
 
-import com.example.addon.autochest.InfoTextSetting;
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.ClientLevelPredictionAccessor;
 import com.example.addon.mixin.LocalPlayerAccessor;
@@ -57,11 +55,9 @@ public class FlightBypass extends YiyiaddonModule {
             if (TacticalFSM.hasAdvancedAntiCheat() && (m == FlightMode.VANILLA_MIMIC || m == FlightMode.FIREWORK_BOOST)) {
                 notify("检测到高级反作弊，建议切换到发包飞行、安全滑翔或序列垫脚");
             }
-            SettingUiHelper.reloadScreen();
         })
         .build()
     );
-    private final InfoTextSetting 飞行模式当前值 = SettingUiHelper.currentValueLine(sgMode, "当前飞行模式", mode);
 
     // 参数调整
     private final Setting<Double> packetFlySpeed = sgTweaks.add(new DoubleSetting.Builder()

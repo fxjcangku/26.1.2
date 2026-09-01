@@ -74,6 +74,9 @@ public final class EnchantPlanningEngine {
                 junk++;
             } else if (m.worthKeeping()) {
                 valuable.add(gear);
+            } else {
+                // 零命中（无价值且非禁止/互斥，如时运方案下随机附出精准采集）也应送砂轮磨掉
+                junk++;
             }
             if (m.state() == TargetMatcher.State.UNREACHABLE) {
                 unreachable = true;
@@ -90,17 +93,18 @@ public final class EnchantPlanningEngine {
             return new Decision(Action.UNREACHABLE, null, null, valuable.size(), junk, "必需附魔无法由 30 级附魔台获得");
         }
 
-        // 3. 有价值中间态 ≥ 2 且可互补合并 → 铁砧
+        // 3. 存在垃圾 → 先砂轮磨掉（高价值中间态保留，只磨垃圾）。
+        //    优先于铁砧：避免垃圾装备（含 fire_protection 等互斥附魔）被误当主装备合并，导致费用=0 死循环
+        if (junk > 0) {
+            return new Decision(Action.GRIND, null, null, valuable.size(), junk, "存在 " + junk + " 件垃圾需砂轮");
+        }
+
+        // 4. 有价值中间态 ≥ 2 且可互补合并 → 铁砧
         if (valuable.size() >= 2) {
             AnvilPlan plan = AnvilPlanner.plan(profile, valuable);
             if (plan.hasNext()) {
                 return new Decision(Action.ANVIL, null, plan, valuable.size(), junk, "规划铁砧合并 " + plan.steps().size() + " 步");
             }
-        }
-
-        // 4. 存在垃圾 → 砂轮（高价值中间态保留，只磨垃圾）
-        if (junk > 0) {
-            return new Decision(Action.GRIND, null, null, valuable.size(), junk, "存在 " + junk + " 件垃圾需砂轮");
         }
 
         // 5. 无合并、无垃圾 → 继续附魔（补更多裸装备扩充候选池）

@@ -1,8 +1,6 @@
 package com.example.addon.modules;
 
-import com.example.addon.autochest.InfoTextSetting;
 import com.example.addon.core.AddonTemplate;
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.tactical.TacticalFSM;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
@@ -69,10 +67,8 @@ public class AutoBoneMeal extends YiyiaddonModule {
         .name("触发模式")
         .description("范围自动扫描：自动搜索周围所有目标；准星精准指向：仅对准星看着的方块生效。")
         .defaultValue(TriggerMode.范围自动扫描)
-        .onChanged(mode -> SettingUiHelper.reloadScreen())
         .build()
     );
-    private final InfoTextSetting 触发模式当前值 = SettingUiHelper.currentValueLine(sgGeneral, "当前触发模式", triggerMode);
 
     private final Setting<Integer> range = sgGeneral.add(new IntSetting.Builder()
         .name("作用半径")

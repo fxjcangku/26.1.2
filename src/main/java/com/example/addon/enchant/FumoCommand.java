@@ -81,6 +81,11 @@ public class FumoCommand extends Command {
     private boolean setPos(PointType type) {
         AutoEnchantBook module = getModule();
         if (module == null) return false;
+        // 模式点位校验：当前目标模式不需要的点位禁止绑定，避免三模式点位混用
+        if (!AutoEnchantBook.requiredPoints(module.currentMode()).contains(type)) {
+            sendMsg("§c设置失败：当前为 [" + module.currentMode() + "] 模式，无需绑定 [" + type.title() + "] 点位，请切换到对应模式后再设置。");
+            return false;
+        }
         if (!preparePointContext(module)) return false;
 
         if (module.getPointPos(type) != null) {

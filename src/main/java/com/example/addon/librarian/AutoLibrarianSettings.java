@@ -1,7 +1,6 @@
 // 附魔交易所 Meteor 设置
 package com.example.addon.librarian;
 
-import com.example.addon.core.SettingUiHelper;
 import com.example.addon.librarian.config.SuccessSound;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnchantmentListSetting;
@@ -120,10 +119,8 @@ public final class AutoLibrarianSettings {
             .name("附魔成功音效")
             .description("找到目标附魔时播放的音效。")
             .defaultValue(SuccessSound.CHALLENGE_COMPLETE)
-            .onChanged(s -> SettingUiHelper.reloadScreen())
             .visible(playNotificationSound::get)
             .build());
-        { SettingUiHelper.currentValueLine(grpNotification, "当前音效", successSound, playNotificationSound::get); }
 
         // ── 调试 ─────────────────────────────────────────────
         debugMode = grpDebug.add(new BoolSetting.Builder()

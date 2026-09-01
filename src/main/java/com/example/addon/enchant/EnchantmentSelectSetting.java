@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IVisible;
 import meteordevelopment.meteorclient.settings.StringListSetting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
@@ -51,7 +52,7 @@ public final class EnchantmentSelectSetting extends StringListSetting {
 
     private static void createWidget(GuiTheme theme, WTable table, EnchantmentSelectSetting setting) {
         WHorizontalList list = table.add(theme.horizontalList()).expandCellX().widget();
-        list.add(theme.item(Items.ENCHANTED_BOOK.getDefaultInstance()));
+        list.add(theme.item(enchantedBookIcon()));
         WButton select = list.add(theme.button("选择附魔")).expandCellX().widget();
         WLabel count = list.add(theme.label(setting.countText())).widget();
         setting.countLabels.add(count);
@@ -61,6 +62,15 @@ public final class EnchantmentSelectSetting extends StringListSetting {
             setting.reset();
             setting.refreshCount();
         };
+    }
+
+    /** 附魔书官方图标堆：主菜单等环境组件未绑定时 getDefaultInstance 会 NPE，兜底返回空堆 */
+    private static ItemStack enchantedBookIcon() {
+        try {
+            return Items.ENCHANTED_BOOK.getDefaultInstance();
+        } catch (NullPointerException e) {
+            return ItemStack.EMPTY;
+        }
     }
 
     public void refreshCount() {

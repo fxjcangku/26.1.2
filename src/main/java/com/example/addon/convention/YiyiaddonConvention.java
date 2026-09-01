@@ -363,23 +363,6 @@ package com.example.addon.convention;
 //   · 已有 .noSlider() 的配置保持不变；新建模块带数值配置时，一律按此规范用 .noSlider()。
 //   · 参考实现：AutoVillagerTradeModule / AutoMinerModule / AutoFarmMatrix 中带 .noSlider() 的设置。
 //
-// 【5.11 设置界面下拉框当前值显示规范（2026-09-01 新增，全项目统一）】
-//
-//   · 所有模块配置页的枚举下拉框（EnumSetting，模式 / 枚举类）必须紧跟一行
-//     绿色「当前值」实时显示，让玩家一眼看到当前选中了什么。
-//   · 通用实现统一走 core/SettingUiHelper，禁止各模块重复造轮子：
-//       SettingUiHelper.currentValueLine(分组, "当前XXX", 下拉框Setting, 可见性)
-//         → 生成 InfoTextSetting 展示行，文字为 §a§l + 枚举 get().toString()（绿色加粗）。
-//       SettingUiHelper.reloadScreen()
-//         → 延迟到下一 tick 重建界面（下拉框 onChanged 回调栈里不能直接 reload）。
-//   · 下拉框 .onChanged(...) 必须触发 reloadScreen()；原本已绑定同步逻辑的（如
-//     切采集模式同步目标、切主题配色立即 apply），用 lambda 叠加，不得覆盖原有逻辑。
-//   · 纯展示文字行走 autochest/InfoTextSetting（已在 AddonTemplate 注册控件工厂）。
-//   · ✗ 禁止硬编码「§a§l」颜色拼展示行，一律走 currentValueLine 统一产出。
-//   · Meteor 内置英文枚举（如 ShapeMode 渲染样式类下拉框）不加「当前值」——
-//     toString() 返回英文（Lines / Sides / Both），显示英文不符中文习惯，跳过。
-//   · 参考实现：AutoChestSettings 的「运行模式 + currentMode」为最初范例。
-//
 // ════════════════════════════════════════════════════════════════════════════
 //  第六章 · 运行时缺陷排查协议（证据驱动调试）
 // ════════════════════════════════════════════════════════════════════════════
