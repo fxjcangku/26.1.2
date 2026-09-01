@@ -30,7 +30,7 @@ public abstract class MeteorComponentMessageMixin {
         ordinal = 0,
         require = 0
     )
-    private Component yiyiaddon$translateComponentMessage(Component msg) {
+    private static Component yiyiaddon$translateComponentMessage(Component msg) {
         return MeteorCommandTranslations.translateComponent(msg);
     }
 }
