@@ -1,0 +1,442 @@
+{
+  "gears": [
+    {
+      "id": "minecraft:diamond_sword",
+      "name": "钻石剑",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "sharpness",
+          "name": "锋利",
+          "default": true,
+          "exclusiveWith": ["smite", "bane_of_arthropods"],
+          "targets": [
+            { "id": "minecraft:sharpness", "name": "锋利", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:sweeping_edge", "name": "横扫之刃", "level": 3, "excludable": true },
+            { "id": "minecraft:looting", "name": "抢夺", "level": 3, "excludable": true },
+            { "id": "minecraft:fire_aspect", "name": "火焰附加", "level": 2, "excludable": true },
+            { "id": "minecraft:knockback", "name": "击退", "level": 2, "excludable": true }
+          ]
+        },
+        {
+          "id": "smite",
+          "name": "亡灵杀手",
+          "default": false,
+          "exclusiveWith": ["sharpness", "bane_of_arthropods"],
+          "targets": [
+            { "id": "minecraft:smite", "name": "亡灵杀手", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:sweeping_edge", "name": "横扫之刃", "level": 3, "excludable": true },
+            { "id": "minecraft:looting", "name": "抢夺", "level": 3, "excludable": true },
+            { "id": "minecraft:fire_aspect", "name": "火焰附加", "level": 2, "excludable": true },
+            { "id": "minecraft:knockback", "name": "击退", "level": 2, "excludable": true }
+          ]
+        },
+        {
+          "id": "bane_of_arthropods",
+          "name": "节肢杀手",
+          "default": false,
+          "exclusiveWith": ["sharpness", "smite"],
+          "targets": [
+            { "id": "minecraft:bane_of_arthropods", "name": "节肢杀手", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:sweeping_edge", "name": "横扫之刃", "level": 3, "excludable": true },
+            { "id": "minecraft:looting", "name": "抢夺", "level": 3, "excludable": true },
+            { "id": "minecraft:fire_aspect", "name": "火焰附加", "level": 2, "excludable": true },
+            { "id": "minecraft:knockback", "name": "击退", "level": 2, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_pickaxe",
+      "name": "钻石镐",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "fortune",
+          "name": "时运",
+          "default": true,
+          "exclusiveWith": ["silk_touch"],
+          "targets": [
+            { "id": "minecraft:fortune", "name": "时运", "level": 3, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "silk_touch",
+          "name": "精准采集",
+          "default": false,
+          "exclusiveWith": ["fortune"],
+          "targets": [
+            { "id": "minecraft:silk_touch", "name": "精准采集", "level": 1, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_axe",
+      "name": "钻石斧",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "sharpness",
+          "name": "锋利",
+          "default": true,
+          "exclusiveWith": ["smite", "bane_of_arthropods"],
+          "targets": [
+            { "id": "minecraft:sharpness", "name": "锋利", "level": 4, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "smite",
+          "name": "亡灵杀手",
+          "default": false,
+          "exclusiveWith": ["sharpness", "bane_of_arthropods"],
+          "targets": [
+            { "id": "minecraft:smite", "name": "亡灵杀手", "level": 4, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "bane_of_arthropods",
+          "name": "节肢杀手",
+          "default": false,
+          "exclusiveWith": ["sharpness", "smite"],
+          "targets": [
+            { "id": "minecraft:bane_of_arthropods", "name": "节肢杀手", "level": 4, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "fortune",
+          "name": "时运",
+          "default": false,
+          "exclusiveWith": ["silk_touch"],
+          "targets": [
+            { "id": "minecraft:fortune", "name": "时运", "level": 3, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "silk_touch",
+          "name": "精准采集",
+          "default": false,
+          "exclusiveWith": ["fortune"],
+          "targets": [
+            { "id": "minecraft:silk_touch", "name": "精准采集", "level": 1, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_shovel",
+      "name": "钻石铲",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "fortune",
+          "name": "时运",
+          "default": true,
+          "exclusiveWith": ["silk_touch"],
+          "targets": [
+            { "id": "minecraft:fortune", "name": "时运", "level": 3, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "silk_touch",
+          "name": "精准采集",
+          "default": false,
+          "exclusiveWith": ["fortune"],
+          "targets": [
+            { "id": "minecraft:silk_touch", "name": "精准采集", "level": 1, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_hoe",
+      "name": "钻石锄",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "fortune",
+          "name": "时运",
+          "default": true,
+          "exclusiveWith": ["silk_touch"],
+          "targets": [
+            { "id": "minecraft:fortune", "name": "时运", "level": 3, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "silk_touch",
+          "name": "精准采集",
+          "default": false,
+          "exclusiveWith": ["fortune"],
+          "targets": [
+            { "id": "minecraft:silk_touch", "name": "精准采集", "level": 1, "excludable": false },
+            { "id": "minecraft:efficiency", "name": "效率", "level": 5, "excludable": true },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:bow",
+      "name": "弓",
+      "category": "weapon",
+      "profiles": [
+        {
+          "id": "power",
+          "name": "力量",
+          "default": true,
+          "exclusiveWith": [],
+          "targets": [
+            { "id": "minecraft:power", "name": "力量", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:punch", "name": "冲击", "level": 2, "excludable": true },
+            { "id": "minecraft:flame", "name": "火矢", "level": 1, "excludable": true },
+            { "id": "minecraft:infinity", "name": "无限", "level": 1, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_helmet",
+      "name": "钻石头盔",
+      "category": "armor",
+      "profiles": [
+        {
+          "id": "protection",
+          "name": "保护",
+          "default": true,
+          "exclusiveWith": ["fire_protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:protection", "name": "保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:respiration", "name": "水下呼吸", "level": 3, "excludable": true },
+            { "id": "minecraft:aqua_affinity", "name": "水下速掘", "level": 1, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "fire_protection",
+          "name": "火焰保护",
+          "default": false,
+          "exclusiveWith": ["protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:fire_protection", "name": "火焰保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:respiration", "name": "水下呼吸", "level": 3, "excludable": true },
+            { "id": "minecraft:aqua_affinity", "name": "水下速掘", "level": 1, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "blast_protection",
+          "name": "爆炸保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:blast_protection", "name": "爆炸保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:respiration", "name": "水下呼吸", "level": 3, "excludable": true },
+            { "id": "minecraft:aqua_affinity", "name": "水下速掘", "level": 1, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "projectile_protection",
+          "name": "弹射物保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "blast_protection"],
+          "targets": [
+            { "id": "minecraft:projectile_protection", "name": "弹射物保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:respiration", "name": "水下呼吸", "level": 3, "excludable": true },
+            { "id": "minecraft:aqua_affinity", "name": "水下速掘", "level": 1, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_chestplate",
+      "name": "钻石胸甲",
+      "category": "armor",
+      "profiles": [
+        {
+          "id": "protection",
+          "name": "保护",
+          "default": true,
+          "exclusiveWith": ["fire_protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:protection", "name": "保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "fire_protection",
+          "name": "火焰保护",
+          "default": false,
+          "exclusiveWith": ["protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:fire_protection", "name": "火焰保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "blast_protection",
+          "name": "爆炸保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:blast_protection", "name": "爆炸保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "projectile_protection",
+          "name": "弹射物保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "blast_protection"],
+          "targets": [
+            { "id": "minecraft:projectile_protection", "name": "弹射物保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_leggings",
+      "name": "钻石护腿",
+      "category": "armor",
+      "profiles": [
+        {
+          "id": "protection",
+          "name": "保护",
+          "default": true,
+          "exclusiveWith": ["fire_protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:protection", "name": "保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "fire_protection",
+          "name": "火焰保护",
+          "default": false,
+          "exclusiveWith": ["protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:fire_protection", "name": "火焰保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "blast_protection",
+          "name": "爆炸保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:blast_protection", "name": "爆炸保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "projectile_protection",
+          "name": "弹射物保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "blast_protection"],
+          "targets": [
+            { "id": "minecraft:projectile_protection", "name": "弹射物保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minecraft:diamond_boots",
+      "name": "钻石靴子",
+      "category": "armor",
+      "profiles": [
+        {
+          "id": "protection",
+          "name": "保护",
+          "default": true,
+          "exclusiveWith": ["fire_protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:protection", "name": "保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:feather_falling", "name": "摔落缓冲", "level": 4, "excludable": true },
+            { "id": "minecraft:depth_strider", "name": "深海探索者", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "fire_protection",
+          "name": "火焰保护",
+          "default": false,
+          "exclusiveWith": ["protection", "blast_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:fire_protection", "name": "火焰保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:feather_falling", "name": "摔落缓冲", "level": 4, "excludable": true },
+            { "id": "minecraft:depth_strider", "name": "深海探索者", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "blast_protection",
+          "name": "爆炸保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "projectile_protection"],
+          "targets": [
+            { "id": "minecraft:blast_protection", "name": "爆炸保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:feather_falling", "name": "摔落缓冲", "level": 4, "excludable": true },
+            { "id": "minecraft:depth_strider", "name": "深海探索者", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        },
+        {
+          "id": "projectile_protection",
+          "name": "弹射物保护",
+          "default": false,
+          "exclusiveWith": ["protection", "fire_protection", "blast_protection"],
+          "targets": [
+            { "id": "minecraft:projectile_protection", "name": "弹射物保护", "level": 4, "excludable": false },
+            { "id": "minecraft:unbreaking", "name": "耐久", "level": 3, "excludable": true },
+            { "id": "minecraft:feather_falling", "name": "摔落缓冲", "level": 4, "excludable": true },
+            { "id": "minecraft:depth_strider", "name": "深海探索者", "level": 3, "excludable": true },
+            { "id": "minecraft:thorns", "name": "荆棘", "level": 3, "excludable": true }
+          ]
+        }
+      ]
+    }
+  ]
+}

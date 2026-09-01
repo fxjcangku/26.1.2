@@ -3,6 +3,21 @@ package com.example.addon.enchant;
 import baritone.api.BaritoneAPI;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.enchant.gear.AcceptanceStrategy;
+import com.example.addon.enchant.gear.AnvilPlan;
+import com.example.addon.enchant.gear.AnvilPlanner;
+import com.example.addon.enchant.gear.AnvilStep;
+import com.example.addon.enchant.gear.EnchantEvaluationService;
+import com.example.addon.enchant.gear.GearEnchantSetting;
+import com.example.addon.enchant.gear.GearEnchantTask;
+import com.example.addon.enchant.gear.GearSafetyGuard;
+import com.example.addon.enchant.gear.GearTaskQueue;
+import com.example.addon.enchant.gear.RecoveryValidator;
+import com.example.addon.enchant.gear.RetryGuard;
+import com.example.addon.enchant.gear.TargetProfile;
+import com.example.addon.enchant.gear.TaskErrorReason;
+import com.example.addon.enchant.gear.XpPlanner;
+import com.example.addon.enchant.point.PointType;
 import com.example.addon.farm.FarmPacketOps;
 import com.example.addon.ui.HelpScreen;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
@@ -24,13 +39,17 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.EnchantmentMenu;
@@ -74,8 +93,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private final SettingGroup sgVanillaTrident  = settings.createGroup("原版三叉戟附魔");
     private final SettingGroup sgVanillaCrossbow = settings.createGroup("原版弩附魔");
     private final SettingGroup sgVanillaCommon   = settings.createGroup("原版通用附魔");
+    private final SettingGroup sgGear            = settings.createGroup("原版装备附魔");
 
     // 基础设置
+    private final Setting<TargetMode> 目标模式 = sgBasic.add(new EnumSetting.Builder<TargetMode>()
+        .name("目标模式").description("原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥切换").defaultValue(TargetMode.BOOK).build());
+
     private final Setting<Integer> 单轮抽取次数 = sgBasic.add(new IntSetting.Builder()
         .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).sliderMax(50).build());
 
@@ -88,10 +111,15 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private final Setting<Integer> 青金石补给组数 = sgBasic.add(new IntSetting.Builder()
         .name("青金石补给组数").description("每次去青金石箱抓取的组数（1组=64个）").defaultValue(1).min(1).max(10).sliderMax(5).build());
 
+    private final Setting<Integer> 每批取用数量 = sgBasic.add(new IntSetting.Builder()
+        .name("每批取用数量").description("每次任务最多从装备箱取用的目标装备数量，铁砧合并会消耗装备，最终完成数可能小于此值")
+        .defaultValue(4).min(1).max(16).sliderMax(16).visible(() -> 目标模式.get() == TargetMode.GEAR).build());
+
     private final Setting<List<String>> 自定义附魔 = sgCustom.add(new StringListSetting.Builder()
         .name("自定义附魔目标")
         .description("每行填写一个附魔名称和等级，例如：打雷 5。支持中文、阿拉伯数字、罗马数字和不带等级的附魔。")
         .defaultValue(List.of())
+        .visible(() -> 目标模式.get() == TargetMode.CUSTOM)
         .build());
 
     private final Setting<RunMode> 运行模式 = sgBasic.add(new EnumSetting.Builder<RunMode>()
@@ -287,6 +315,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
     public BlockPos posEnchant     = null;  // 附魔台
     public BlockPos posGrindstone  = null;  // 砂轮
     public BlockPos posHangout     = null;  // 挂机位
+    public BlockPos posAnvil       = null;  // 铁砧（原版装备极品附魔）
+    public BlockPos posAnvilBox    = null;  // 铁砧箱（原版装备极品附魔，备用铁砧）
+    public Direction posAnvilFacing = null; // 铁砧朝向（FACING，损坏后原样恢复）
+    public BlockPos posEquipment   = null;  // 工具/护甲箱（原版装备极品附魔）
+    public BlockPos posError       = null;  // 异常装备箱（原版装备极品附魔）
     public Float hangoutYaw        = null;
     public Float hangoutPitch      = null;
     public String pointServer      = null;
@@ -300,7 +333,19 @@ public class AutoEnchantBook extends YiyiaddonModule {
         CHECKING("检查附魔结果"),
         WALK_TO_GRIND("前往砂轮"), GRINDING("磨书"),
         WALK_TO_STORE("前往存书"), STORING("存书"),
-        WALK_TO_RESTOCK("前往补给"), RESTOCKING("补给");
+        WALK_TO_RESTOCK("前往补给"), RESTOCKING("补给"),
+        // 原版装备附魔（GEAR 模式，复用同一状态机，不另建 GearStateMachine）
+        GEAR_IDLE("待机"),
+        GEAR_WALK_EQUIPMENT("前往装备箱"), GEAR_TAKE_GEAR("取装备"),
+        GEAR_WALK_ENCHANT("前往附魔台"), GEAR_ENCHANTING("附魔装备"),
+        GEAR_WALK_LAPIS("前往青金石箱"), GEAR_RESTOCK_LAPIS("取青金石"),
+        GEAR_EVALUATE("评估附魔"),
+        GEAR_WALK_GRIND("前往砂轮"), GEAR_GRINDING("磨装备"),
+        GEAR_WALK_ANVIL("前往铁砧"), GEAR_ANVIL("铁砧合并"),
+        GEAR_WALK_ANVIL_BOX("前往铁砧箱"), GEAR_TAKE_ANVIL("取铁砧"),
+        GEAR_WALK_ANVIL_POS("返回铁砧位"), GEAR_PLACE_ANVIL("放置铁砧"),
+        GEAR_WALK_OUTPUT("前往成品箱"), GEAR_STORE_OUTPUT("存成品"),
+        GEAR_WALK_ERROR("前往异常箱"), GEAR_STORE_ERROR("存异常");
 
         private final String cn;
         State(String cn) { this.cn = cn; }
@@ -310,6 +355,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     private State state = State.IDLE;
     private String lastNotifiedState = "";
+    // 发包附魔提示去重锁：整次运行只在首次进入附魔阶段播一句，避免附魔→砂轮循环每轮刷屏
+    private boolean 发包附魔提示已播 = false;
     private int   remainingAttempts = 0;
     private int   guiTick           = 0;
     private int   guiPhase          = 0;
@@ -331,11 +378,48 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     private final List<String> activeTasks = new ArrayList<>();
 
+    // ── 原版装备附魔（GEAR）运行态 ─────────────────────────────────────────
+    private GearTaskQueue gearQueue;                    // 任务队列（4 件批次）
+    private GearEnchantTask gearTask;                   // 当前任务
+    private TargetProfile gearProfile;                  // 当前目标方案
+    private Item gearTargetItem;                        // 目标装备物品类型（由 gearId 解析）
+    private int gearEquipSlot = -1;                     // 当前装备在背包的槽位
+    private int gearTargetXp = 30;                      // 当前挂机目标经验等级
+    private State gearReturnState = State.GEAR_IDLE;    // 挂机完返回的状态
+    private AnvilPlan gearAnvilPlan;                    // 当前铁砧合并计划
+    private int gearAnvilPhase = 0;                     // 铁砧发包子相位
+    private int gearTakeCount = 0;                      // 本批已取装备数
+    private int gearEnchantIndex = 0;                   // 已附魔装备数（4 件批次附魔进度）
+    private int 卸货重试次数 = 0;                       // 成品箱卸货失败重试计数
+    private RetryGuard gearRetry = new RetryGuard();    // 重试守卫（防死循环）
+    // 运行统计（不影响核心流程）
+    private int statTotal = 0, statDone = 0, statError = 0;
+    private int statEnchant = 0, statGrind = 0, statAnvil = 0, statFarm = 0;
+
     private final EnchantmentSelectSetting 剑附魔选择;
     private final EnchantmentSelectSetting 斧头附魔选择;
     private final EnchantmentSelectSetting 弓附魔选择;
     private final EnchantmentSelectSetting 护甲附魔选择;
     private final EnchantmentSelectSetting 工具通用附魔选择;
+    private final GearEnchantSetting 装备附魔配置;
+
+    /** 目标模式：原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥 */
+    public enum TargetMode {
+        GEAR("原版装备附魔"),
+        BOOK("原版附魔书"),
+        CUSTOM("自定义附魔");
+
+        private final String title;
+
+        TargetMode(String title) {
+            this.title = title;
+        }
+
+        @Override
+        public String toString() {
+            return title;
+        }
+    }
 
     public enum RunMode {
         DRAIN("纯附魔模式"),
@@ -382,11 +466,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
     public AutoEnchantBook() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "扩展附魔",
             "经验获取→定向附魔→极品剔除→洗练仓储全自动闭环。详细参考下面使用说明。");
-        剑附魔选择 = addSelector("剑附魔属性", sgSword, sgAdvanced);
-        斧头附魔选择 = addSelector("斧头附魔属性", sgAxe, sgAdvanced);
-        弓附魔选择 = addSelector("弓附魔属性", sgBow, sgAdvanced);
-        护甲附魔选择 = addSelector("护甲附魔属性", sgArmor, sgAdvanced);
-        工具通用附魔选择 = addSelector("工具与通用附魔属性", sgOther, sgAdvanced);
+        剑附魔选择 = addSelector("剑附魔属性", sgSword, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
+        斧头附魔选择 = addSelector("斧头附魔属性", sgAxe, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
+        弓附魔选择 = addSelector("弓附魔属性", sgBow, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
+        护甲附魔选择 = addSelector("护甲附魔属性", sgArmor, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
+        工具通用附魔选择 = addSelector("工具与通用附魔属性", sgOther, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
         addTargets(sgVanillaArmor, "保护 IV", "火焰保护 IV", "摔落缓冲 IV", "爆炸保护 IV", "弹射物保护 IV", "水下呼吸 III", "水下速掘", "荆棘 II", "深海探索者 III");
         addTargets(sgVanillaMelee, "锋利 IV", "亡灵杀手 IV", "节肢杀手 IV", "击退 II", "火焰附加 II", "抢夺 III", "横扫之刃 III");
         addTargets(sgVanillaTool, "效率 IV", "精准采集", "时运 III");
@@ -395,16 +479,19 @@ public class AutoEnchantBook extends YiyiaddonModule {
         addTargets(sgVanillaTrident, "忠诚 III", "穿刺 V", "激流 III", "引雷");
         addTargets(sgVanillaCrossbow, "多重射击", "快速装填 III", "穿透 IV");
         addTargets(sgVanillaCommon, "耐久 III");
-        addSelector("原版防具附魔", sgVanillaArmor, sgVanilla);
-        addSelector("原版近战附魔", sgVanillaMelee, sgVanilla);
-        addSelector("原版工具附魔", sgVanillaTool, sgVanilla);
-        addSelector("原版弓附魔", sgVanillaBow, sgVanilla);
-        addSelector("原版钓竿附魔", sgVanillaFishing, sgVanilla);
-        addSelector("原版三叉戟附魔", sgVanillaTrident, sgVanilla);
-        addSelector("原版弩附魔", sgVanillaCrossbow, sgVanilla);
-        addSelector("原版通用附魔", sgVanillaCommon, sgVanilla);
+        addSelector("原版防具附魔", sgVanillaArmor, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版近战附魔", sgVanillaMelee, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版工具附魔", sgVanillaTool, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版弓附魔", sgVanillaBow, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版钓竿附魔", sgVanillaFishing, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版三叉戟附魔", sgVanillaTrident, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版弩附魔", sgVanillaCrossbow, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        addSelector("原版通用附魔", sgVanillaCommon, sgVanilla, () -> 目标模式.get() == TargetMode.BOOK);
+        装备附魔配置 = new GearEnchantSetting("装备附魔配置", () -> 目标模式.get() == TargetMode.GEAR);
+        sgGear.add(装备附魔配置);
         sgAdvanced.sectionExpanded = true;
         sgVanilla.sectionExpanded = false;
+        sgGear.sectionExpanded = true;
         sgSword.sectionExpanded = false;
         sgAxe.sectionExpanded = false;
         sgBow.sectionExpanded = false;
@@ -428,12 +515,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
         for (String name : names) group.add(new BoolSetting.Builder().name(name).defaultValue(false).build());
     }
 
-    private EnchantmentSelectSetting addSelector(String name, SettingGroup source, SettingGroup target) {
+    private EnchantmentSelectSetting addSelector(String name, SettingGroup source, SettingGroup target, IVisible visible) {
         List<BoolSetting> values = new ArrayList<>();
         for (Setting<?> setting : source) if (setting instanceof BoolSetting boolSetting) values.add(boolSetting);
         List<String> names = new ArrayList<>();
         for (BoolSetting setting : values) names.add(setting.name);
-        EnchantmentSelectSetting selector = new EnchantmentSelectSetting(name, names, values);
+        EnchantmentSelectSetting selector = new EnchantmentSelectSetting(name, names, values, visible);
         target.add(selector);
         return selector;
     }
@@ -447,19 +534,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
             table.add(helpBtn).expandX().minWidth(200);
             table.row();
 
-            // 点位卡片区（两行三列，共六个点位）
-            WTable row1 = theme.table();
-            buildPointCard(theme, row1, "空白书", "书");
-            buildPointCard(theme, row1, "青晶石", "青晶石");
-            buildPointCard(theme, row1, "成品箱", "成品箱");
-            table.add(row1).expandX();
-            table.row();
-
-            WTable row2 = theme.table();
-            buildPointCard(theme, row2, "附魔台", "附魔台");
-            buildPointCard(theme, row2, "砂轮", "砂轮");
-            buildPointCard(theme, row2, "挂机位", "挂机位");
-            table.add(row2).expandX();
+            // 点位卡片区：按当前目标模式动态显示对应点位按钮（三种模式互不污染）
+            WTable row = theme.table();
+            for (PointType type : requiredPoints(目标模式.get())) {
+                buildPointCard(theme, row, type);
+            }
+            table.add(row).expandX();
             table.row();
         });
     }
@@ -471,27 +551,29 @@ public class AutoEnchantBook extends YiyiaddonModule {
      *
      * @param theme       Meteor GUI 主题
      * @param parentTable 父表格（横向排列）
-     * @param title       卡片标题（如"附魔台"）
-     * @param node        节点名（与 FumoCommand 一致）
+     * @param type        统一点位业务类型（决定标题、颜色与绑定目标）
      */
-    private void buildPointCard(GuiTheme theme, WTable parentTable, String title, String node) {
+    private void buildPointCard(GuiTheme theme, WTable parentTable, PointType type) {
         WTable card = theme.table();
 
-        BlockPos pos = getPointPos(node);
+        BlockPos pos = getPointPos(type);
         boolean isBound = pos != null;
 
-        // 点位标题配色（与 ESP 标点颜色完全一致）
-        String titleColor = switch (node) {
-            case "书" -> "§a";       // 书本箱：绿色（ESP §a）
-            case "青晶石" -> "§9";   // 青金石箱：蓝色（ESP §9）
-            case "成品箱" -> "§6";   // 成品箱：金色（ESP §6）
-            case "附魔台" -> "§d";   // 附魔台：粉色（ESP §d）
-            case "砂轮" -> "§7";     // 砂轮：灰色（ESP §7）
-            case "挂机位" -> "§c";   // 挂机位：红色（ESP §c）
-            default -> "§f";
+        // 点位标题配色（与 ESP 标点颜色一致）
+        String titleColor = switch (type) {
+            case BOOK_STORAGE -> "§a";        // 空白书箱：绿色
+            case LAPIS_STORAGE -> "§9";       // 青金石箱：蓝色
+            case EQUIPMENT_STORAGE -> "§b";   // 工具/护甲箱：青色
+            case ENCHANTING_TABLE -> "§d";    // 附魔台：粉色
+            case GRINDSTONE -> "§7";          // 砂轮：灰色
+            case ANVIL -> "§6";               // 铁砧：金色
+            case ANVIL_BOX -> "§e";           // 铁砧箱：黄色
+            case AFK -> "§c";                 // 挂机点：红色
+            case OUTPUT_STORAGE -> "§6";      // 成品箱：金色
+            case ERROR_STORAGE -> "§4";       // 异常装备箱：深红
         };
 
-        card.add(theme.label(titleColor + title)).expandX().center();
+        card.add(theme.label(titleColor + type.title())).expandX().center();
         card.row();
 
         // 状态显示（固定两行，保持高度一致）
@@ -514,7 +596,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         WButton setBtn = theme.button(setBtnColor + "设置");
         setBtn.action = () -> {
             // 设置成功才关闭 GUI（失败保留界面让玩家重新对准）
-            if (FumoCommand.setPoint(node)) {
+            if (FumoCommand.setPoint(type)) {
                 mc.setScreen(null);
             }
         };
@@ -525,7 +607,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         WButton delBtn = theme.button("§c删除");
         delBtn.action = () -> {
             if (isBound) {
-                FumoCommand.removePoint(node);
+                FumoCommand.removePoint(type);
                 mc.setScreen(null);
             }
         };
@@ -534,16 +616,49 @@ public class AutoEnchantBook extends YiyiaddonModule {
         parentTable.add(card).expandX();
     }
 
-    /** 按节点名取对应点位坐标，未绑定返回 null */
-    private BlockPos getPointPos(String node) {
-        return switch (node) {
-            case "书" -> posBook;
-            case "青晶石" -> posLapis;
-            case "成品箱" -> posOutput;
-            case "附魔台" -> posEnchant;
-            case "砂轮" -> posGrindstone;
-            case "挂机位" -> posHangout;
-            default -> null;
+    /** 按统一点位类型取坐标，未绑定返回 null */
+    public BlockPos getPointPos(PointType type) {
+        return switch (type) {
+            case BOOK_STORAGE -> posBook;
+            case LAPIS_STORAGE -> posLapis;
+            case OUTPUT_STORAGE -> posOutput;
+            case ENCHANTING_TABLE -> posEnchant;
+            case GRINDSTONE -> posGrindstone;
+            case AFK -> posHangout;
+            case ANVIL -> posAnvil;
+            case ANVIL_BOX -> posAnvilBox;
+            case EQUIPMENT_STORAGE -> posEquipment;
+            case ERROR_STORAGE -> posError;
+        };
+    }
+
+    /** 写入统一点位（供 FumoCommand 调用，保证 GUI / 指令 / 自检 / 状态机同一数据源） */
+    public void setPointPos(PointType type, BlockPos pos) {
+        switch (type) {
+            case BOOK_STORAGE -> posBook = pos;
+            case LAPIS_STORAGE -> posLapis = pos;
+            case OUTPUT_STORAGE -> posOutput = pos;
+            case ENCHANTING_TABLE -> posEnchant = pos;
+            case GRINDSTONE -> posGrindstone = pos;
+            case AFK -> posHangout = pos;
+            case ANVIL -> posAnvil = pos;
+            case ANVIL_BOX -> posAnvilBox = pos;
+            case EQUIPMENT_STORAGE -> posEquipment = pos;
+            case ERROR_STORAGE -> posError = pos;
+        }
+    }
+
+    /** 当前目标模式需要的点位列表（自检 / GUI 按钮 / 指令选点共用同一份来源） */
+    public static List<PointType> requiredPoints(TargetMode mode) {
+        return switch (mode) {
+            case GEAR -> List.of(
+                PointType.EQUIPMENT_STORAGE, PointType.LAPIS_STORAGE, PointType.ENCHANTING_TABLE, PointType.GRINDSTONE,
+                PointType.ANVIL, PointType.ANVIL_BOX, PointType.AFK, PointType.OUTPUT_STORAGE, PointType.ERROR_STORAGE
+            );
+            case BOOK, CUSTOM -> List.of(
+                PointType.BOOK_STORAGE, PointType.LAPIS_STORAGE, PointType.OUTPUT_STORAGE,
+                PointType.ENCHANTING_TABLE, PointType.GRINDSTONE, PointType.AFK
+            );
         };
     }
 
@@ -618,6 +733,47 @@ public class AutoEnchantBook extends YiyiaddonModule {
             toggle();
             return;
         }
+        // 原版装备附魔：按装备模式点位需求自检，加载目标方案后进入 GEAR 状态机
+        if (目标模式.get() == TargetMode.GEAR) {
+            if (!reportSelfCheck(selfCheck())) return;
+            if (pointServer == null || pointDimension == null) {
+                notifyError("旧版点位没有服务器和维度信息，请执行 .fumo clear 后重新设置！");
+                toggle();
+                return;
+            }
+            if (!matchesCurrentPointContext()) {
+                notifyError("当前服务器或维度与点位不一致，已阻止启动！请切回原世界，或使用 .fumo clear 重新设置。");
+                toggle();
+                return;
+            }
+            gearProfile = 装备附魔配置.currentProfile();
+            if (gearProfile == null || gearProfile.isEmpty()) {
+                notifyError("请先在「原版装备附魔」分类选择装备与极品方案！");
+                toggle();
+                return;
+            }
+            gearTargetItem = gearItemOf(gearProfile.gearId());
+            if (gearTargetItem == null) {
+                notifyError("无法解析目标装备：" + gearProfile.gearId());
+                toggle();
+                return;
+            }
+            // 初始化 GEAR 运行态
+            gearQueue = null;
+            gearTask = null;
+            gearEquipSlot = -1;
+            gearAnvilPlan = null;
+            gearAnvilPhase = 0;
+            gearRetry.reset();
+            statTotal = statDone = statError = 0;
+            statEnchant = statGrind = statAnvil = statFarm = 0;
+            state = State.GEAR_IDLE;
+            lastNotifiedState = "";
+            guiTick = 0;
+            guiPhase = 0;
+            announceGearStartup();
+            return;
+        }
         if (!reportSelfCheck(selfCheck())) return;
         if (pointServer == null || pointDimension == null) {
             notifyError("旧版点位没有服务器和维度信息，请执行 .fumo clear 后重新设置！");
@@ -643,6 +799,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         remainingAttempts = 单轮抽取次数.get();
         state = State.IDLE;
         lastNotifiedState = "";
+        发包附魔提示已播 = false;
         guiTick = 0;
         guiPhase = 0;
         hangoutViewRestored = false;
@@ -731,8 +888,20 @@ public class AutoEnchantBook extends YiyiaddonModule {
             return;
         }
 
+        // 断点恢复：GEAR 运行中周期验证目标装备仍在背包（死亡掉落 / 掉线丢失即暂停，防盲跑）
+        if (目标模式.get() == TargetMode.GEAR && gearTargetItem != null
+            && (gearQueue != null || gearEquipSlot >= 0)
+            && (mc.player.tickCount & 31) == 0
+            && !RecoveryValidator.hasGearInInventory(mc, new ItemStack(gearTargetItem))) {
+            notifyError("目标装备不在背包，原版装备极品附魔已暂停。请补充装备后重试。");
+            stopKillAura();
+            stopBaritone();
+            toggle();
+            return;
+        }
+
         if (isPathing()) {
-            if (!state.name().startsWith("WALK_") && state != State.FARMING) return;
+            if (!state.name().startsWith("WALK_") && !state.name().startsWith("GEAR_WALK_") && state != State.FARMING) return;
         }
 
         switch (state) {
@@ -748,6 +917,27 @@ public class AutoEnchantBook extends YiyiaddonModule {
             case STORING      -> tickStoring();
             case WALK_TO_RESTOCK -> tickWalkToRestock();
             case RESTOCKING   -> tickRestocking();
+            // 原版装备附魔（GEAR）
+            case GEAR_IDLE          -> tickGearIdle();
+            case GEAR_WALK_EQUIPMENT -> tickGearWalkEquipment();
+            case GEAR_TAKE_GEAR     -> tickGearTakeGear();
+            case GEAR_WALK_ENCHANT  -> tickGearWalkEnchant();
+            case GEAR_ENCHANTING    -> tickGearEnchanting();
+            case GEAR_WALK_LAPIS    -> tickGearWalkLapis();
+            case GEAR_RESTOCK_LAPIS -> tickGearRestockLapis();
+            case GEAR_EVALUATE      -> tickGearEvaluate();
+            case GEAR_WALK_GRIND    -> tickGearWalkGrind();
+            case GEAR_GRINDING      -> tickGearGrinding();
+            case GEAR_WALK_ANVIL    -> tickGearWalkAnvil();
+            case GEAR_ANVIL         -> tickGearAnvil();
+            case GEAR_WALK_ANVIL_BOX -> tickGearWalkAnvilBox();
+            case GEAR_TAKE_ANVIL    -> tickGearTakeAnvil();
+            case GEAR_WALK_ANVIL_POS -> tickGearWalkAnvilPos();
+            case GEAR_PLACE_ANVIL   -> tickGearPlaceAnvil();
+            case GEAR_WALK_OUTPUT   -> tickGearWalkOutput();
+            case GEAR_STORE_OUTPUT  -> tickGearStoreOutput();
+            case GEAR_WALK_ERROR    -> tickGearWalkError();
+            case GEAR_STORE_ERROR   -> tickGearStoreError();
         }
     }
 
@@ -792,11 +982,18 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private void tickFarming() {
         restoreHangoutView();
         startKillAura();
-        int targetLevel = 30 + 3 * (单轮抽取次数.get() - 1);
+        int targetLevel = 目标模式.get() == TargetMode.GEAR
+            ? gearTargetXp
+            : 30 + 3 * (单轮抽取次数.get() - 1);
         if (mc.player.experienceLevel >= targetLevel) {
             stopKillAura();
             remainingAttempts = 单轮抽取次数.get();
-            setState(State.WALK_TO_ENCHANT);
+            if (目标模式.get() == TargetMode.GEAR) {
+                statFarm++;
+                setState(gearReturnState);
+            } else {
+                setState(State.WALK_TO_ENCHANT);
+            }
         }
     }
 
@@ -943,6 +1140,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
         if (hitTask != null) {
             playSuccessSound();
+            notify("§a✓ 命中目标附魔书 §8▸ " + highlightText(hitTask));
             setState(State.WALK_TO_STORE);
         } else {
             setState(State.WALK_TO_GRIND);
@@ -1235,12 +1433,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (!ESP标点.get() || !matchesCurrentPointContext()) return;
-        renderLabel(event, posBook,       "📚 §a§l[书本箱]",   new Color(80,  230, 160, 200));
-        renderLabel(event, posLapis,      "💎 §9§l[青金石箱]", new Color(70,  130, 255, 200));
-        renderLabel(event, posOutput,     "📦 §6§l[成品箱]",   new Color(255, 200, 50,  200));
-        renderLabel(event, posEnchant,    "✨ §d§l[附魔台]",   new Color(200, 100, 255, 200));
-        renderLabel(event, posGrindstone, "⚙ §7§l[砂轮]",      new Color(160, 160, 160, 200));
-        renderLabel(event, posHangout,    "⚔ §c§l[挂机位]",    new Color(255, 80,  80,  200));
+        renderLabel(event, posBook,       "§a§l[书本箱]",   new Color(80,  230, 160, 200));
+        renderLabel(event, posLapis,      "§9§l[青金石箱]", new Color(70,  130, 255, 200));
+        renderLabel(event, posOutput,     "§6§l[成品箱]",   new Color(255, 200, 50,  200));
+        renderLabel(event, posEnchant,    "§d§l[附魔台]",   new Color(200, 100, 255, 200));
+        renderLabel(event, posGrindstone, "§7§l[砂轮]",     new Color(160, 160, 160, 200));
+        renderLabel(event, posHangout,    "§c§l[挂机位]",   new Color(255, 80,  80,  200));
     }
 
     private void renderLabel(Render2DEvent event, BlockPos pos, String label, Color color) {
@@ -1267,6 +1465,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
         writePos(tag, "posEnchant", posEnchant);
         writePos(tag, "posGrindstone", posGrindstone);
         writePos(tag, "posHangout", posHangout);
+        writePos(tag, "posAnvil", posAnvil);
+        writePos(tag, "posAnvilBox", posAnvilBox);
+        writePos(tag, "posEquipment", posEquipment);
+        writePos(tag, "posError", posError);
+        if (posAnvilFacing != null) tag.putString("posAnvilFacing", posAnvilFacing.name());
         if (hangoutYaw != null) tag.putFloat("hangoutYaw", hangoutYaw);
         if (hangoutPitch != null) tag.putFloat("hangoutPitch", hangoutPitch);
         if (pointServer != null) tag.putString("pointServer", pointServer);
@@ -1282,6 +1485,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
         posEnchant = readPos(tag, "posEnchant");
         posGrindstone = readPos(tag, "posGrindstone");
         posHangout = readPos(tag, "posHangout");
+        posAnvil = readPos(tag, "posAnvil");
+        posAnvilBox = readPos(tag, "posAnvilBox");
+        posEquipment = readPos(tag, "posEquipment");
+        posError = readPos(tag, "posError");
+        posAnvilFacing = readDirection(tag, "posAnvilFacing");
         hangoutYaw = tag.getFloat("hangoutYaw").orElse(null);
         hangoutPitch = tag.getFloat("hangoutPitch").orElse(null);
         pointServer = tag.getString("pointServer").orElse(null);
@@ -1297,6 +1505,17 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private BlockPos readPos(CompoundTag tag, String key) {
         int[] value = tag.getIntArray(key).orElse(null);
         return value != null && value.length == 3 ? new BlockPos(value[0], value[1], value[2]) : null;
+    }
+
+    /** 读取朝向（Direction），非法值返回 null */
+    private Direction readDirection(CompoundTag tag, String key) {
+        String name = tag.getString(key).orElse(null);
+        if (name == null) return null;
+        try {
+            return Direction.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public String currentServer() {
@@ -1315,7 +1534,9 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     public boolean hasAnyPosition() {
-        return posBook != null || posLapis != null || posOutput != null || posEnchant != null || posGrindstone != null || posHangout != null;
+        return posBook != null || posLapis != null || posOutput != null || posEnchant != null
+            || posGrindstone != null || posHangout != null || posAnvil != null
+            || posAnvilBox != null || posEquipment != null || posError != null;
     }
 
     public void clearPoints() {
@@ -1325,6 +1546,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
         posEnchant = null;
         posGrindstone = null;
         posHangout = null;
+        posAnvil = null;
+        posAnvilBox = null;
+        posAnvilFacing = null;
+        posEquipment = null;
+        posError = null;
         hangoutYaw = null;
         hangoutPitch = null;
         pointServer = null;
@@ -1368,17 +1594,21 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     /**
-     * 启动自检：收集所有未绑定的点位，交给 reportSelfCheck 一次性多行播报。
-     * 缺项文案「§颜色点位名§f·未绑定」，与 AutoMinerModule 自检风格保持一致。
+     * 启动自检：按当前目标模式只检查该模式需要的点位，交给 reportSelfCheck 一次性多行播报。
+     * 三种模式互不污染——装备模式不检查空白书箱/青金石箱，附魔书/自定义模式不检查铁砧/装备箱。
+     * 挂机点在附魔书/自定义模式下仅挂机循环需要（纯附魔模式跳过）；装备模式下始终必需。
      */
     private List<String> selfCheck() {
         List<String> missing = new ArrayList<>();
-        if (posBook       == null) missing.add("§6书本箱§f·未绑定");
-        if (posLapis      == null) missing.add("§2青金石箱§f·未绑定");
-        if (posOutput     == null) missing.add("§6成品箱§f·未绑定");
-        if (posEnchant    == null) missing.add("§d附魔台§f·未绑定");
-        if (posGrindstone == null) missing.add("§d砂轮§f·未绑定");
-        if (运行模式.get() == RunMode.EXPERIENCE && posHangout == null) missing.add("§d挂机位§f·未绑定");
+        TargetMode mode = 目标模式.get();
+        for (PointType type : requiredPoints(mode)) {
+            if (type == PointType.AFK && mode != TargetMode.GEAR && 运行模式.get() == RunMode.DRAIN) {
+                continue;
+            }
+            if (getPointPos(type) == null) {
+                missing.add("§6" + type.title() + "§f·未绑定");
+            }
+        }
         return missing;
     }
 
@@ -1637,19 +1867,891 @@ public class AutoEnchantBook extends YiyiaddonModule {
         guiTick = 0;
         guiPhase = 0;
         if (newState == State.WALK_TO_FARM) hangoutViewRestored = false;
+        // 发包附魔循环（附魔→检查→砂轮洗练→再附魔）不逐状态播报，避免每轮刷屏；
+        // 进入附魔阶段只播一句「发包附魔中（不打开界面）」，且整次运行只播一次。
+        if (newState == State.ENCHANTING && !发包附魔提示已播) {
+            notify("§7发包附魔中（不打开界面）...");
+            发包附魔提示已播 = true;
+        }
         // 状态播报：只播有实质动作的工作状态，寻路过渡（WALK_TO_*）不播防刷屏
         // 带去重锁，循环类流程每轮每个工作状态只播一次
         if (isWorkState(newState) && !newState.cn().equals(lastNotifiedState)) {
             notify("§7正在" + newState.cn() + "...");
             lastNotifiedState = newState.cn();
-        } else if (newState == State.IDLE) {
+        } else if (newState == State.IDLE || newState == State.GEAR_IDLE) {
             lastNotifiedState = "";
         }
     }
 
-    /** 是否为需要播报进度的工作状态（排除寻路过渡与待机） */
+    /** 是否为需要播报进度的工作状态（排除寻路过渡、待机及附魔循环内的高速状态） */
     private boolean isWorkState(State s) {
-        return s == State.FARMING || s == State.ENCHANTING || s == State.CHECKING
-            || s == State.GRINDING || s == State.STORING || s == State.RESTOCKING;
+        return s == State.FARMING || s == State.STORING || s == State.RESTOCKING
+            || s == State.GEAR_TAKE_GEAR || s == State.GEAR_ENCHANTING
+            || s == State.GEAR_RESTOCK_LAPIS
+            || s == State.GEAR_GRINDING || s == State.GEAR_ANVIL
+            || s == State.GEAR_TAKE_ANVIL || s == State.GEAR_PLACE_ANVIL
+            || s == State.GEAR_STORE_OUTPUT || s == State.GEAR_STORE_ERROR;
+    }
+
+    // ── 原版装备附魔（GEAR）状态处理器 ─────────────────────────────────────
+
+    /** GEAR 启动播报（目标装备 + 方案 + 目标附魔数） */
+    private void announceGearStartup() {
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 扩展附魔 · 原版装备附魔启动");
+        report.append("\n§7目标装备　§8▸ ").append(highlightText(gearProfile.gearName())).append("§r");
+        report.append("\n§7极品方案　§8▸ ").append(highlightFunction(gearProfile.profileName())).append("§r");
+        report.append("\n§7目标附魔　§8▸ ").append(highlightNumber(gearProfile.activeTargets().size() + " 项")).append("§r");
+        notify(report.toString());
+    }
+
+    /** GEAR 批次结束播报（统计，不影响核心流程） */
+    private void announceGearSummary() {
+        StringBuilder report = new StringBuilder();
+        report.append("§a§l✓ 原版装备附魔 · 批次完成");
+        report.append("\n§7处理装备　§8▸ ").append(highlightNumber(statTotal + " 件")).append("§r");
+        report.append("\n§7完成数量　§8▸ ").append(highlightNumber(statDone + " 件")).append("§r");
+        report.append("\n§7异常数量　§8▸ ").append(highlightNumber(statError + " 件")).append("§r");
+        report.append("\n§7附魔次数　§8▸ ").append(highlightNumber(statEnchant + " 次")).append("§r");
+        report.append("\n§7砂轮次数　§8▸ ").append(highlightNumber(statGrind + " 次")).append("§r");
+        report.append("\n§7铁砧次数　§8▸ ").append(highlightNumber(statAnvil + " 次")).append("§r");
+        report.append("\n§7挂机次数　§8▸ ").append(highlightNumber(statFarm + " 次")).append("§r");
+        notify(report.toString());
+    }
+
+    /** gearId（如 minecraft:diamond_sword）→ 物品类型 */
+    private Item gearItemOf(String gearId) {
+        if (gearId == null || mc.level == null) return null;
+        Identifier id = Identifier.tryParse(gearId);
+        if (id == null) return null;
+        var holder = mc.level.registryAccess().lookupOrThrow(Registries.ITEM)
+            .get(ResourceKey.create(Registries.ITEM, id));
+        return holder.map(ref -> ref.value()).orElse(null);
+    }
+
+    /** 推进到下一件装备（清理单件运行态，保留批次） */
+    private void gearNext() {
+        if (gearQueue != null) gearQueue.advance();
+        gearEquipSlot = -1;
+        gearAnvilPlan = null;
+        gearAnvilPhase = 0;
+        gearRetry.reset();
+    }
+
+    /** 标记当前任务异常并播报中文原因 */
+    private void gearFail(TaskErrorReason reason) {
+        if (gearTask != null) gearTask.markError(reason);
+        notifyError("装备异常 → " + reason + "，转入异常装备箱。");
+    }
+
+    /** 在玩家背包查找已附魔的目标装备（ENCHANTMENTS 非空），返回槽位，无则 -1 */
+    private int findEnchantedGear() {
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(gearTargetItem) && !EnchantEvaluationService.readEnchantments(stack).isEmpty()) return i;
+        }
+        return -1;
+    }
+
+    /** 在玩家背包查找未附魔的裸装备（ENCHANTMENTS 为空），返回槽位，无则 -1 */
+    private int findUnenchantedGear(Item item) {
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(item) && EnchantEvaluationService.readEnchantments(stack).isEmpty()) return i;
+        }
+        return -1;
+    }
+
+    /** 收集玩家背包里所有已附魔的目标装备（4 件批次附魔结果） */
+    private List<ItemStack> collectGears() {
+        List<ItemStack> gears = new ArrayList<>();
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(gearTargetItem) && !EnchantEvaluationService.readEnchantments(stack).isEmpty()) {
+                gears.add(stack);
+            }
+        }
+        return gears;
+    }
+
+    /** 找对目标贡献最多的装备槽位（作为铁砧合并主装备），无则 -1 */
+    private int findBestGearSlot() {
+        int bestSlot = -1;
+        int bestScore = -1;
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(gearTargetItem)) continue;
+            int score = AnvilPlanner.contributionScore(stack, gearProfile);
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = i;
+            }
+        }
+        return bestSlot;
+    }
+
+    /** 找带目标附魔的另一件装备槽位（作为铁砧合并材料，排除主装备槽位），无则 -1 */
+    private int findMergeGearSlot(int excludeSlot) {
+        for (int i = 0; i < 36; i++) {
+            if (i == excludeSlot) continue;
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(gearTargetItem)) continue;
+            if (AnvilPlanner.hasTargetContribution(stack, gearProfile)) return i;
+        }
+        return -1;
+    }
+
+    /** 查找某个装备快照在背包里的槽位，无则 -1 */
+    private int slotOfItem(ItemStack target) {
+        for (int i = 0; i < 36; i++) {
+            if (mc.player.getInventory().getItem(i) == target) return i;
+        }
+        return -1;
+    }
+
+    /** 铁砧菜单是否已打开 */
+    private boolean anvilMenuOpen() {
+        return mc.player != null && mc.player.containerMenu instanceof AnvilMenu;
+    }
+
+    /** 根据背包里的目标装备构建批次队列（数量由「每批取用数量」配置决定） */
+    private void buildGearQueue() {
+        List<GearEnchantTask> tasks = new ArrayList<>();
+        int taskId = 1;
+        int batchSize = 每批取用数量.get();
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(gearTargetItem)) {
+                tasks.add(new GearEnchantTask(taskId++, stack, gearProfile));
+                if (tasks.size() >= batchSize) break;
+            }
+        }
+        if (tasks.isEmpty()) {
+            gearQueue = null;
+            notifyError("装备箱中没有可用的" + (gearProfile == null ? "目标装备" : gearProfile.gearName()) + "，原版装备极品附魔已暂停。");
+            toggle();
+            return;
+        }
+        gearQueue = new GearTaskQueue(tasks);
+        statTotal = tasks.size();
+    }
+
+    private void tickGearIdle() {
+        if (gearQueue == null) {
+            setState(State.GEAR_WALK_EQUIPMENT);
+            return;
+        }
+        if (gearQueue.hasNext()) {
+            gearTask = gearQueue.current();
+            gearEnchantIndex = 0;
+            setState(State.GEAR_WALK_ENCHANT);
+            return;
+        }
+        announceGearSummary();
+        toggle();
+    }
+
+    private void tickGearWalkEquipment() {
+        if (canOpenNow(posEquipment)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            gearTakeCount = 0;
+            setState(State.GEAR_TAKE_GEAR);
+        } else {
+            walkToBlock(posEquipment);
+        }
+    }
+
+    private void tickGearTakeGear() {
+        if (guiTick > 0) { guiTick--; return; }
+        if (!chestMenuOpen()) {
+            if (guiPhase == 0) {
+                interactBlock(posEquipment);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        if (!chestMenuOpen()) return;
+        ChestMenu handler = (ChestMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        // 每 tick 取一件目标装备，最多「每批取用数量」件（只取 gearTargetItem，其他装备不拿）
+        for (int i = 0; i < handler.getRowCount() * 9; i++) {
+            ItemStack stack = handler.getSlot(i).getItem();
+            if (stack.is(gearTargetItem)) {
+                mc.gameMode.handleContainerInput(syncId, i, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                gearTakeCount++;
+                if (gearTakeCount >= 每批取用数量.get()) {
+                    mc.player.closeContainer();
+                    guiTick = GUI操作延迟.get();
+                    gearTakeCount = 0;
+                    buildGearQueue();
+                    setState(State.GEAR_IDLE);
+                }
+                return;
+            }
+        }
+        // 箱子空或没有更多目标装备
+        mc.player.closeContainer();
+        guiTick = GUI操作延迟.get();
+        gearTakeCount = 0;
+        buildGearQueue();
+        setState(State.GEAR_IDLE);
+    }
+
+    private void tickGearWalkEnchant() {
+        if (!isBlockAt(posEnchant, Blocks.ENCHANTING_TABLE)) {
+            stopBaritone();
+            notifyError("附魔台不存在或已被挖掉！自动停机。");
+            toggle();
+            return;
+        }
+        if (canOpenNow(posEnchant)) {
+            stopBaritone();
+            // 附魔台固定需要 30 级，不足则先挂机补经验
+            if (XpPlanner.needsEnchantGrinding(mc.player.experienceLevel)) {
+                gearTargetXp = XpPlanner.ENCHANT_TABLE_LEVEL;
+                gearReturnState = State.GEAR_WALK_ENCHANT;
+                setState(State.WALK_TO_FARM);
+                return;
+            }
+            // 找一件未附魔的裸装备；没有则说明本批已全部附魔完，进入对比
+            gearEquipSlot = findUnenchantedGear(gearTargetItem);
+            if (gearEquipSlot < 0) {
+                setState(State.GEAR_EVALUATE);
+                return;
+            }
+            if (countInInventory(Items.LAPIS_LAZULI) < 3) {
+                // 青金石不足：前往青金石箱补给（复用青金石补给组数 + 青金石箱点位）
+                setState(State.GEAR_WALK_LAPIS);
+                return;
+            }
+            guiTick = 0;
+            guiPhase = 0;
+            setState(State.GEAR_ENCHANTING);
+        } else {
+            walkToBlock(posEnchant);
+        }
+    }
+
+    private void tickGearEnchanting() {
+        if (guiTick > 0) { guiTick--; return; }
+        boolean menuOpen = enchantMenuOpen();
+        if (!menuOpen && !isBlockAt(posEnchant, Blocks.ENCHANTING_TABLE)) {
+            stopBaritone();
+            notifyError("附魔台不存在或已被挖掉！自动停机。");
+            toggle();
+            return;
+        }
+        if (!menuOpen) {
+            if (guiPhase == 0) {
+                interactBlock(posEnchant);
+                guiPhase = GUI_OPEN_PENDING;
+                guiTick = GUI_OPEN_TIMEOUT;
+                return;
+            }
+            if (guiPhase == GUI_OPEN_PENDING) {
+                if (guiTick == 0) { guiPhase = 0; guiTick = GUI操作延迟.get(); }
+                return;
+            }
+        }
+        if (!menuOpen) return;
+        EnchantmentMenu handler = (EnchantmentMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        switch (guiPhase) {
+            case 0 -> {
+                if (gearEquipSlot < 0 || mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+                    mc.player.closeContainer();
+                    gearQueue = null;
+                    setState(State.GEAR_WALK_EQUIPMENT);
+                    return;
+                }
+                int contSlot = containerSlotOf(handler, gearEquipSlot);
+                mc.gameMode.handleContainerInput(syncId, contSlot, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 1;
+            }
+            case 1 -> {
+                if (!handler.getSlot(0).getItem().is(gearTargetItem)) return;
+                guiTick = GUI操作延迟.get();
+                guiPhase = 2;
+            }
+            case 2 -> {
+                if (!handler.getSlot(0).getItem().is(gearTargetItem)) return;
+                int lapisSlot = findInInventoryAtLeast(Items.LAPIS_LAZULI, 3);
+                if (lapisSlot < 0) {
+                    mc.player.closeContainer();
+                    notifyError("青金石不足 3 个，无法附魔！自动停机。");
+                    toggle();
+                    return;
+                }
+                int lapisContSlot = containerSlotOf(handler, lapisSlot);
+                mc.gameMode.handleContainerInput(syncId, lapisContSlot, 0, ContainerInput.PICKUP, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 3;
+            }
+            case 3 -> {
+                if (!mc.player.containerMenu.getCarried().is(Items.LAPIS_LAZULI)) return;
+                mc.gameMode.handleContainerInput(syncId, 1, 0, ContainerInput.PICKUP, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 4;
+            }
+            case 4 -> {
+                if (!handler.getSlot(1).getItem().is(Items.LAPIS_LAZULI) || handler.getSlot(1).getItem().getCount() < 3) {
+                    mc.player.closeContainer();
+                    notifyError("附魔台青金石未达到 3 个，取消附魔并停机。");
+                    toggle();
+                    return;
+                }
+                mc.gameMode.handleInventoryButtonClick(syncId, 2);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 5;
+            }
+            case 5 -> {
+                // 附魔完成：slot 0 的装备已获得附魔（附魔前装备为裸装备）
+                ItemStack result = handler.getSlot(0).getItem();
+                if (!EnchantEvaluationService.readEnchantments(result).isEmpty()) {
+                    mc.gameMode.handleContainerInput(syncId, 0, 0, ContainerInput.QUICK_MOVE, mc.player);
+                    guiTick = GUI操作延迟.get();
+                    guiPhase = 6;
+                }
+            }
+            case 6 -> {
+                mc.player.closeContainer();
+                guiTick = GUI操作延迟.get();
+                statEnchant++;
+                gearEnchantIndex++;
+                // 还有裸装备没附魔则继续，否则进入「对比 4 件装备」环节
+                if (gearQueue != null && gearEnchantIndex < gearQueue.size()) {
+                    setState(State.GEAR_WALK_ENCHANT);
+                } else {
+                    setState(State.GEAR_EVALUATE);
+                }
+            }
+        }
+    }
+
+    private void tickGearWalkLapis() {
+        if (canOpenNow(posLapis)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            setState(State.GEAR_RESTOCK_LAPIS);
+        } else {
+            walkToBlock(posLapis);
+        }
+    }
+
+    private void tickGearRestockLapis() {
+        if (guiTick > 0) { guiTick--; return; }
+        if (!chestMenuOpen()) {
+            if (guiPhase == 0) {
+                interactBlock(posLapis);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        if (!chestMenuOpen()) return;
+        ChestMenu handler = (ChestMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        // 复用「青金石补给组数」计算补足数量（与附魔书模式同一标准）
+        int current = countInInventory(Items.LAPIS_LAZULI);
+        int need = 青金石补给组数.get() * 64 - current;
+        if (need <= 0) {
+            mc.player.closeContainer();
+            setState(State.GEAR_WALK_ENCHANT);
+            return;
+        }
+        // 从青金石箱 QUICK_MOVE 青金石
+        for (int i = 0; i < handler.getRowCount() * 9; i++) {
+            if (handler.getSlot(i).getItem().is(Items.LAPIS_LAZULI)) {
+                mc.gameMode.handleContainerInput(syncId, i, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        // 青金石箱空：停机，不无限循环
+        mc.player.closeContainer();
+        notifyError("青金石箱已空，无法附魔！原版装备极品附魔已暂停。");
+        toggle();
+    }
+
+    private void tickGearEvaluate() {
+        // 收集背包里所有已附魔的目标装备（4 件批次附魔结果）
+        List<ItemStack> gears = collectGears();
+        if (gears.isEmpty()) {
+            gearFail(TaskErrorReason.GEAR_IDENTITY_INVALID);
+            setState(State.GEAR_WALK_ERROR);
+            return;
+        }
+        // 某件已 100% 达标 → 直接成品
+        for (ItemStack gear : gears) {
+            if (EnchantEvaluationService.evaluate(gear, gearProfile, AcceptanceStrategy.STRICT, 1.0).complete()) {
+                gearEquipSlot = slotOfItem(gear);
+                setState(State.GEAR_WALK_OUTPUT);
+                return;
+            }
+        }
+        // 规划「装备 + 装备」合并（把分散附魔叠加成一件）
+        gearAnvilPlan = AnvilPlanner.plan(gearProfile, gears);
+        if (gearAnvilPlan == null || !gearAnvilPlan.hasNext()) {
+            // 附魔结果无法凑齐极品：记录失败，超上限则放弃本件进异常（防「附魔→砂轮」无限循环）
+            gearRetry.recordFailure();
+            if (gearRetry.exceeded()) {
+                gearFail(TaskErrorReason.REPEATED_FAILURE);
+                setState(State.GEAR_WALK_ERROR);
+                return;
+            }
+            setState(State.GEAR_WALK_GRIND);
+            return;
+        }
+        setState(State.GEAR_WALK_ANVIL);
+    }
+
+    private void tickGearWalkGrind() {
+        if (canOpenNow(posGrindstone)) {
+            stopBaritone();
+            gearEquipSlot = findEnchantedGear();
+            if (gearEquipSlot < 0) {
+                // 没有已附魔装备了，重置附魔进度重新附魔
+                gearEnchantIndex = 0;
+                setState(State.GEAR_WALK_ENCHANT);
+                return;
+            }
+            guiTick = 0;
+            guiPhase = 0;
+            setState(State.GEAR_GRINDING);
+        } else {
+            walkToBlock(posGrindstone);
+        }
+    }
+
+    private void tickGearGrinding() {
+        if (guiTick > 0) { guiTick--; return; }
+        boolean menuOpen = grindMenuOpen();
+        if (!menuOpen) {
+            if (guiPhase == 0) {
+                interactBlock(posGrindstone);
+                guiPhase = GUI_OPEN_PENDING;
+                guiTick = GUI_OPEN_TIMEOUT;
+                return;
+            }
+            if (guiPhase == GUI_OPEN_PENDING) {
+                if (guiTick == 0) { guiPhase = 0; guiTick = GUI操作延迟.get(); }
+                return;
+            }
+        }
+        if (!menuOpen) return;
+        GrindstoneMenu handler = (GrindstoneMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        switch (guiPhase) {
+            case 0 -> {
+                if (gearEquipSlot < 0 || mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+                    setState(State.GEAR_IDLE);
+                    return;
+                }
+                int contSlot = containerSlotOf(handler, gearEquipSlot);
+                mc.gameMode.handleContainerInput(syncId, contSlot, 0, ContainerInput.PICKUP, mc.player);
+                mc.gameMode.handleContainerInput(syncId, 0, 0, ContainerInput.PICKUP, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 1;
+            }
+            case 1 -> {
+                ItemStack output = handler.getSlot(2).getItem();
+                if (!output.is(gearTargetItem)) return;
+                mc.gameMode.handleContainerInput(syncId, 2, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 2;
+            }
+            case 2 -> {
+                mc.player.closeContainer();
+                guiTick = GUI操作延迟.get();
+                statGrind++;
+                // 继续磨下一件已附魔装备，全部磨完则重置进度重新附魔
+                gearEquipSlot = findEnchantedGear();
+                if (gearEquipSlot >= 0) {
+                    setState(State.GEAR_WALK_GRIND);
+                } else {
+                    gearEnchantIndex = 0;
+                    setState(State.GEAR_WALK_ENCHANT);
+                }
+            }
+        }
+    }
+
+    private void tickGearWalkAnvil() {
+        // 铁砧检测：使用前确认铁砧仍存在且有效，损坏/消失则进入自动更换
+        if (!isAnvilAt(posAnvil)) {
+            stopBaritone();
+            notify("§e⚠ 铁砧已损坏或消失，正在自动更换...");
+            setState(State.GEAR_WALK_ANVIL_BOX);
+            return;
+        }
+        if (canOpenNow(posAnvil)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            gearAnvilPhase = 0;
+            setState(State.GEAR_ANVIL);
+        } else {
+            walkToBlock(posAnvil);
+        }
+    }
+
+    // ── 铁砧检测与自动更换 ──────────────────────────────────────────────
+
+    /** 检测坐标是否为有效铁砧（含微损/严重损坏铁砧） */
+    private boolean isAnvilAt(BlockPos pos) {
+        if (pos == null || mc.level == null) return false;
+        var block = mc.level.getBlockState(pos).getBlock();
+        return block == Blocks.ANVIL || block == Blocks.CHIPPED_ANVIL || block == Blocks.DAMAGED_ANVIL;
+    }
+
+    /** 是否为铁砧物品（用于铁砧箱取用） */
+    private boolean isAnvilItem(ItemStack stack) {
+        Item item = stack.getItem();
+        return item == Items.ANVIL || item == Items.CHIPPED_ANVIL || item == Items.DAMAGED_ANVIL;
+    }
+
+    /** 在背包查找铁砧物品槽位，无则 -1 */
+    private int findAnvilItemInInventory() {
+        for (int i = 0; i < 36; i++) {
+            if (isAnvilItem(mc.player.getInventory().getItem(i))) return i;
+        }
+        return -1;
+    }
+
+    /** 把背包槽位的物品换到当前选中快捷栏 */
+    private void selectItem(int invSlot) {
+        if (invSlot < 9) {
+            mc.player.getInventory().setSelectedSlot(invSlot);
+            return;
+        }
+        int selectedSlot = mc.player.getInventory().getSelectedSlot();
+        mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, invSlot, selectedSlot, ContainerInput.SWAP, mc.player);
+    }
+
+    private void tickGearWalkAnvilBox() {
+        if (canOpenNow(posAnvilBox)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            setState(State.GEAR_TAKE_ANVIL);
+        } else {
+            walkToBlock(posAnvilBox);
+        }
+    }
+
+    private void tickGearTakeAnvil() {
+        if (guiTick > 0) { guiTick--; return; }
+        if (!chestMenuOpen()) {
+            if (guiPhase == 0) {
+                interactBlock(posAnvilBox);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        if (!chestMenuOpen()) return;
+        ChestMenu handler = (ChestMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        // 只取 1 个铁砧（铁砧不可堆叠，每槽 1 个）
+        for (int i = 0; i < handler.getRowCount() * 9; i++) {
+            ItemStack stack = handler.getSlot(i).getItem();
+            if (isAnvilItem(stack)) {
+                mc.gameMode.handleContainerInput(syncId, i, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                mc.player.closeContainer();
+                setState(State.GEAR_WALK_ANVIL_POS);
+                return;
+            }
+        }
+        // 没有备用铁砧：暂停，不无限寻路
+        mc.player.closeContainer();
+        notifyError("铁砧已损坏，铁砧箱没有备用铁砧，原版装备极品附魔已暂停。");
+        toggle();
+    }
+
+    private void tickGearWalkAnvilPos() {
+        double range = mc.player.blockInteractionRange() + 0.5;
+        if (mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(posAnvil)) <= range) {
+            stopBaritone();
+            setState(State.GEAR_PLACE_ANVIL);
+        } else {
+            walkToBlock(posAnvil);
+        }
+    }
+
+    private void tickGearPlaceAnvil() {
+        if (guiTick > 0) { guiTick--; return; }
+        // 铁砧已放置成功，继续原任务（保留当前装备 / 目标 / 合并规划上下文）
+        if (isAnvilAt(posAnvil)) {
+            notify("§a✓ 铁砧已更换完成，继续原任务。");
+            setState(State.GEAR_WALK_ANVIL);
+            return;
+        }
+        int anvilSlot = findAnvilItemInInventory();
+        if (anvilSlot < 0) {
+            notifyError("铁砧已损坏，铁砧箱没有备用铁砧，原版装备极品附魔已暂停。");
+            toggle();
+            return;
+        }
+        selectItem(anvilSlot);
+        // 按保存的朝向放置（玩家面向铁砧朝向的对面）
+        if (posAnvilFacing != null) {
+            float yaw = posAnvilFacing.getOpposite().toYRot();
+            mc.player.setYRot(yaw);
+            mc.player.setYHeadRot(yaw);
+        }
+        FarmPacketOps.interactBlock(InteractionHand.MAIN_HAND, posAnvil.below(), Direction.UP);
+        guiTick = GUI操作延迟.get();
+    }
+
+    private void tickGearAnvil() {
+        if (guiTick > 0) { guiTick--; return; }
+
+        // 合并过程中铁砧损坏检测：立即切换自动更换
+        if (!isAnvilAt(posAnvil)) {
+            notify("§e⚠ 铁砧已损坏或消失，正在自动更换...");
+            setState(State.GEAR_WALK_ANVIL_BOX);
+            return;
+        }
+
+        if (gearAnvilPlan == null || !gearAnvilPlan.hasNext()) {
+            // 合并计划执行完：重新读取主装备并最终验收，只有 100% 达标才进成品箱
+            gearEquipSlot = findBestGearSlot();
+            if (gearEquipSlot < 0) {
+                gearFail(TaskErrorReason.GEAR_IDENTITY_INVALID);
+                setState(State.GEAR_WALK_ERROR);
+                return;
+            }
+            ItemStack finalGear = mc.player.getInventory().getItem(gearEquipSlot);
+            if (EnchantEvaluationService.evaluate(finalGear, gearProfile, AcceptanceStrategy.STRICT, 1.0).complete()) {
+                setState(State.GEAR_WALK_OUTPUT);
+            } else {
+                gearFail(TaskErrorReason.CANNOT_REACH_TARGET);
+                setState(State.GEAR_WALK_ERROR);
+            }
+            return;
+        }
+
+        boolean menuOpen = anvilMenuOpen();
+        if (!menuOpen) {
+            if (gearAnvilPhase == 0) {
+                interactBlock(posAnvil);
+                gearAnvilPhase = GUI_OPEN_PENDING;
+                guiTick = GUI_OPEN_TIMEOUT;
+                return;
+            }
+            if (gearAnvilPhase == GUI_OPEN_PENDING) {
+                if (guiTick == 0) { gearAnvilPhase = 0; guiTick = GUI操作延迟.get(); }
+                return;
+            }
+        }
+        if (!menuOpen) return;
+
+        AnvilMenu handler = (AnvilMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        AnvilStep step = gearAnvilPlan.next();
+
+        switch (gearAnvilPhase) {
+            case 0 -> {
+                // 左槽：放主装备（对目标贡献最多的装备）
+                gearEquipSlot = findBestGearSlot();
+                if (gearEquipSlot < 0) {
+                    mc.player.closeContainer();
+                    gearFail(TaskErrorReason.GEAR_IDENTITY_INVALID);
+                    setState(State.GEAR_WALK_ERROR);
+                    return;
+                }
+                // 耐久保护：低于最低耐久比例不再合并，进异常
+                if (!GearSafetyGuard.isSafe(mc.player.getInventory().getItem(gearEquipSlot))) {
+                    mc.player.closeContainer();
+                    gearFail(TaskErrorReason.DURABILITY_LOW);
+                    setState(State.GEAR_WALK_ERROR);
+                    return;
+                }
+                int gearCont = containerSlotOf(handler, gearEquipSlot);
+                mc.gameMode.handleContainerInput(syncId, gearCont, 0, ContainerInput.PICKUP, mc.player);
+                mc.gameMode.handleContainerInput(syncId, 0, 0, ContainerInput.PICKUP, mc.player);
+                guiTick = GUI操作延迟.get();
+                gearAnvilPhase = 1;
+            }
+            case 1 -> {
+                // 右槽：放材料装备（带目标附魔的另一件装备，装备+装备叠加）
+                if (!handler.getSlot(0).getItem().is(gearTargetItem)) return;
+                int materialSlot = findMergeGearSlot(gearEquipSlot);
+                if (materialSlot < 0) {
+                    mc.player.closeContainer();
+                    gearFail(TaskErrorReason.CANNOT_PLAN);
+                    setState(State.GEAR_WALK_ERROR);
+                    return;
+                }
+                int matCont = containerSlotOf(handler, materialSlot);
+                mc.gameMode.handleContainerInput(syncId, matCont, 0, ContainerInput.PICKUP, mc.player);
+                mc.gameMode.handleContainerInput(syncId, 1, 0, ContainerInput.PICKUP, mc.player);
+                guiTick = GUI操作延迟.get();
+                gearAnvilPhase = 2;
+            }
+            case 2 -> {
+                if (handler.getSlot(1).getItem().isEmpty()) return;
+                int cost = AnvilPlanner.readCost(handler);
+                step.actualXpCost(cost);
+                if (AnvilPlanner.isTooExpensive(cost)) {
+                    step.tooExpensive(true);
+                    mc.player.closeContainer();
+                    gearFail(TaskErrorReason.TOO_EXPENSIVE);
+                    setState(State.GEAR_WALK_ERROR);
+                    return;
+                }
+                if (mc.player.experienceLevel < cost) {
+                    mc.player.closeContainer();
+                    gearTargetXp = cost;
+                    gearReturnState = State.GEAR_ANVIL;
+                    setState(State.WALK_TO_FARM);
+                    return;
+                }
+                mc.gameMode.handleContainerInput(syncId, 2, 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                gearAnvilPhase = 3;
+            }
+            case 3 -> {
+                mc.player.closeContainer();
+                guiTick = GUI操作延迟.get();
+                step.executed(true);
+                gearAnvilPlan.advance();
+                gearAnvilPhase = 0;
+                statAnvil++;
+                gearEquipSlot = findBestGearSlot();
+                gearRetry.reset();
+            }
+        }
+    }
+
+    private void tickGearWalkOutput() {
+        // 卸货前重新验收：确保 100% 达标才允许进成品箱（未验证不放箱）
+        gearEquipSlot = findBestGearSlot();
+        if (gearEquipSlot < 0) {
+            gearFail(TaskErrorReason.GEAR_IDENTITY_INVALID);
+            setState(State.GEAR_WALK_ERROR);
+            return;
+        }
+        ItemStack finalGear = mc.player.getInventory().getItem(gearEquipSlot);
+        if (!EnchantEvaluationService.evaluate(finalGear, gearProfile, AcceptanceStrategy.STRICT, 1.0).complete()) {
+            gearFail(TaskErrorReason.CANNOT_REACH_TARGET);
+            setState(State.GEAR_WALK_ERROR);
+            return;
+        }
+        if (canOpenNow(posOutput)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            卸货重试次数 = 0;
+            setState(State.GEAR_STORE_OUTPUT);
+        } else {
+            walkToBlock(posOutput);
+        }
+    }
+
+    private void tickGearStoreOutput() {
+        if (guiTick > 0) { guiTick--; return; }
+        if (!chestMenuOpen()) {
+            if (guiPhase == 0) {
+                interactBlock(posOutput);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        if (!chestMenuOpen()) return;
+        ChestMenu handler = (ChestMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        switch (guiPhase) {
+            case 0 -> {
+                boolean hasFreeSlot = false;
+                for (int i = 0; i < handler.getRowCount() * 9; i++) {
+                    if (handler.getSlot(i).getItem().isEmpty()) { hasFreeSlot = true; break; }
+                }
+                if (!hasFreeSlot) {
+                    mc.player.closeContainer();
+                    notifyError("成品箱空间不足，原版装备极品附魔已暂停。");
+                    toggle();
+                    return;
+                }
+                if (gearEquipSlot < 0 || mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+                    mc.player.closeContainer();
+                    setState(State.GEAR_IDLE);
+                    return;
+                }
+                mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, gearEquipSlot), 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 1;
+            }
+            case 1 -> {
+                // 确认装备确实已离开背包（成功存入成品箱），失败则重试有限次数
+                if (gearEquipSlot >= 0 && !mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+                    if (++卸货重试次数 < 3) {
+                        guiTick = GUI操作延迟.get();
+                        guiPhase = 0;
+                        return;
+                    }
+                    mc.player.closeContainer();
+                    gearFail(TaskErrorReason.REPEATED_FAILURE);
+                    setState(State.GEAR_WALK_ERROR);
+                    return;
+                }
+                mc.player.closeContainer();
+                guiTick = GUI操作延迟.get();
+                if (gearTask != null) gearTask.markDone();
+                statDone++;
+                notify("§a✓ 装备已达成极品目标，存入成品箱 §8▸ " + highlightText(gearProfile.gearName()));
+                gearNext();
+                setState(State.GEAR_IDLE);
+            }
+        }
+    }
+
+    private void tickGearWalkError() {
+        if (canOpenNow(posError)) {
+            stopBaritone();
+            guiTick = 0;
+            guiPhase = 0;
+            setState(State.GEAR_STORE_ERROR);
+        } else {
+            walkToBlock(posError);
+        }
+    }
+
+    private void tickGearStoreError() {
+        if (guiTick > 0) { guiTick--; return; }
+        if (!chestMenuOpen()) {
+            if (guiPhase == 0) {
+                interactBlock(posError);
+                guiTick = GUI操作延迟.get();
+                return;
+            }
+        }
+        if (!chestMenuOpen()) return;
+        ChestMenu handler = (ChestMenu) mc.player.containerMenu;
+        int syncId = handler.containerId;
+        switch (guiPhase) {
+            case 0 -> {
+                if (gearEquipSlot < 0 || mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+                    mc.player.closeContainer();
+                    gearNext();
+                    setState(State.GEAR_IDLE);
+                    return;
+                }
+                mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, gearEquipSlot), 0, ContainerInput.QUICK_MOVE, mc.player);
+                guiTick = GUI操作延迟.get();
+                guiPhase = 1;
+            }
+            case 1 -> {
+                mc.player.closeContainer();
+                guiTick = GUI操作延迟.get();
+                statError++;
+                gearNext();
+                setState(State.GEAR_IDLE);
+            }
+        }
     }
 }

@@ -38,23 +38,23 @@ import java.util.Set;
  */
 public enum CropProfile {
 
-    // ── 📦 双作物：果实卸货，种子回收留作补种 ──
+    // ── 双作物：果实卸货，种子回收留作补种 ──
     WHEAT("小麦", Kind.TWIN, Blocks.WHEAT, Items.WHEAT_SEEDS, Items.WHEAT, Blocks.FARMLAND),
     BEETROOT("甜菜", Kind.TWIN, Blocks.BEETROOTS, Items.BEETROOT_SEEDS, Items.BEETROOT, Blocks.FARMLAND),
 
-    // ── 🥔 单作物：产物即种子，卸货时按阈值截留 ──
+    // ── 单作物：产物即种子，卸货时按阈值截留 ──
     // 土豆有 2% 概率额外掉毒马铃薯，进白名单但不截留，全部倒进卸货箱
     POTATO("土豆", Kind.SINGLE, Blocks.POTATOES, Items.POTATO, Items.POTATO, Blocks.FARMLAND,
         Set.of(Items.POISONOUS_POTATO)),
     CARROT("胡萝卜", Kind.SINGLE, Blocks.CARROTS, Items.CARROT, Items.CARROT, Blocks.FARMLAND),
     NETHER_WART("地狱疣", Kind.SINGLE, Blocks.NETHER_WART, Items.NETHER_WART, Items.NETHER_WART, Blocks.SOUL_SAND),
 
-    // ── 🎍 柱状物：Y+1 切割保留根部，全卸货，无补种 ──
+    // ── 柱状物：Y+1 切割保留根部，全卸货，无补种 ──
     BAMBOO("竹子", Kind.PILLAR, Blocks.BAMBOO, null, Items.BAMBOO, null),
     SUGAR_CANE("甘蔗", Kind.PILLAR, Blocks.SUGAR_CANE, null, Items.SUGAR_CANE, null),
     CACTUS("仙人掌", Kind.PILLAR, Blocks.CACTUS, null, Items.CACTUS, null),
 
-    // ── 🎃 蔓生物：只砍果实，全卸货，无补种 ──
+    // ── 蔓生物：只砍果实，全卸货，无补种 ──
     PUMPKIN("南瓜", Kind.VINE, Blocks.PUMPKIN, null, Items.PUMPKIN, null),
     MELON("西瓜", Kind.VINE, Blocks.MELON, null, Items.MELON_SLICE, null);
 

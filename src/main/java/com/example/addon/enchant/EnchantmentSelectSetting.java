@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.IVisible;
 import meteordevelopment.meteorclient.settings.StringListSetting;
 import net.minecraft.client.Minecraft;
 
@@ -24,7 +25,12 @@ public final class EnchantmentSelectSetting extends StringListSetting {
     private final List<WLabel> countLabels = new ArrayList<>();
 
     public EnchantmentSelectSetting(String name, List<String> options, List<BoolSetting> backing) {
-        super(name, "选择需要收集的附魔属性", selected(backing), values -> apply(values, backing), null, null, null, null);
+        this(name, options, backing, null);
+    }
+
+    /** 带可见性条件的构造：用于三模式 UI 下按目标模式动态显示/隐藏 */
+    public EnchantmentSelectSetting(String name, List<String> options, List<BoolSetting> backing, IVisible visible) {
+        super(name, "选择需要收集的附魔属性", selected(backing), values -> apply(values, backing), null, visible, null, null);
         this.options = List.copyOf(options);
     }
 

@@ -692,7 +692,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         if (supply != null && supply.inCurrentDimension()) {
-            FarmRenderer.renderLabel(event, supply.pos(), "[📦 种子库]",
+            FarmRenderer.renderLabel(event, supply.pos(), "[种子库]",
                 new SettingColor(100, 150, 255));
         }
     }
