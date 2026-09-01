@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
@@ -85,6 +86,28 @@ public final class ItemIdentifier {
 
         return new EntityIdentity(entityId, displayName, baseName, customName,
             currentDataVersion(), entity.getType());
+    }
+
+    /**
+     * 按中文显示名精确匹配原版物品（遍历注册表做 equals 判断，非 contains / startsWith）。
+     *
+     * <p>供「手动添加物品」输入中文名时使用：输入「钻石」匹配 {@code minecraft:diamond}。
+     * 可能存在多个同名物品（不同变体），调用方需对多结果展示候选列表，不得随机选择。</p>
+     *
+     * @param chineseName 中文名称（已剥离颜色代码）
+     * @return 命中物品列表（可能为空或多个）
+     */
+    public static List<Item> findVanillaByChineseName(String chineseName) {
+        List<Item> result = new ArrayList<>();
+        String target = clean(chineseName);
+        if (target.isEmpty()) return result;
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (item == Items.AIR) continue;
+            if (clean(item.getDefaultInstance().getHoverName().getString()).equals(target)) {
+                result.add(item);
+            }
+        }
+        return result;
     }
 
     // ── 附魔解析（Data Component API） ──

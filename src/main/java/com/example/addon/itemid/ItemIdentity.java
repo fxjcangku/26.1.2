@@ -346,6 +346,42 @@ public final class ItemIdentity {
     }
 
     /**
+     * 从物品注册表项 + 自定义名构造身份（手动添加自定义 / 改名物品用）。
+     *
+     * <p>用于「添加自定义物品」：输入真实物品 ID（如 {@code minecraft:diamond}）+
+     * 自定义名称（如「超级钻石」），构造 customName 非空、displayName 为自定义名的
+     * 完整身份。真实身份判定仍以 itemId + customName 为准，普通钻石与超级钻石不相等。</p>
+     *
+     * @param item       物品注册表项（必须真实存在，非空气）
+     * @param customName 自定义名称（改名后的名称），为空返回 null
+     * @return 完整身份；物品非法或自定义名为空返回 null
+     */
+    public static ItemIdentity fromItemAndCustomName(Item item, String customName) {
+        if (item == null || item == Items.AIR) return null;
+        String cn = cleanName(customName);
+        if (cn == null || cn.isBlank()) return null;
+        String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
+        String baseName = cleanName(item.getDefaultInstance().getHoverName().getString());
+        return new ItemIdentity(itemId, cn, baseName, cn, currentDataVersion(),
+            Collections.emptyList(), null, item, null, 1);
+    }
+
+    /** 剥离 Minecraft 颜色代码并去首尾空格（与 ItemIdentifier.clean 同语义） */
+    private static String cleanName(String text) {
+        if (text == null) return "";
+        return text.replaceAll("§[0-9a-fk-orA-FK-ORx]", "").trim();
+    }
+
+    /** 当前 Minecraft 数据版本；获取失败返回 0 */
+    private static int currentDataVersion() {
+        try {
+            return net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version();
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    /**
      * 清洗成合法文件名：剥离 Minecraft 颜色代码、剔除 Windows 非法字符、
      * 压缩空白并去首尾空格；结果为空时回退到给定兜底值。
      */

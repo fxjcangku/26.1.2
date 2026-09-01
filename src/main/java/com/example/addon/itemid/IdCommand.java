@@ -3,6 +3,8 @@ package com.example.addon.itemid;
 import com.example.addon.core.YiyiaddonModule;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;
+import meteordevelopment.meteorclient.gui.GuiThemes;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.multiplayer.ClientSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -49,7 +51,7 @@ public final class IdCommand extends Command {
         }));
     }
 
-    /** 识别手持物品：主手优先，主手空读副手，均空提示 */
+    /** 识别手持物品：主手优先，主手空读副手，均空提示；按「ID识别」模块的识别模式分流 */
     private void identifyItem() {
         if (mc.player == null) {
             info("§c玩家未加载");
@@ -69,25 +71,25 @@ public final class IdCommand extends Command {
             info("§c识别失败");
             return;
         }
-        String fileName = itemIdManager.add(identity);
-        if (fileName == null) {
-            info("§c该物品已在 ID 配置中");
-            return;
-        }
 
-        info("§a§l✓ 已识别物品 §8▸ §a§l" + identity.displayName());
-        info("§7物品ID　§8▸ §f" + identity.itemId());
-        info("§7物品类型　§8▸ §f" + identity.typeName());
-        info("§7数量　§8▸ §f" + identity.quantity());
-        if (identity.isRenamed()) {
-            info("§7改名　§8▸ §a" + identity.customName() + " §7（原名 §f" + identity.baseName() + "§7）");
+        // 读取「ID识别」模块当前的识别模式，作为统一命令入口的分流依据；命令自身不维护一份 mode
+        IdIdentifyModule identifyModule = Modules.get().get(IdIdentifyModule.class);
+        IdentifyMode mode = identifyModule != null
+            ? identifyModule.identifyMode.get()
+            : IdentifyMode.AUTO_SAVE;
+
+        if (mode == IdentifyMode.AUTO_SAVE) {
+            // 自动保存：直接写入 ID 配置，只发简短提示，不弹结果屏、不刷完整识别文本
+            String fileName = itemIdManager.add(identity);
+            if (fileName == null) {
+                info("§e该物品已在 ID 配置中");
+                return;
+            }
+            info("§a§l✓ 已自动保存 §8▸ §a§l" + identity.displayName());
+        } else {
+            // 聊天复制/显示：弹出识别结果屏幕，可复制 / 保存 / 添加到 ID 配置
+            mc.setScreen(new IdResultScreen(GuiThemes.get(), identity, itemIdManager));
         }
-        for (ItemIdentity.EnchantmentEntry e : identity.enchantments()) {
-            info("§7附魔　§8▸ §a" + e.displayName() + " §8▸ §f" + e.id() + " §7等级 §f" + e.level());
-        }
-        info("§7数据组件　§8▸ §f" + (identity.dataComponents() == null ? "无" : "有"));
-        info("§7数据版本　§8▸ §f" + identity.dataVersion());
-        info("§7已保存　§8▸ §f" + fileName);
     }
 
     /** 识别准星对准的实体 */
