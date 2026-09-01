@@ -318,7 +318,12 @@ public final class AutoChestModule extends YiyiaddonModule {
         table.add(theme.label(processed ? "§c已处理" : "§a未处理")).widget();
         WButton del = table.add(theme.button("§c删除")).widget();
         del.action = () -> {
-            pointManager.remove(p.pos(), p.dimension());
+            if (pointManager.remove(p.pos(), p.dimension())) {
+                notify("§c§l✗ 已删除标点 §8▸ " + YiyiaddonModule.formatCoords(p.pos().getX(), p.pos().getY(), p.pos().getZ())
+                    + " §8▸ §7维度 §8▸ §f" + dim);
+            } else {
+                notifyError("删除失败：该标点已不存在");
+            }
             mc.setScreen(null);
         };
         table.row();
@@ -359,6 +364,7 @@ public final class AutoChestModule extends YiyiaddonModule {
         String dim = WorldIdentity.dimension(mc);
         if (pointManager.add(target, dim, type.id())) {
             notify("§a§l✓ 已添加标点 §8▸ " + YiyiaddonModule.formatCoords(target.getX(), target.getY(), target.getZ())
+                + " §8▸ §7维度 §8▸ §f" + WorldIdentity.dimensionDisplayName(dim)
                 + " §8▸ §a" + type.displayName());
         } else {
             notifyError("该标点已存在");
@@ -388,7 +394,7 @@ public final class AutoChestModule extends YiyiaddonModule {
     private String[][] buildSections() {
         return new String[][]{
             {"§l自动箱子 · 使用说明"},
-            {"§e§l▌ 使用方法", "§f  1. 先用「ID识别」添加目标物品ID", "§f  2. 在设置页选择运行模式（玩家控制/寻路/标点）", "§f  · 开启后自动处理容器，取走目标物品"},
+            {"§e§l▌ 使用方法", "§f  1. 先用「ID识别」或指令 §e.id 物品§f 添加目标物品ID", "§f  2. 在设置页选择运行模式（玩家控制/寻路/标点）", "§f  · 开启后自动处理容器，取走目标物品"},
             {"§a§l▌ 三种模式", "§f  · 玩家控制模式：玩家自己走，进入触发距离自动处理", "§f  · 寻路模式：自动扫描并寻路到容器面前安全站位", "§f  · 标点模式：只处理 .autochest 保存的点位"},
             {"§d§l▌ 保护机制", "§f  · 目标锁：同一容器同时只处理一次", "§f  · 多人保护：他人正在用箱不抢，临时跳过", "§f  · 有限重试 + 临时冷却：失败不无限卡箱"},
             {"§c§l▌ 注意", "§f  · 目标物品来自 ID 配置管理，本模块不建独立物品库", "§f  · 后台挂机不抢鼠标/焦点，走客户端内部 API"}

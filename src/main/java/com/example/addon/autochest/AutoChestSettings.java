@@ -2,6 +2,7 @@ package com.example.addon.autochest;
 
 import com.example.addon.autochest.model.ScanMode;
 import com.example.addon.autochest.model.WithdrawMode;
+import com.example.addon.core.SettingUiHelper;
 import com.example.addon.itemid.ItemIdManager;
 import com.example.addon.itemid.ItemTargetSetting;
 import meteordevelopment.meteorclient.gui.WidgetScreen;
@@ -129,7 +130,7 @@ public final class AutoChestSettings {
         markerHint = grpMarker.add(new InfoTextSetting(
             "标点管理",
             "标点通过说明面板按钮或指令管理，模块只处理已保存的点位。",
-            () -> "§7用面板按钮管理点位，或指令 §e.autochest add/remove/clear/status",
+            () -> "§7面板按钮或 §e.autochest add/remove/clear/status§7 管理点位；目标物品用 §e.id 物品§7 识别",
             () -> scanMode.get() == ScanMode.MARKER));
 
         // ── 容器 ─────────────────────────────────────────────
@@ -198,7 +199,9 @@ public final class AutoChestSettings {
             .name("取物模式")
             .description("按目标数量取：每种目标物品单独配置数量；目标物品拿空：只拿空目标列表物品；全部拿空：忽略目标列表取走所有合法物品。")
             .defaultValue(WithdrawMode.TARGET_COUNT)
+            .onChanged(mode -> 刷新界面())
             .build());
+        { SettingUiHelper.currentValueLine(grpWithdraw, "当前取物模式", withdrawMode); }
 
         // ── 目标物品 ─────────────────────────────────────────
         // 全部拿空模式不需要目标列表，此时隐藏目标物品选择器
@@ -234,8 +237,10 @@ public final class AutoChestSettings {
             .name("ESP框样式")
             .description("容器的 ESP 渲染样式：仅线条 / 仅面 / 线+面。")
             .defaultValue(EspStyle.BOTH)
+            .onChanged(style -> 刷新界面())
             .visible(renderEsp::get)
             .build());
+        { SettingUiHelper.currentValueLine(grpRender, "当前框样式", espStyle, renderEsp::get); }
 
         unprocessedColor = grpRender.add(new ColorSetting.Builder()
             .name("未处理颜色")

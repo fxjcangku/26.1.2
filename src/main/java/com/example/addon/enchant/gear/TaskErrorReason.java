@@ -3,7 +3,7 @@ package com.example.addon.enchant.gear;
 /**
  * 原版装备附魔 · 任务异常原因。
  *
- * <p>覆盖所有进入「异常装备箱」的触发条件，语义明确，避免用模糊字符串。</p>
+ * <p>覆盖所有装备处理失败（跳过该件）的触发条件，语义明确，避免用模糊字符串。</p>
  */
 public enum TaskErrorReason {
 

@@ -1,5 +1,6 @@
 package com.example.addon.autologin;
 
+import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.settings.*;
 import net.minecraft.client.Minecraft;
@@ -250,8 +251,10 @@ public final class AutoLoginSettings {
             .name("进入方式")
             .description("直接进入、菜单传送、子服网络或自用多阶段回服路线，四种模式互斥运行。")
             .defaultValue(ServerEntryMode.LEYUAN_CUSTOM)
+            .onChanged(m -> SettingUiHelper.reloadScreen())
             .visible(autoEnterSubserver::get)
             .build());
+        { SettingUiHelper.currentValueLine(grpRoute, "当前进入方式", serverEntryMode, autoEnterSubserver::get); }
 
         menuTool = grpRoute.add(new ItemSetting.Builder()
             .name("菜单工具")
@@ -371,8 +374,10 @@ public final class AutoLoginSettings {
             .name("欢迎页入口")
             .description("选择扫描自用入口，或点击欢迎菜单中可直达主城的无名书本。")
             .defaultValue(LeyuanWelcomeEntryMode.BOOK_DIRECT)
+            .onChanged(m -> SettingUiHelper.reloadScreen())
             .visible(this::usesLeyuanMode)
             .build());
+        { SettingUiHelper.currentValueLine(grpRoute, "当前欢迎页入口", leyuanWelcomeEntryMode, this::usesLeyuanMode); }
 
         leyuanWorldTransferKeyword = grpRoute.add(new StringSetting.Builder()
             .name("主城世界传送按钮")

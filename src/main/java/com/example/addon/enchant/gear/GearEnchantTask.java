@@ -97,7 +97,7 @@ public final class GearEnchantTask {
         return result.complete();
     }
 
-    /** 标记异常（进入异常装备箱） */
+    /** 标记失败（装备处理失败，跳过该件继续下一件） */
     public void markError(TaskErrorReason reason) {
         this.stage = Stage.ERROR;
         this.status = Status.ERROR;

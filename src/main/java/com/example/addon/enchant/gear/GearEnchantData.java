@@ -63,6 +63,7 @@ public final class GearEnchantData {
         @SerializedName("default")
         public boolean isDefault;
         public List<String> exclusiveWith = new ArrayList<>();
+        public List<String> forbidden = new ArrayList<>();
         public List<TargetDefinition> targets = new ArrayList<>();
 
         @Override

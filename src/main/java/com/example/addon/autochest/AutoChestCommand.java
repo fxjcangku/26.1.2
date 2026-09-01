@@ -88,6 +88,7 @@ public final class AutoChestCommand extends Command {
         String dim = WorldIdentity.dimension(mc);
         if (module.pointManager.add(target, dim, type.id())) {
             info("§a§l✓ 已添加标点 §8▸ " + YiyiaddonModule.formatCoords(target.getX(), target.getY(), target.getZ())
+                + " §8▸ §7维度 §8▸ §f" + WorldIdentity.dimensionDisplayName(dim)
                 + " §8▸ §a" + type.displayName());
         } else {
             info("§c该标点已存在");
@@ -108,7 +109,8 @@ public final class AutoChestCommand extends Command {
         }
         String dim = WorldIdentity.dimension(mc);
         if (module.pointManager.remove(target, dim)) {
-            info("§c§l✗ 已删除标点 §8▸ " + YiyiaddonModule.formatCoords(target.getX(), target.getY(), target.getZ()));
+            info("§c§l✗ 已删除标点 §8▸ " + YiyiaddonModule.formatCoords(target.getX(), target.getY(), target.getZ())
+                + " §8▸ §7维度 §8▸ §f" + WorldIdentity.dimensionDisplayName(dim));
         } else {
             info("§c该坐标没有标点");
         }

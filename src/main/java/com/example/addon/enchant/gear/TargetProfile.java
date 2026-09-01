@@ -43,9 +43,16 @@ public final class TargetProfile {
     private final List<TargetEnchantment> targets;
     /** 与本方案互斥的其他方案 ID 列表 */
     private final List<String> exclusiveProfiles;
+    /** 目标禁止拥有的附魔 ID（FORBIDDEN 语义：最终成品不允许出现） */
+    private final List<String> forbiddenIds;
 
     public TargetProfile(String gearId, String gearName, String category, String profileId, String profileName,
                          List<TargetEnchantment> targets, List<String> exclusiveProfiles) {
+        this(gearId, gearName, category, profileId, profileName, targets, exclusiveProfiles, List.of());
+    }
+
+    public TargetProfile(String gearId, String gearName, String category, String profileId, String profileName,
+                         List<TargetEnchantment> targets, List<String> exclusiveProfiles, List<String> forbiddenIds) {
         this.gearId = Objects.requireNonNull(gearId, "gearId");
         this.gearName = Objects.requireNonNull(gearName, "gearName");
         this.category = Objects.requireNonNull(category, "category");
@@ -53,6 +60,7 @@ public final class TargetProfile {
         this.profileName = Objects.requireNonNull(profileName, "profileName");
         this.targets = List.copyOf(targets);
         this.exclusiveProfiles = List.copyOf(exclusiveProfiles);
+        this.forbiddenIds = List.copyOf(forbiddenIds);
     }
 
     /** 返回最终生效的目标附魔（过滤掉被排除项） */
@@ -89,6 +97,7 @@ public final class TargetProfile {
     public String profileName() { return profileName; }
     public List<TargetEnchantment> targets() { return targets; }
     public List<String> exclusiveProfiles() { return exclusiveProfiles; }
+    public List<String> forbiddenIds() { return forbiddenIds; }
 
     /** 是否为空目标（没有任何启用附魔） */
     public boolean isEmpty() {

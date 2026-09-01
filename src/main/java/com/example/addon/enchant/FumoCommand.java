@@ -24,7 +24,7 @@ import static com.mojang.brigadier.Command.SINGLE_SUCCESS;
  * 读写同一个点位（同一份数据源），避免「箱子坐标」模糊类型或多套点位数据库。</p>
  *
  * 用法：
- *   .fumo set <书/青晶石/工具护甲箱/附魔台/砂轮/铁砧/挂机位/成品箱/异常装备箱>
+ *   .fumo set <书/青晶石/工具护甲箱/附魔台/砂轮/铁砧/挂机位/成品箱>
  *   .fumo remove <同上>
  *   .fumo status
  *   .fumo clear
@@ -49,7 +49,6 @@ public class FumoCommand extends Command {
             .then(literal("铁砧箱")     .executes(ctx -> { setPos(PointType.ANVIL_BOX);         return SINGLE_SUCCESS; }))
             .then(literal("挂机位")     .executes(ctx -> { setPos(PointType.AFK);               return SINGLE_SUCCESS; }))
             .then(literal("成品箱")     .executes(ctx -> { setPos(PointType.OUTPUT_STORAGE);    return SINGLE_SUCCESS; }))
-            .then(literal("异常装备箱") .executes(ctx -> { setPos(PointType.ERROR_STORAGE);     return SINGLE_SUCCESS; }))
         );
 
         // .fumo remove <节点>
@@ -63,7 +62,6 @@ public class FumoCommand extends Command {
             .then(literal("铁砧箱")     .executes(ctx -> { removePos(PointType.ANVIL_BOX);         return SINGLE_SUCCESS; }))
             .then(literal("挂机位")     .executes(ctx -> { removePos(PointType.AFK);               return SINGLE_SUCCESS; }))
             .then(literal("成品箱")     .executes(ctx -> { removePos(PointType.OUTPUT_STORAGE);    return SINGLE_SUCCESS; }))
-            .then(literal("异常装备箱") .executes(ctx -> { removePos(PointType.ERROR_STORAGE);     return SINGLE_SUCCESS; }))
         );
 
         // .fumo status —— 打印当前所有坐标

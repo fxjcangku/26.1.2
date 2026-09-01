@@ -3,12 +3,19 @@ package com.example.addon.enchant.gear;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.renderer.GuiRenderer;
 import meteordevelopment.meteorclient.gui.utils.SettingsWidgetFactory;
+import meteordevelopment.meteorclient.gui.widgets.WItem;
 import meteordevelopment.meteorclient.gui.widgets.WLabel;
+import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.IVisible;
 import meteordevelopment.meteorclient.settings.StringListSetting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,16 +48,29 @@ public final class GearEnchantSetting extends StringListSetting {
     }
 
     private static void createWidget(GuiTheme theme, WTable table, GearEnchantSetting setting) {
-        WButton select = table.add(theme.button("配置装备附魔")).expandCellX().widget();
-        WLabel summary = table.add(theme.label(setting.summaryText())).widget();
-        WButton reset = table.add(theme.button(GuiRenderer.RESET)).widget();
-        select.action = () -> Minecraft.getInstance().setScreen(new GearEnchantScreen(theme, setting));
-        reset.action = setting::reset;
-        // 摘要标签缓存，由 GearEnchantScreen 关闭时调用 refreshSummary 刷新
+        // 图标 + 按钮 + 摘要 + 重置统一放进横向列表（官方 BlockSetting 同款布局），
+        // 避免多个控件直接平铺进设置表格造成行宽/命中区异常
+        WHorizontalList row = table.add(theme.horizontalList()).expandX().widget();
+        WItem icon = row.add(theme.item(setting.currentIconStack())).widget();
+        WButton select = row.add(theme.button("配置装备附魔")).expandCellX().widget();
+        WLabel summary = row.add(theme.label(setting.summaryText())).widget();
+        WButton reset = row.add(theme.button(GuiRenderer.RESET)).widget();
+        // 延迟到下一 tick 再弹屏：主菜单等环境中立即 setScreen 会被后续 UI 事件覆盖，
+        // 出现「点了没反应」，进世界后事件时序不同才正常
+        select.action = () -> Minecraft.getInstance().execute(() ->
+            Minecraft.getInstance().setScreen(new GearEnchantScreen(theme, setting)));
+        // 重置后同步刷新摘要与图标，避免配置页文字停留在旧值
+        reset.action = () -> {
+            setting.reset();
+            setting.refreshSummary();
+        };
+        // 摘要/图标缓存，GearEnchantScreen 每次重建都会调 refreshSummary 同步刷新
         setting.summaryLabel = summary;
+        setting.iconLabel = icon;
     }
 
     private WLabel summaryLabel;
+    private WItem iconLabel;
 
     /** 当前装备 ID，未选择返回 null */
     public String gearId() {
@@ -99,11 +119,13 @@ public final class GearEnchantSetting extends StringListSetting {
         set(encoded);
     }
 
-    /** 调整某附魔等级（受真实最大等级限制，clamp 到 [1, max]） */
+    /** 调整某附魔等级（受真实最大等级限制，clamp 到 [1, max]；注册表不可用时只做下限保护） */
     public void setLevel(String enchantId, int level) {
         int max = GearEnchantData.get().maxLevelOf(enchantId);
-        if (max < 1) max = 1;
-        int clamped = Math.max(1, Math.min(level, max));
+        int clamped = Math.max(1, level);
+        // maxLevelOf 返回 -1 表示注册表尚未就绪/附魔不存在，此时不强制降级为 1，
+        // 否则会出现「点减号从 V 直接跳到 I、点加号无反应」——把 -1 误当 max=1 所致
+        if (max >= 1) clamped = Math.min(clamped, max);
         mutateTarget(enchantId, clamped, -1);
     }
 
@@ -115,8 +137,8 @@ public final class GearEnchantSetting extends StringListSetting {
     /** 读取某附魔当前等级，不存在返回 -1 */
     public int levelOf(String enchantId) {
         for (int i = 2; i < get().size(); i++) {
-            String[] parts = get().get(i).split(":");
-            if (parts.length == 3 && parts[0].equals(enchantId)) {
+            String[] parts = parseTarget(get().get(i));
+            if (parts != null && parts[0].equals(enchantId)) {
                 try { return Integer.parseInt(parts[1]); } catch (NumberFormatException ignored) { return -1; }
             }
         }
@@ -126,10 +148,29 @@ public final class GearEnchantSetting extends StringListSetting {
     /** 读取某附魔是否被排除 */
     public boolean isExcluded(String enchantId) {
         for (int i = 2; i < get().size(); i++) {
-            String[] parts = get().get(i).split(":");
-            if (parts.length == 3 && parts[0].equals(enchantId)) return "1".equals(parts[2]);
+            String[] parts = parseTarget(get().get(i));
+            if (parts != null && parts[0].equals(enchantId)) return "1".equals(parts[2]);
         }
         return false;
+    }
+
+    /**
+     * 从右向左解析「附魔ID:等级:排除标记」条目。
+     * 附魔 ID 自带命名空间冒号（如 minecraft:sharpness），不能直接 split(":")，
+     * 必须定位最后两个冒号：前面的等级、最后的标记，剩余部分是完整 ID。
+     * 非法条目返回 null。
+     */
+    private static String[] parseTarget(String entry) {
+        if (entry == null) return null;
+        int flagColon = entry.lastIndexOf(':');
+        if (flagColon <= 0) return null;
+        int levelColon = entry.lastIndexOf(':', flagColon - 1);
+        if (levelColon <= 0) return null;
+        return new String[]{
+            entry.substring(0, levelColon),
+            entry.substring(levelColon + 1, flagColon),
+            entry.substring(flagColon + 1)
+        };
     }
 
     /** 生成当前配置对应的 TargetProfile 快照（后续评分 / 规划的唯一依据） */
@@ -142,8 +183,8 @@ public final class GearEnchantSetting extends StringListSetting {
 
         List<TargetProfile.TargetEnchantment> targets = new ArrayList<>();
         for (int i = 2; i < get().size(); i++) {
-            String[] parts = get().get(i).split(":");
-            if (parts.length != 3) continue;
+            String[] parts = parseTarget(get().get(i));
+            if (parts == null) continue;
             int level;
             try { level = Integer.parseInt(parts[1]); } catch (NumberFormatException e) { continue; }
             boolean excluded = "1".equals(parts[2]);
@@ -156,13 +197,25 @@ public final class GearEnchantSetting extends StringListSetting {
             profileId == null ? "" : profileId,
             profile == null ? "" : profile.name,
             targets,
-            profile == null ? List.of() : profile.exclusiveWith
+            profile == null ? List.of() : profile.exclusiveWith,
+            profile == null ? List.of() : profile.forbidden
         );
     }
 
-    /** 刷新摘要文本 */
+    /** 刷新摘要文本与装备图标 */
     public void refreshSummary() {
         if (summaryLabel != null) summaryLabel.set(summaryText());
+        if (iconLabel != null) iconLabel.set(currentIconStack());
+    }
+
+    /** 按当前装备 ID 查原版物品的图标堆，未选择/查不到返回空堆（不渲染） */
+    private ItemStack currentIconStack() {
+        String gearId = gearId();
+        if (gearId == null || gearId.isEmpty()) return ItemStack.EMPTY;
+        Identifier id = Identifier.tryParse(gearId);
+        if (id == null) return ItemStack.EMPTY;
+        Item item = BuiltInRegistries.ITEM.getValue(id);
+        return (item == null || item == Items.AIR) ? ItemStack.EMPTY : item.getDefaultInstance();
     }
 
     private String summaryText() {
@@ -179,14 +232,13 @@ public final class GearEnchantSetting extends StringListSetting {
     private void mutateTarget(String enchantId, int level, int excludedFlag) {
         List<String> next = new ArrayList<>(get());
         for (int i = 2; i < next.size(); i++) {
-            String[] parts = next.get(i).split(":");
-            if (parts.length == 3 && parts[0].equals(enchantId)) {
-                int lvl = level >= 0 ? level : Integer.parseInt(parts[1]);
-                int ex = excludedFlag >= 0 ? excludedFlag : Integer.parseInt(parts[2]);
-                next.set(i, enchantId + ":" + lvl + ":" + ex);
-                set(next);
-                return;
-            }
+            String[] parts = parseTarget(next.get(i));
+            if (parts == null || !parts[0].equals(enchantId)) continue;
+            String lvl = level >= 0 ? String.valueOf(level) : parts[1];
+            String ex = excludedFlag >= 0 ? String.valueOf(excludedFlag) : parts[2];
+            next.set(i, parts[0] + ":" + lvl + ":" + ex);
+            set(next);
+            return;
         }
     }
 

@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IVisible;
 import meteordevelopment.meteorclient.settings.StringListSetting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +51,7 @@ public final class EnchantmentSelectSetting extends StringListSetting {
 
     private static void createWidget(GuiTheme theme, WTable table, EnchantmentSelectSetting setting) {
         WHorizontalList list = table.add(theme.horizontalList()).expandCellX().widget();
+        list.add(theme.item(Items.ENCHANTED_BOOK.getDefaultInstance()));
         WButton select = list.add(theme.button("选择附魔")).expandCellX().widget();
         WLabel count = list.add(theme.label(setting.countText())).widget();
         setting.countLabels.add(count);

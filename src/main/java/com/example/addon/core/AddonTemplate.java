@@ -9,6 +9,7 @@ import com.example.addon.commands.ReplyAdminCommand;
 import com.example.addon.commands.YiyiaddonChatCommand;
 import com.example.addon.autologin.AutoLoginModule;
 import com.example.addon.enchant.AutoEnchantBook;
+import com.example.addon.enchant.CustomEnchantSetting;
 import com.example.addon.enchant.EnchantmentSelectSetting;
 import com.example.addon.enchant.FumoCommand;
 import com.example.addon.enchant.gear.GearEnchantSetting;
@@ -132,6 +133,7 @@ public class AddonTemplate extends MeteorAddon {
         // 自动附魔：经验获取→定向附魔→极品剔除→洗练仓储全自动闭环
         EnchantmentSelectSetting.register();
         GearEnchantSetting.register();
+        CustomEnchantSetting.register();
         Modules.get().add(new AutoEnchantBook());
 
         // ── 辅助模块 ──

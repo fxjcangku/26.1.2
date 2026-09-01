@@ -10,7 +10,7 @@
   "contact": {
     "sources": "https://github.com/yiyijia/yiyiaddon"
   },
-  "icon": "assets/template/icon.png",
+  "icon": "assets/yiyiaddon/icon.png",
   "environment": "client",
   "entrypoints": {
     "meteor": [

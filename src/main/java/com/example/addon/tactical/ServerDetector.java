@@ -1,5 +1,6 @@
 package com.example.addon.tactical;
 
+import com.example.addon.core.SettingUiHelper;
 import com.example.addon.core.YiyiaddonModule;
 import com.mojang.brigadier.tree.CommandNode;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
@@ -94,8 +95,10 @@ public class ServerDetector extends YiyiaddonModule {
         .name("资源包模式")
         .description("选择如何处理服务器资源包")
         .defaultValue(ResourcePackMode.BYPASS)
+        .onChanged(m -> SettingUiHelper.reloadScreen())
         .build()
     );
+    { SettingUiHelper.currentValueLine(sgResourcePack, "当前资源包模式", resourcePackMode); }
 
     private final Setting<Integer> downloadRetries = sgResourcePack.add(new IntSetting.Builder()
         .name("重试次数")

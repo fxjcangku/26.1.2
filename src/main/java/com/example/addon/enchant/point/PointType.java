@@ -28,9 +28,7 @@ public enum PointType {
     /** 挂机点（三模式共享，复用现有 .fumo/AFK 体系） */
     AFK("挂机点", "挂机位"),
     /** 成品箱（三模式共享：附魔书成品 / 极品装备成品） */
-    OUTPUT_STORAGE("成品箱", "成品箱"),
-    /** 异常装备箱（原版装备极品附魔，存附魔失败 / 不达标 / 无法继续处理的装备） */
-    ERROR_STORAGE("异常装备箱", "异常装备箱");
+    OUTPUT_STORAGE("成品箱", "成品箱");
 
     /** 中文显示名 */
     private final String title;
