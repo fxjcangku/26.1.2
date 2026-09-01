@@ -4,6 +4,8 @@ import com.example.addon.autochest.model.ScanMode;
 import com.example.addon.autochest.model.WithdrawMode;
 import com.example.addon.itemid.ItemIdManager;
 import com.example.addon.itemid.ItemTargetSetting;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
+import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -12,6 +14,7 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.Settings;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import net.minecraft.client.Minecraft;
 
 /**
  * AutoChest 设置：承载自动箱子的全部可配置项。
@@ -72,6 +75,7 @@ public final class AutoChestSettings {
 
     // ── 渲染 ──
     public final Setting<Boolean> renderEsp;
+    public final Setting<EspStyle> espStyle;
     public final Setting<SettingColor> unprocessedColor;
     public final Setting<SettingColor> processedColor;
     public final Setting<SettingColor> processingColor;
@@ -92,6 +96,7 @@ public final class AutoChestSettings {
             .name("运行模式")
             .description("玩家控制模式：玩家自己走位，进入触发距离自动处理；寻路模式：自动扫描并寻路；标点模式：只处理保存点位。")
             .defaultValue(ScanMode.PLAYER_CONTROL)
+            .onChanged(mode -> 刷新界面())
             .build());
 
         // 当前模式实时显示（随上方下拉切换自动刷新）
@@ -225,6 +230,13 @@ public final class AutoChestSettings {
             .defaultValue(true)
             .build());
 
+        espStyle = grpRender.add(new EnumSetting.Builder<EspStyle>()
+            .name("ESP框样式")
+            .description("容器的 ESP 渲染样式：仅线条 / 仅面 / 线+面。")
+            .defaultValue(EspStyle.BOTH)
+            .visible(renderEsp::get)
+            .build());
+
         unprocessedColor = grpRender.add(new ColorSetting.Builder()
             .name("未处理颜色")
             .description("未处理容器的 ESP 颜色。")
@@ -245,5 +257,36 @@ public final class AutoChestSettings {
             .defaultValue(new SettingColor(255, 200, 0, 80))
             .visible(renderEsp::get)
             .build());
+    }
+
+    /** ESP 框样式（映射到 Meteor ShapeMode，下拉显示中文） */
+    public enum EspStyle {
+        LINES("仅线条", ShapeMode.Lines),
+        SIDES("仅面", ShapeMode.Sides),
+        BOTH("线+面", ShapeMode.Both);
+
+        public final String displayName;
+        public final ShapeMode shapeMode;
+
+        EspStyle(String displayName, ShapeMode shapeMode) {
+            this.displayName = displayName;
+            this.shapeMode = shapeMode;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
+    /**
+     * 运行模式切换后刷新模块配置界面，让标点管理按钮/卡片按当前模式实时显隐。
+     * 延迟到下一 tick 执行，避免在 WDropdown 的 action 回调栈中直接 reload 导致正在交互的控件被提前清空。
+     */
+    private void 刷新界面() {
+        Minecraft mc = Minecraft.getInstance();
+        mc.execute(() -> {
+            if (mc.screen instanceof WidgetScreen screen) screen.reload();
+        });
     }
 }

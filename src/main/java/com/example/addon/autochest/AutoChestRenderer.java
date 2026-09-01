@@ -2,7 +2,6 @@ package com.example.addon.autochest;
 
 import com.example.addon.autochest.model.ChestTarget;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
@@ -60,7 +59,7 @@ public final class AutoChestRenderer {
                 color = module.moduleSettings.unprocessedColor.get();
             }
 
-            event.renderer.box(target.pos(), color, color, ShapeMode.Lines, 0);
+            event.renderer.box(target.pos(), color, color, module.moduleSettings.espStyle.get().shapeMode, 0);
         }
     }
 

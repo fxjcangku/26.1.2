@@ -118,7 +118,7 @@ public class FumoCommand extends Command {
 
         sendMsg("§a§l✓ 绑定成功§r §8▸ §e[" + type.title() + "] §8▸ §d坐标 (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"
             + " §8▸ §7维度 §a" + dimensionName(module.pointDimension)
-            + " §8▸ §7服务器 §6" + (module.pointServer == null ? "未知" : module.pointServer));
+            + " §8▸ §7服务器 §6" + (module.pointServer == null ? "未知" : serverDisplayName(module.pointServer)));
         return true;
     }
 
@@ -186,8 +186,8 @@ public class FumoCommand extends Command {
         for (PointType type : PointType.all()) {
             sendMsg("  §f" + type.title() + " §8▸ " + fmt(m.getPointPos(type)));
         }
-        sendMsg("  §7服务器   §8▸ " + context(m.pointServer));
-        sendMsg("  §7维度     §8▸ " + context(m.pointDimension));
+        sendMsg("  §7服务器   §8▸ " + context(serverDisplayName(m.pointServer)));
+        sendMsg("  §7维度     §8▸ " + context(m.pointDimension == null ? null : dimensionName(m.pointDimension)));
         sendMsg("  §7当前状态 §8▸ " + (m.matchesCurrentPointContext() ? "§a匹配" : "§c不匹配"));
         sendMsg("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
@@ -261,6 +261,12 @@ public class FumoCommand extends Command {
         if (dimension.contains("nether")) return "下界";
         if (dimension.contains("end")) return "末地";
         return dimension;
+    }
+
+    /** 服务器显示名转换：单机固定标识 singleplayer → 单人游戏，其余原样（null 透传由调用方处理） */
+    private String serverDisplayName(String server) {
+        if (server != null && server.equals("singleplayer")) return "单人游戏";
+        return server;
     }
 
     private void sendMsg(String msg) {

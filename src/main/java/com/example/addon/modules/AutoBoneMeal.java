@@ -70,10 +70,10 @@ public class AutoBoneMeal extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Integer> range = sgGeneral.add(new IntSetting.Builder()
         .name("作用半径")
         .description("范围扫描的最大半径（格）。")
-        .defaultValue(4.0).min(1.0).max(8.0).noSlider()
+        .defaultValue(4).min(1).max(8).noSlider()
         .visible(() -> triggerMode.get() == TriggerMode.范围自动扫描)
         .build()
     );
@@ -512,7 +512,7 @@ public class AutoBoneMeal extends YiyiaddonModule {
 
     /** 范围扫描：收集半径内所有合法目标 */
     private void scanRange() {
-        int r = (int) Math.ceil(range.get());
+        int r = range.get();
         double rangeSq = range.get() * range.get();
         BlockPos center = mc.player.blockPosition();
 

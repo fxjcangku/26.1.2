@@ -90,12 +90,12 @@ public class FlightBypass extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Double> vanillaJumpInterval = sgTweaks.add(new DoubleSetting.Builder()
+    private final Setting<Integer> vanillaJumpInterval = sgTweaks.add(new IntSetting.Builder()
         .name("跳跃间隔（tick）")
         .description("原版模拟模式：每N个tick发送一次onGround=true")
-        .defaultValue(3.0)
-        .min(1.0)
-        .max(10.0)
+        .defaultValue(3)
+        .min(1)
+        .max(10)
         .noSlider()
         .visible(() -> mode.get() == FlightMode.VANILLA_MIMIC)
         .build()
@@ -436,7 +436,7 @@ public class FlightBypass extends YiyiaddonModule {
         }
         
         // 高频伪造 onGround 骗过反作弊
-        int interval = (int) vanillaJumpInterval.get().doubleValue();
+        int interval = vanillaJumpInterval.get();
         if (tickCounter % interval == 0) {
             Vec3 pos = mc.player.position();
             mc.player.connection.send(new ServerboundMovePlayerPacket.PosRot(

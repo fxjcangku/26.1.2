@@ -87,8 +87,10 @@ public final class IdCommand extends Command {
             }
             info("§a§l✓ 已自动保存 §8▸ §a§l" + identity.displayName());
         } else {
-            // 聊天复制/显示：弹出识别结果屏幕，可复制 / 保存 / 添加到 ID 配置
-            mc.setScreen(new IdResultScreen(GuiThemes.get(), identity, itemIdManager));
+            // 聊天复制/显示：延迟到下一 tick 弹出结果屏幕。
+            // 命令在聊天屏 sendChat 流程里执行，紧接着聊天屏会 setScreen(null) 关闭自身，
+            // 若此处同步 setScreen 会被立即覆盖掉，导致「什么提示都没有」。
+            mc.execute(() -> mc.setScreen(new IdResultScreen(GuiThemes.get(), identity, itemIdManager)));
         }
     }
 

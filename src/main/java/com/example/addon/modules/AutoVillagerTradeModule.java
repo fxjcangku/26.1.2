@@ -132,12 +132,12 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         .build()
     );
 
-    private final Setting<Double> searchRange = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Integer> searchRange = sgGeneral.add(new IntSetting.Builder()
         .name("村民搜索范围")
         .description("原地模式的搜索/自检半径（格）：范围内必须存在目标职业村民，否则自检不通过")
-        .defaultValue(16.0)
-        .min(4.0)
-        .max(32.0)
+        .defaultValue(16)
+        .min(4)
+        .max(32)
         .noSlider()
         .visible(() -> mode.get() == Mode.LOCAL)
         .build()

@@ -210,12 +210,12 @@ public final class IdConfigModule extends YiyiaddonModule {
             {"§lID 配置管理 · 使用说明"},
             {"§e§l▌ 使用方法",
              "§f  · 识别物品：直接识别手持物品（主手→副手）写入ID",
-             "§f  · 手动添加：输入物品ID经Registry验证后保存",
+             "§f  · 手动添加：输入物品ID经注册表验证后保存",
              "§f  · 删除：点击清单右侧「-」移除该ID",
              "§f  · 刷新：重新读取磁盘，运行时走内存缓存"},
             {"§a§l▌ 数据链",
-             "§f  · ID识别 → ID配置管理 → AutoChest选择器",
-             "§f  · 三处共享同一份 ItemIdManager，实时联动无需重启"}
+             "§f  · ID识别 → ID配置管理 → 自动箱子选择器",
+             "§f  · 三处共享同一份物品ID管理器，实时联动无需重启"}
         };
     }
 }

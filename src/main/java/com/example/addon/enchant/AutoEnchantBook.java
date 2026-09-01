@@ -24,6 +24,7 @@ import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
@@ -97,16 +98,20 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     // 基础设置
     private final Setting<TargetMode> 目标模式 = sgBasic.add(new EnumSetting.Builder<TargetMode>()
-        .name("目标模式").description("原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥切换").defaultValue(TargetMode.BOOK).build());
+        .name("目标模式").description("原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥切换").defaultValue(TargetMode.BOOK)
+        .onChanged(mode -> 刷新模式界面())
+        .build());
 
     private final Setting<Integer> 单轮抽取次数 = sgBasic.add(new IntSetting.Builder()
-        .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).noSlider().build());
+        .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).noSlider()
+        .visible(() -> 目标模式.get() != TargetMode.GEAR).build());
 
     private final Setting<Integer> GUI操作延迟 = sgBasic.add(new IntSetting.Builder()
         .name("GUI操作延迟(Tick)").description("所有 GUI 点击之间的等待 Tick 数").defaultValue(1).min(1).max(10).noSlider().build());
 
     private final Setting<Integer> 书本补给组数 = sgBasic.add(new IntSetting.Builder()
-        .name("书本补给组数").description("每次去书箱抓取的组数（1组=64本）").defaultValue(1).min(1).max(10).noSlider().build());
+        .name("书本补给组数").description("每次去书箱抓取的组数（1组=64本）").defaultValue(1).min(1).max(10).noSlider()
+        .visible(() -> 目标模式.get() != TargetMode.GEAR).build());
 
     private final Setting<Integer> 青金石补给组数 = sgBasic.add(new IntSetting.Builder()
         .name("青金石补给组数").description("每次去青金石箱抓取的组数（1组=64个）").defaultValue(1).min(1).max(10).noSlider().build());
@@ -142,10 +147,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
         .name("返回挂机视角").description("到达挂机位后恢复设置该点位时记录的视角").defaultValue(true).visible(() -> false).build());
 
     private final Setting<Boolean> 成功提示音 = sgBasic.add(new BoolSetting.Builder()
-        .name("成功提示音").description("刷到已选择的目标附魔书时播放本地提示音").defaultValue(true).build());
+        .name("成功提示音").description("刷到已选择的目标附魔书时播放本地提示音").defaultValue(true)
+        .visible(() -> 目标模式.get() != TargetMode.GEAR).build());
 
     private final Setting<SuccessSound> 成功提示音类型 = sgBasic.add(new EnumSetting.Builder<SuccessSound>()
-        .name("成功提示音类型").description("选择刷到目标附魔书时播放的音效").defaultValue(SuccessSound.CHALLENGE_COMPLETE).visible(成功提示音::get).build());
+        .name("成功提示音类型").description("选择刷到目标附魔书时播放的音效").defaultValue(SuccessSound.CHALLENGE_COMPLETE)
+        .visible(() -> 目标模式.get() != TargetMode.GEAR && 成功提示音.get()).build());
 
     // ── 剑类极品 ────────────────────────────────────────────────────────
     // 传说
@@ -564,6 +571,16 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     /**
+     * 切换目标模式后刷新模块配置界面，让点位卡片区按新模式的 requiredPoints 实时重建。
+     * 延迟到下一 tick 执行，避免在 WDropdown 的 action 回调栈中直接 reload 导致正在交互的控件被提前清空。
+     */
+    private void 刷新模式界面() {
+        mc.execute(() -> {
+            if (mc.screen instanceof WidgetScreen screen) screen.reload();
+        });
+    }
+
+    /**
      * 构建点位设置卡片（与自动挖矿的卡片布局一致）
      * 卡片包含标题、坐标显示、设置按钮、删除按钮。
      * 设置/删除直接复用 FumoCommand 静态方法，与 .fumo set/remove 指令同一套校验。
@@ -595,13 +612,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
         card.add(theme.label(titleColor + type.title())).expandX().center();
         card.row();
 
-        // 状态显示（固定两行，保持高度一致）
+        // 状态显示（固定两行，保持高度一致：第一行坐标，第二行维度）
         if (isBound) {
             String coords = String.format("§7X§f%d §7Y§f%d §7Z§f%d",
                 pos.getX(), pos.getY(), pos.getZ());
             card.add(theme.label(coords)).expandX().center();
             card.row();
-            card.add(theme.label("§8-")).expandX().center();
+            String dim = 维度中文名();
+            card.add(theme.label(dim != null ? "§7维度 §f" + dim : "§8-")).expandX().center();
             card.row();
         } else {
             card.add(theme.label("§8暂未绑定")).expandX().center();
@@ -633,6 +651,16 @@ public class AutoEnchantBook extends YiyiaddonModule {
         card.add(delBtn).expandX().center();
 
         parentTable.add(card).expandX();
+    }
+
+    /** 当前整套点位绑定的维度中文显示名（主世界/下界/末地），未绑定维度返回 null */
+    private String 维度中文名() {
+        String dim = pointDimension;
+        if (dim == null) return null;
+        if (dim.contains("overworld")) return "主世界";
+        if (dim.contains("nether")) return "下界";
+        if (dim.contains("end")) return "末地";
+        return dim;
     }
 
     /** 按统一点位类型取坐标，未绑定返回 null */

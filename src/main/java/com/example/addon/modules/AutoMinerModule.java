@@ -104,21 +104,21 @@ public final class AutoMinerModule extends YiyiaddonModule {
     // ─── 采集模式 ───
     private final Setting<LootMode> lootMode;
 
-    // ─── 时运产物映射（烧制产物 → 矿石方块）───
-    // 主世界矿石：时运挖矿的最终烧制产物 → 对应的矿石方块
+    // ─── 时运产物映射（掉落物 → 矿石方块）───
+    // 主世界矿石：时运挖矿的掉落物 → 对应的矿石方块（铁/金/铜挖出粗矿，不是锭）
     private static final Map<String, String> OVERWORLD_FORTUNE = Map.ofEntries(
-        Map.entry("minecraft:iron_ingot", "minecraft:iron_ore"),
-        Map.entry("minecraft:gold_ingot", "minecraft:gold_ore"),
-        Map.entry("minecraft:copper_ingot", "minecraft:copper_ore"),
+        Map.entry("minecraft:raw_iron", "minecraft:iron_ore"),
+        Map.entry("minecraft:raw_gold", "minecraft:gold_ore"),
+        Map.entry("minecraft:raw_copper", "minecraft:copper_ore"),
         Map.entry("minecraft:redstone", "minecraft:redstone_ore"),
         Map.entry("minecraft:lapis_lazuli", "minecraft:lapis_ore"),
         Map.entry("minecraft:diamond", "minecraft:diamond_ore"),
         Map.entry("minecraft:emerald", "minecraft:emerald_ore"),
         Map.entry("minecraft:coal", "minecraft:coal_ore")
     );
-    // 下界矿石：时运挖矿的掉落物 → 对应的矿石方块（下界金矿掉金粒，不是金锭）
+    // 下界矿石：时运挖矿的掉落物 → 对应的矿石方块（残骸掉残骸本身，下界金矿掉金粒，石英矿掉石英）
     private static final Map<String, String> NETHER_FORTUNE = Map.ofEntries(
-        Map.entry("minecraft:netherite_ingot", "minecraft:ancient_debris"),
+        Map.entry("minecraft:ancient_debris", "minecraft:ancient_debris"),
         Map.entry("minecraft:gold_nugget", "minecraft:nether_gold_ore"),
         Map.entry("minecraft:quartz", "minecraft:nether_quartz_ore")
     );
@@ -211,21 +211,21 @@ public final class AutoMinerModule extends YiyiaddonModule {
         
         lootMode = sgTarget.add(new EnumSetting.Builder<LootMode>()
             .name("采集模式")
-            .description("精准采集：目标选择器显示原矿；时运：目标选择器显示烧制产物（锭）。切换模式时自动同步目标")
+            .description("精准采集：目标选择器显示原矿；时运：目标选择器显示掉落物（粗铁/粗金/粗铜等）。切换模式时自动同步目标")
             .defaultValue(LootMode.FORTUNE)
             .onChanged(this::syncTargetsOnModeSwitch)
             .build());
 
         overworldOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("主世界矿石")
-            .description("时运模式选烧制产物（铁锭/金锭等），精准采集选原矿（铁矿石等）")
+            .description("时运模式选掉落物（粗铁/粗金/粗铜等），精准采集选原矿（铁矿石等）")
             .defaultValue(Items.AIR)
             .filter(this::isOverworldTargetItem)
             .build());
 
         netherOreTarget = sgTarget.add(new ItemSetting.Builder()
             .name("下界矿石")
-            .description("时运模式选烧制产物（下界合金锭/金粒/石英），精准采集选原矿（下界残骸等）")
+            .description("时运模式选掉落物（下界残骸/金粒/石英），精准采集选原矿（下界残骸等）")
             .defaultValue(Items.AIR)
             .filter(this::isNetherTargetItem)
             .build());

@@ -19,6 +19,7 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
@@ -259,22 +260,67 @@ public final class AutoChestModule extends YiyiaddonModule {
         return buildInfoWidget(theme, this::buildHeader, buildSections());
     }
 
-    /** 面板头部按钮：标点管理 + 处理记录清除，全部直接调用 Service，不模拟聊天输入 */
+    /** 面板头部：标点管理（仅标点模式显示）+ 处理记录清除（三模式通用），参考自动挖矿的点位卡片布局 */
     private void buildHeader(WTable table) {
-        addUniformButton(theme, table, "设置箱子点位", this::addPointFromCrosshair);
-        table.row();
-        addUniformButton(theme, table, "删除箱子点位", this::removePointFromCrosshair);
-        table.row();
-        addUniformButton(theme, table, "查看当前设置箱子信息", this::showPoints);
-        table.row();
-        addUniformButton(theme, table, "清空全部点位", () ->
-            mc.setScreen(new ConfirmScreen(theme, "清空点位", "确定要清空全部标点吗？此操作不可恢复。", this::clearAllPoints)));
-        table.row();
+        boolean markerMode = moduleSettings.scanMode.get() == ScanMode.MARKER;
+
+        // 标点相关：仅「标点模式」显示，其它模式不显示标点按钮/卡片
+        if (markerMode) {
+            // 顶部：对准容器后点击添加点位
+            addUniformButton(theme, table, "设置箱子点位（对准容器）", () -> {
+                addPointFromCrosshair();
+                mc.setScreen(null);
+            });
+            table.row();
+
+            // 点位卡片区：动态列出当前维度已绑定的箱子点位（坐标 + 维度 + 处理状态 + 删除）
+            List<ChestTarget> points = pointManager.pointsInCurrentDimension();
+            if (points.isEmpty()) {
+                table.add(theme.label("§8当前维度暂无箱子点位")).expandX().center();
+                table.row();
+            } else {
+                table.add(theme.horizontalSeparator()).expandX();
+                table.row();
+                for (ChestTarget p : points) {
+                    buildPointCard(theme, table, p);
+                }
+            }
+
+            // 清空全部点位
+            table.add(theme.horizontalSeparator()).expandX();
+            table.row();
+            addUniformButton(theme, table, "清空全部点位", () ->
+                mc.setScreen(new ConfirmScreen(theme, "清空点位", "确定要清空全部标点吗？此操作不可恢复。", this::clearAllPoints)));
+            table.row();
+        }
+
+        // 处理记录清除（三模式通用：ESP 显示处理状态，与运行模式无关）
         addUniformButton(theme, table, "清除当前维度处理记录", () ->
             mc.setScreen(new ConfirmScreen(theme, "清除记录", "确定清除当前维度的已处理记录吗？", this::clearCurrentDimensionRecords)));
         table.row();
         addUniformButton(theme, table, "清除全部处理记录", () ->
             mc.setScreen(new ConfirmScreen(theme, "清除记录", "确定清除全部服务器的已处理记录吗？", this::clearAllRecords)));
+        table.row();
+    }
+
+    /** 单个箱子点位卡片行：容器类型 + 坐标 + 维度 + 处理状态 + 删除按钮 */
+    private void buildPointCard(GuiTheme theme, WTable table, ChestTarget p) {
+        String typeName = ContainerTypeRegistry.byId(p.containerType()) == null
+            ? p.containerType() : ContainerTypeRegistry.byId(p.containerType()).displayName();
+        String dim = WorldIdentity.dimensionDisplayName(p.dimension());
+        long expireMs = moduleSettings.recordExpireMinutes.get() * 60_000L;
+        boolean processed = recordManager.isProcessed(p.pos(), p.dimension(), p.containerType(), expireMs);
+
+        table.add(theme.label("§b■ §f" + typeName)).expandX().widget();
+        table.add(theme.label(String.format("§7X§f%d §7Y§f%d §7Z§f%d",
+            p.pos().getX(), p.pos().getY(), p.pos().getZ()))).widget();
+        table.add(theme.label("§7维度 §f" + dim)).widget();
+        table.add(theme.label(processed ? "§c已处理" : "§a未处理")).widget();
+        WButton del = table.add(theme.button("§c删除")).widget();
+        del.action = () -> {
+            pointManager.remove(p.pos(), p.dimension());
+            mc.setScreen(null);
+        };
         table.row();
     }
 
@@ -317,54 +363,6 @@ public final class AutoChestModule extends YiyiaddonModule {
         } else {
             notifyError("该标点已存在");
         }
-    }
-
-    /** 删除箱子点位：按服务器 + 维度 + 坐标删除，避免误删其它服务器 / 维度相同坐标 */
-    private void removePointFromCrosshair() {
-        if (mc.player == null || mc.level == null) {
-            notifyError("玩家未加载");
-            return;
-        }
-        BlockPos target = crosshairBlock();
-        if (target == null) {
-            notifyError("准星未对准任何方块");
-            return;
-        }
-        String dim = WorldIdentity.dimension(mc);
-        if (pointManager.remove(target, dim)) {
-            notify("§c§l✗ 已删除标点 §8▸ " + YiyiaddonModule.formatCoords(target.getX(), target.getY(), target.getZ()));
-        } else {
-            notifyError("该坐标没有标点");
-        }
-    }
-
-    /** 查看当前维度点位信息：服务器/世界、维度、坐标、容器类型、处理状态与数量 */
-    private void showPoints() {
-        if (mc.player == null || mc.level == null) {
-            notifyError("玩家未加载");
-            return;
-        }
-        List<ChestTarget> points = pointManager.pointsInCurrentDimension();
-        notify("§b§l━━ 自动箱子 ▸ 标点管理 ━━");
-        if (points.isEmpty()) {
-            notify("§7当前维度没有标点");
-        } else {
-            String server = WorldIdentity.serverDisplayName(mc);
-            long expireMs = moduleSettings.recordExpireMinutes.get() * 60_000L;
-            for (ChestTarget p : points) {
-                String typeName = ContainerTypeRegistry.byId(p.containerType()) == null
-                    ? p.containerType() : ContainerTypeRegistry.byId(p.containerType()).displayName();
-                boolean processed = recordManager.isProcessed(p.pos(), p.dimension(), p.containerType(), expireMs);
-                String status = processed ? "§c已处理" : "§a未处理";
-                notify("§d■ §8▸ §f" + typeName + " §8▸ "
-                    + YiyiaddonModule.formatCoords(p.pos().getX(), p.pos().getY(), p.pos().getZ())
-                    + " §8▸ " + status);
-            }
-            notify("§7服务器 §8▸ §f" + server
-                + " §7维度 §8▸ §f" + WorldIdentity.dimensionDisplayName(WorldIdentity.dimension(mc))
-                + " §7数量 §8▸ §e" + points.size());
-        }
-        notify("§b§l━━━━━━━━━━━━━━━━━━━━━━");
     }
 
     /** 清空全部标点（确认后执行） */

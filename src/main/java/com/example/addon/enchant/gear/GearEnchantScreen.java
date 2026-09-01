@@ -7,6 +7,7 @@ import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WMinus;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WPlus;
+import net.minecraft.client.Minecraft;
 
 import java.util.List;
 
@@ -69,7 +70,7 @@ public final class GearEnchantScreen extends WindowScreen {
         WDropdown<GearCategory> categoryDropdown = table.add(theme.dropdown(categoryEnum())).expandCellX().widget();
         categoryDropdown.action = () -> {
             category = categoryDropdown.get().key;
-            rebuild();
+            scheduleRebuild();
         };
         table.row();
 
@@ -87,7 +88,7 @@ public final class GearEnchantScreen extends WindowScreen {
             theme.dropdown(gears.toArray(new GearEnchantData.GearDefinition[0]), selectedGear)).expandCellX().widget();
         gearDropdown.action = () -> {
             setting.applyGear(gearDropdown.get().id);
-            rebuild();
+            scheduleRebuild();
         };
         table.row();
 
@@ -101,7 +102,7 @@ public final class GearEnchantScreen extends WindowScreen {
                 .expandCellX().widget();
             profileDropdown.action = () -> {
                 setting.applyProfile(profileDropdown.get().id);
-                rebuild();
+                scheduleRebuild();
             };
             table.row();
         }
@@ -119,6 +120,15 @@ public final class GearEnchantScreen extends WindowScreen {
         setting.refreshSummary();
     }
 
+    /**
+     * 延迟到下一 tick 重建界面。
+     * 交互按钮（下拉/加减/启用）的 action 在鼠标释放事件回调里触发，若在此同步 clear + 重建，
+     * 会把正在分发事件的控件提前从 widget 树移除，导致事件链中断、控件点击失灵或卡顿。
+     */
+    private void scheduleRebuild() {
+        Minecraft.getInstance().execute(this::rebuild);
+    }
+
     /** 渲染单个附魔行：名称 + 排除开关 + [-] 等级 [+] */
     private void addEnchantRow(GearEnchantData.TargetDefinition target) {
         int rawLevel = setting.levelOf(target.id);
@@ -132,7 +142,7 @@ public final class GearEnchantScreen extends WindowScreen {
             WButton exclude = table.add(theme.button(excluded ? "§c已排除" : "§a启用")).widget();
             exclude.action = () -> {
                 setting.setExcluded(target.id, !excluded);
-                rebuild();
+                scheduleRebuild();
             };
         } else {
             table.add(theme.label("§8核心")).widget();
@@ -142,7 +152,7 @@ public final class GearEnchantScreen extends WindowScreen {
         WMinus minus = table.add(theme.minus()).widget();
         minus.action = () -> {
             setting.setLevel(target.id, level - 1);
-            rebuild();
+            scheduleRebuild();
         };
 
         table.add(theme.label("§e" + roman(level))).widget();
@@ -150,7 +160,7 @@ public final class GearEnchantScreen extends WindowScreen {
         WPlus plus = table.add(theme.plus()).widget();
         plus.action = () -> {
             setting.setLevel(target.id, level + 1);
-            rebuild();
+            scheduleRebuild();
         };
 
         table.row();
