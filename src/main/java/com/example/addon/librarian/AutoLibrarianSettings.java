@@ -67,7 +67,7 @@ public final class AutoLibrarianSettings {
             .description("固定交易站村民搜索半径（格）。")
             .defaultValue(32)
             .min(1)
-            .sliderRange(1, 64)
+            .noSlider()
             .build());
 
         maximumEmeraldPrice = grpBehavior.add(new IntSetting.Builder()
@@ -75,7 +75,7 @@ public final class AutoLibrarianSettings {
             .description("允许购买的单本附魔书最高绿宝石成本。")
             .defaultValue(64)
             .min(1)
-            .sliderRange(1, 64)
+            .noSlider()
             .build());
 
         professionTimeout = grpBehavior.add(new IntSetting.Builder()
@@ -83,7 +83,7 @@ public final class AutoLibrarianSettings {
             .description("等待村民职业同步的最大 Tick 数。")
             .defaultValue(200)
             .min(20)
-            .sliderRange(20, 1200)
+            .noSlider()
             .build());
 
         actionDelay = grpBehavior.add(new IntSetting.Builder()
@@ -91,7 +91,7 @@ public final class AutoLibrarianSettings {
             .description("普通业务动作之间的 Tick 间隔。")
             .defaultValue(2)
             .min(1)
-            .sliderRange(1, 20)
+            .noSlider()
             .build());
 
         resetDelay = grpBehavior.add(new IntSetting.Builder()
@@ -99,7 +99,7 @@ public final class AutoLibrarianSettings {
             .description("拆除与重新放置讲台之间的最小 Tick 间隔。")
             .defaultValue(10)
             .min(1)
-            .sliderRange(1, 100)
+            .noSlider()
             .build());
 
         removeTargetOnFound = grpBehavior.add(new BoolSetting.Builder()

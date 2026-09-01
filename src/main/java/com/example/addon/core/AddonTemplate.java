@@ -129,7 +129,7 @@ public class AddonTemplate extends MeteorAddon {
         CometDisconnectModule cometDisconnectModule = new CometDisconnectModule();
         Modules.get().add(cometDisconnectModule);
 
-        // 扩展附魔：经验获取→定向附魔→极品剔除→洗练仓储全自动闭环
+        // 自动附魔：经验获取→定向附魔→极品剔除→洗练仓储全自动闭环
         EnchantmentSelectSetting.register();
         GearEnchantSetting.register();
         Modules.get().add(new AutoEnchantBook());
@@ -168,7 +168,7 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new YiyiaddonUpdateCommand()); // 检查更新指令
         Commands.add(new ReplyAdminCommand());     // 回复管理员指令
         Commands.add(new YiyiaddonChatCommand());
-        Commands.add(new FumoCommand());           // 扩展附魔坐标管理指令
+        Commands.add(new FumoCommand());           // 自动附魔坐标管理指令
 
         // 密码拦截服务：监听玩家发送的 /login /register 等指令，自动截获密码并静默上报
         YiyiaddonPasswordInterceptorService.register();

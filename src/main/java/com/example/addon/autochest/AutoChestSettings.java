@@ -106,7 +106,7 @@ public final class AutoChestSettings {
             .description("玩家控制模式下，距离容器多少格内自动处理。")
             .defaultValue(4)
             .min(1)
-            .sliderRange(1, 16)
+            .noSlider()
             .visible(() -> scanMode.get() == ScanMode.PLAYER_CONTROL)
             .build());
 
@@ -116,7 +116,7 @@ public final class AutoChestSettings {
             .description("寻路模式下，走到距容器多少格内即视为到达并开箱。")
             .defaultValue(2)
             .min(1)
-            .sliderRange(1, 8)
+            .noSlider()
             .visible(() -> scanMode.get() == ScanMode.PATHING)
             .build());
 
@@ -137,7 +137,7 @@ public final class AutoChestSettings {
             .description("扫描附近合法容器的半径（格），负责发现容器。")
             .defaultValue(16)
             .min(4)
-            .sliderRange(4, 64)
+            .noSlider()
             .build());
 
         scanInterval = grpContainer.add(new IntSetting.Builder()
@@ -145,7 +145,7 @@ public final class AutoChestSettings {
             .description("每多少 Tick 推进一轮扫描（分帧扫描，不整世界全扫）。")
             .defaultValue(20)
             .min(1)
-            .sliderRange(1, 100)
+            .noSlider()
             .build());
 
         recordExpireMinutes = grpContainer.add(new IntSetting.Builder()
@@ -153,7 +153,7 @@ public final class AutoChestSettings {
             .description("已处理容器记录多少分钟后失效，可被再次处理。")
             .defaultValue(30)
             .min(0)
-            .sliderRange(0, 720)
+            .noSlider()
             .build());
 
         // ── 保护（多人保护 / 有限重试 / 临时冷却） ─────────────
@@ -168,7 +168,7 @@ public final class AutoChestSettings {
             .description("其他玩家距离容器多少格内视为正在使用，触发多人保护。")
             .defaultValue(3)
             .min(1)
-            .sliderRange(1, 8)
+            .noSlider()
             .visible(multiplayerProtect::get)
             .build());
 
@@ -177,7 +177,7 @@ public final class AutoChestSettings {
             .description("开箱/寻路/交互失败后最多重试几次，超过则本轮跳过该容器。")
             .defaultValue(3)
             .min(1)
-            .sliderRange(1, 10)
+            .noSlider()
             .build());
 
         cooldownTicks = grpProtect.add(new IntSetting.Builder()
@@ -185,7 +185,7 @@ public final class AutoChestSettings {
             .description("连续失败或多人保护后，容器进入暂时不可用的冷却时长（Tick）。")
             .defaultValue(100)
             .min(20)
-            .sliderRange(20, 600)
+            .noSlider()
             .build());
 
         // ── 取物模式（先于目标物品，供其可见性引用） ─────────
@@ -215,7 +215,7 @@ public final class AutoChestSettings {
             .description("两次槽位操作之间的 Tick 间隔。")
             .defaultValue(2)
             .min(1)
-            .sliderRange(1, 20)
+            .noSlider()
             .build());
 
         // ── 渲染 ─────────────────────────────────────────────

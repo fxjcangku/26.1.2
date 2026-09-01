@@ -73,7 +73,7 @@ public class AutoBoneMeal extends YiyiaddonModule {
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("作用半径")
         .description("范围扫描的最大半径（格）。")
-        .defaultValue(4.0).min(1.0).max(8.0).sliderRange(1.0, 8.0)
+        .defaultValue(4.0).min(1.0).max(8.0).noSlider()
         .visible(() -> triggerMode.get() == TriggerMode.范围自动扫描)
         .build()
     );
@@ -153,14 +153,14 @@ public class AutoBoneMeal extends YiyiaddonModule {
     private final Setting<Integer> tickDelay = sgBypass.add(new IntSetting.Builder()
         .name("动作节流（Tick）")
         .description("每隔多少 Tick 执行一轮催熟，0=每帧最暴力，建议 0~2。")
-        .defaultValue(0).min(0).sliderMax(20)
+        .defaultValue(0).min(0).noSlider()
         .build()
     );
 
     private final Setting<Integer> maxPerTick = sgBypass.add(new IntSetting.Builder()
         .name("每轮最大催熟数")
         .description("每轮（节流周期）最多同时催熟多少个方块。0=不限制（最暴力）。")
-        .defaultValue(0).min(0).sliderMax(64)
+        .defaultValue(0).min(0).noSlider()
         .build()
     );
 

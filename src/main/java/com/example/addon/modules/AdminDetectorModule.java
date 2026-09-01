@@ -61,7 +61,7 @@ public final class AdminDetectorModule extends YiyiaddonModule {
             .defaultValue(10)
             .min(1)
             .max(64)
-            .sliderMax(32)
+            .noSlider()
             .build());
 
         detectSpectator = sgDetect.add(new BoolSetting.Builder()

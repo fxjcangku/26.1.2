@@ -18,7 +18,7 @@ import net.minecraft.world.phys.HitResult;
 import static com.mojang.brigadier.Command.SINGLE_SUCCESS;
 
 /**
- * .fumo 指令系统 —— 为扩展附魔三种模式设置统一点位节点。
+ * .fumo 指令系统 —— 为自动附魔三种模式设置统一点位节点。
  *
  * <p>所有节点通过 {@link PointType} 统一绑定，GUI 按钮、本指令、自检、状态机
  * 读写同一个点位（同一份数据源），避免「箱子坐标」模糊类型或多套点位数据库。</p>
@@ -32,7 +32,7 @@ import static com.mojang.brigadier.Command.SINGLE_SUCCESS;
 public class FumoCommand extends Command {
 
     public FumoCommand() {
-        super("fumo", "扩展附魔坐标设置指令");
+        super("fumo", "自动附魔坐标设置指令");
     }
 
     @Override
@@ -156,7 +156,7 @@ public class FumoCommand extends Command {
     // ── 公开静态方法（供模块 GUI 点位卡片按钮调用）─────────────────────────────
 
     /**
-     * 设置点位（供扩展附魔配置页面的卡片按钮调用）。
+     * 设置点位（供自动附魔配置页面的卡片按钮调用）。
      * 复用 .fumo set 指令的同一套校验逻辑（容器/附魔台/砂轮/铁砧判定、覆盖保护、世界绑定）。
      *
      * @param type 统一点位业务类型
@@ -167,7 +167,7 @@ public class FumoCommand extends Command {
     }
 
     /**
-     * 删除点位（供扩展附魔配置页面的卡片按钮调用）。
+     * 删除点位（供自动附魔配置页面的卡片按钮调用）。
      *
      * @param type 统一点位业务类型
      */
@@ -181,7 +181,7 @@ public class FumoCommand extends Command {
 
         // 统一「标签 §8▸ 值」结构，与 .wk / .farm / .cunmin 状态面板风格一致
         sendMsg("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        sendMsg("§b§l       扩展附魔 ▸ 坐标状态");
+        sendMsg("§b§l       自动附魔 ▸ 坐标状态");
         sendMsg("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         for (PointType type : PointType.all()) {
             sendMsg("  §f" + type.title() + " §8▸ " + fmt(m.getPointPos(type)));
@@ -196,7 +196,7 @@ public class FumoCommand extends Command {
 
     private AutoEnchantBook getModule() {
         AutoEnchantBook m = Modules.get().get(AutoEnchantBook.class);
-        if (m == null) sendMsg("§c找不到 扩展附魔 模块，请确认已注册！");
+        if (m == null) sendMsg("§c找不到 自动附魔 模块，请确认已注册！");
         return m;
     }
 
@@ -265,7 +265,7 @@ public class FumoCommand extends Command {
 
     private void sendMsg(String msg) {
         if (mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("扩展附魔", msg)));
+            mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("自动附魔", msg)));
         }
     }
 }

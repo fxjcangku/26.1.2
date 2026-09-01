@@ -100,7 +100,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(1500)
         .min(1000)
         .max(3000)
-        .sliderMax(3000)
+        .noSlider()
         .visible(() -> enableChatQueue.get())
         .build()
     );
@@ -133,7 +133,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(8)
         .min(2)
         .max(20)
-        .sliderRange(2, 20)
+        .noSlider()
         .visible(limitDigging::get)
         .build()
     );
@@ -151,7 +151,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(8)
         .min(2)
         .max(20)
-        .sliderRange(2, 20)
+        .noSlider()
         .visible(limitInteract::get)
         .build()
     );
@@ -179,7 +179,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(10)
         .min(5)
         .max(50)
-        .sliderRange(5, 50)
+        .noSlider()
         .visible(() -> enableAnalysis.get())
         .build()
     );
@@ -201,7 +201,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(2.0)
         .min(0.5)
         .max(5.0)
-        .sliderMax(5.0)
+        .noSlider()
         .visible(() -> enableViewShake.get())
         .build()
     );
@@ -219,7 +219,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(20)
         .min(0)
         .max(100)
-        .sliderRange(0, 100)
+        .noSlider()
         .visible(() -> enableNetworkDelay.get())
         .build()
     );
@@ -230,7 +230,7 @@ public class AntiKickBypass extends YiyiaddonModule {
         .defaultValue(80)
         .min(0)
         .max(200)
-        .sliderRange(0, 200)
+        .noSlider()
         .visible(() -> enableNetworkDelay.get())
         .build()
     );

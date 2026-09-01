@@ -353,6 +353,16 @@ package com.example.addon.convention;
 //   · 高频循环动作（收割/拾取/进食/耐久）继续用 stateTick % N 节流，不走状态播报。
 //   · 参考实现：AutoFarmMatrix.transitionTo() 的 lastNotifiedState 去重播报。
 //
+// 【5.10 数值配置控件规范（2026-09-01 新增，全项目统一）】
+//
+//   · 所有模块配置页的数值型设置（IntSetting / DoubleSetting）一律使用
+//     「加减按钮 + 可输入框」，即调用 .noSlider()，禁止使用滑块
+//     （sliderRange / sliderMin / sliderMax）。
+//   · 理由：滑块只能粗粒度拖动，无法精确输入（例如从 1 直接改成 64）；
+//     加减框既能点 +/− 微调，又能点框手输任意数值，体验更好。
+//   · 已有 .noSlider() 的配置保持不变；新建模块带数值配置时，一律按此规范用 .noSlider()。
+//   · 参考实现：AutoVillagerTradeModule / AutoMinerModule / AutoFarmMatrix 中带 .noSlider() 的设置。
+//
 // ════════════════════════════════════════════════════════════════════════════
 //  第六章 · 运行时缺陷排查协议（证据驱动调试）
 // ════════════════════════════════════════════════════════════════════════════

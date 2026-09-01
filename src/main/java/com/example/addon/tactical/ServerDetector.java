@@ -86,7 +86,7 @@ public class ServerDetector extends YiyiaddonModule {
         .defaultValue(3)
         .min(1)
         .max(15)
-        .sliderRange(1, 15)
+        .noSlider()
         .build()
     );
 
@@ -103,7 +103,7 @@ public class ServerDetector extends YiyiaddonModule {
         .defaultValue(5)
         .min(1)
         .max(10)
-        .sliderRange(1, 10)
+        .noSlider()
         .visible(() -> resourcePackMode.get() == ResourcePackMode.AUTO_DOWNLOAD)
         .build()
     );
@@ -114,7 +114,7 @@ public class ServerDetector extends YiyiaddonModule {
         .defaultValue(60)
         .min(10)
         .max(300)
-        .sliderRange(10, 300)
+        .noSlider()
         .visible(() -> resourcePackMode.get() == ResourcePackMode.AUTO_DOWNLOAD)
         .build()
     );

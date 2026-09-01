@@ -97,7 +97,7 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .defaultValue(5.0)
         .min(1.0)
         .max(20.0)
-        .sliderMax(20.0)
+        .noSlider()
         .visible(() -> breakMode.get() == BreakMode.BOOST)
         .build());
 
@@ -107,7 +107,7 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .defaultValue(4)
         .min(1)
         .max(6)
-        .sliderRange(1, 6)
+        .noSlider()
         .visible(() -> targetMode.get() == TargetMode.RANGE)
         .build());
 
@@ -127,7 +127,7 @@ public class PacketInstantBreak extends YiyiaddonModule {
         .defaultValue(1)
         .min(0)
         .max(20)
-        .sliderRange(0, 20)
+        .noSlider()
         .build());
 
     private final Setting<Boolean> rotate = sgPacket.add(new BoolSetting.Builder()

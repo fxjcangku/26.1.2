@@ -46,7 +46,7 @@ public final class ItemQuantityScreen extends WindowScreen {
         for (ItemIdentity id : targets) {
             String key = id.identityKey();
             table.add(theme.label("§a" + id.displayName())).expandX();
-            WIntEdit edit = table.add(theme.intEdit(setting.quantityOf(key), 1, MAX_COUNT, 1, 64, false)).expandX().widget();
+            WIntEdit edit = table.add(theme.intEdit(setting.quantityOf(key), 1, MAX_COUNT, 1, 64, true)).expandX().widget();
             edit.action = () -> setting.setQuantity(key, edit.get());
             table.row();
         }

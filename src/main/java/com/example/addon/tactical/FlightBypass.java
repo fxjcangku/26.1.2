@@ -66,7 +66,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(0.3)
         .min(0.1)
         .max(1.0)
-        .sliderMax(1.0)
+        .noSlider()
         .visible(() -> mode.get() == FlightMode.PACKET_FLY)
         .build()
     );
@@ -77,7 +77,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(20)
         .min(5)
         .max(60)
-        .sliderMax(60)
+        .noSlider()
         .visible(() -> mode.get() == FlightMode.PACKET_FLY)
         .build()
     );
@@ -96,7 +96,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(3.0)
         .min(1.0)
         .max(10.0)
-        .sliderMax(10.0)
+        .noSlider()
         .visible(() -> mode.get() == FlightMode.VANILLA_MIMIC)
         .build()
     );
@@ -107,7 +107,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(0.03)
         .min(0.01)
         .max(0.1)
-        .sliderMax(0.1)
+        .noSlider()
         .visible(() -> mode.get() == FlightMode.SAFE_GLIDE)
         .build()
     );
@@ -118,7 +118,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(100)
         .min(80)
         .max(200)
-        .sliderMax(200)
+        .noSlider()
         .visible(() -> mode.get() == FlightMode.SEQUENCE_SCAFFOLD)
         .build()
     );
@@ -136,7 +136,7 @@ public class FlightBypass extends YiyiaddonModule {
         .defaultValue(3)
         .min(2)
         .max(10)
-        .sliderMax(10)
+        .noSlider()
         .visible(adaptiveSlowdown::get)
         .build()
     );

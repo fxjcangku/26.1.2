@@ -68,7 +68,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * 扩展附魔 —— 经验获取→定向附魔→极品剔除→洗练仓储全自动闭环。
+ * 自动附魔 —— 经验获取→定向附魔→极品剔除→洗练仓储全自动闭环。
  *
  * 状态机：IDLE → 补给/打怪 → 附魔 → 鉴定 → 存成品 或 砂轮洗练 → 循环。
  */
@@ -77,7 +77,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
     // ── 设置面板 ──────────────────────────────────────────────────────────
 
     private final SettingGroup sgBasic    = settings.createGroup("基础设置");
-    private final SettingGroup sgAdvanced = settings.createGroup("扩展附魔分类");
+    private final SettingGroup sgAdvanced = settings.createGroup("自动附魔分类");
     private final SettingGroup sgCustom   = settings.createGroup("自定义附魔");
     private final SettingGroup sgVanilla  = settings.createGroup("原版附魔分类");
     private final SettingGroup sgSword    = settings.createGroup("剑附魔属性");
@@ -100,20 +100,20 @@ public class AutoEnchantBook extends YiyiaddonModule {
         .name("目标模式").description("原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥切换").defaultValue(TargetMode.BOOK).build());
 
     private final Setting<Integer> 单轮抽取次数 = sgBasic.add(new IntSetting.Builder()
-        .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).sliderMax(50).build());
+        .name("单轮抽取次数").description("挂机循环每轮附魔最大次数，纯附魔模式忽略此项").defaultValue(10).min(1).max(100).noSlider().build());
 
     private final Setting<Integer> GUI操作延迟 = sgBasic.add(new IntSetting.Builder()
-        .name("GUI操作延迟(Tick)").description("所有 GUI 点击之间的等待 Tick 数").defaultValue(1).min(1).max(10).sliderMax(10).build());
+        .name("GUI操作延迟(Tick)").description("所有 GUI 点击之间的等待 Tick 数").defaultValue(1).min(1).max(10).noSlider().build());
 
     private final Setting<Integer> 书本补给组数 = sgBasic.add(new IntSetting.Builder()
-        .name("书本补给组数").description("每次去书箱抓取的组数（1组=64本）").defaultValue(1).min(1).max(10).sliderMax(5).build());
+        .name("书本补给组数").description("每次去书箱抓取的组数（1组=64本）").defaultValue(1).min(1).max(10).noSlider().build());
 
     private final Setting<Integer> 青金石补给组数 = sgBasic.add(new IntSetting.Builder()
-        .name("青金石补给组数").description("每次去青金石箱抓取的组数（1组=64个）").defaultValue(1).min(1).max(10).sliderMax(5).build());
+        .name("青金石补给组数").description("每次去青金石箱抓取的组数（1组=64个）").defaultValue(1).min(1).max(10).noSlider().build());
 
     private final Setting<Integer> 每批取用数量 = sgBasic.add(new IntSetting.Builder()
         .name("每批取用数量").description("每次任务最多从装备箱取用的目标装备数量，铁砧合并会消耗装备，最终完成数可能小于此值")
-        .defaultValue(4).min(1).max(16).sliderMax(16).visible(() -> 目标模式.get() == TargetMode.GEAR).build());
+        .defaultValue(4).min(1).max(16).noSlider().visible(() -> 目标模式.get() == TargetMode.GEAR).build());
 
     private final Setting<List<String>> 自定义附魔 = sgCustom.add(new StringListSetting.Builder()
         .name("自定义附魔目标")
@@ -122,8 +122,18 @@ public class AutoEnchantBook extends YiyiaddonModule {
         .visible(() -> 目标模式.get() == TargetMode.CUSTOM)
         .build());
 
-    private final Setting<RunMode> 运行模式 = sgBasic.add(new EnumSetting.Builder<RunMode>()
-        .name("运行模式").description("纯附魔模式只使用当前经验，经验低于30级时停止；挂机循环会前往挂机点刷经验").defaultValue(RunMode.EXPERIENCE).build());
+    // 三个目标模式各自独立的运行模式开关，互不干扰（仅当前目标模式对应的开关可见并生效）
+    private final Setting<RunMode> 装备运行模式 = sgBasic.add(new EnumSetting.Builder<RunMode>()
+        .name("装备运行模式").description("原版装备附魔：纯附魔只消耗当前经验，不足则停机；挂机循环前往挂机点刷经验").defaultValue(RunMode.EXPERIENCE)
+        .visible(() -> 目标模式.get() == TargetMode.GEAR).build());
+
+    private final Setting<RunMode> 附魔书运行模式 = sgBasic.add(new EnumSetting.Builder<RunMode>()
+        .name("附魔书运行模式").description("原版附魔书：纯附魔只消耗当前经验，不足则停机；挂机循环前往挂机点刷经验").defaultValue(RunMode.EXPERIENCE)
+        .visible(() -> 目标模式.get() == TargetMode.BOOK).build());
+
+    private final Setting<RunMode> 自定义运行模式 = sgBasic.add(new EnumSetting.Builder<RunMode>()
+        .name("自定义运行模式").description("自定义附魔：纯附魔只消耗当前经验，不足则停机；挂机循环前往挂机点刷经验").defaultValue(RunMode.EXPERIENCE)
+        .visible(() -> 目标模式.get() == TargetMode.CUSTOM).build());
 
     private final Setting<Boolean> ESP标点 = sgBasic.add(new BoolSetting.Builder()
         .name("ESP标点").description("显示已设置点位的名称").defaultValue(true).visible(() -> false).build());
@@ -437,6 +447,15 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
     }
 
+    /** 当前目标模式对应的独立运行模式开关（三个模式互不干扰） */
+    private RunMode 当前运行模式() {
+        return switch (目标模式.get()) {
+            case GEAR -> 装备运行模式.get();
+            case BOOK -> 附魔书运行模式.get();
+            case CUSTOM -> 自定义运行模式.get();
+        };
+    }
+
     public enum SuccessSound {
         CHALLENGE_COMPLETE("挑战完成"),
         LEVEL_UP("升级"),
@@ -464,7 +483,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     public AutoEnchantBook() {
-        super(AddonTemplate.CATEGORY_AUTOMATION, "扩展附魔",
+        super(AddonTemplate.CATEGORY_AUTOMATION, "自动附魔",
             "经验获取→定向附魔→极品剔除→洗练仓储全自动闭环。详细参考下面使用说明。");
         剑附魔选择 = addSelector("剑附魔属性", sgSword, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
         斧头附魔选择 = addSelector("斧头附魔属性", sgAxe, sgAdvanced, () -> 目标模式.get() == TargetMode.CUSTOM);
@@ -670,7 +689,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 "  §8├─ §f准星对准对应方块，点击下方卡片「设置」按钮依次绑定：",
                 "  §8│    §7书 / 青晶石 / 成品箱 / 附魔台 / 砂轮",
                 "  §8├─ §f挂机循环模式站在刷怪点调好杀怪视角，再绑定「挂机位」 §7(纯附魔模式不需要)",
-                "  §8├─ §f在扩展附魔分类或原版附魔分类勾选要收集的目标词条",
+                "  §8├─ §f在自动附魔分类或原版附魔分类勾选要收集的目标词条",
                 "  §8├─ §f把带「横扫之刃」的剑放背包或快捷栏任意位置",
                 "  §8└─ §f书箱放空白书、青金石箱放青金石、成品箱预留空间"
             ),
@@ -700,7 +719,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 "  §6▸ §eGUI操作延迟 §f— 服务器卡顿或吞点击时适当调大",
                 "  §6▸ §e书本/青金石补给组数 §f— 每次补给希望保有的组数",
                 "  §6▸ §e自定义附魔目标 §f— 每行一个附魔名，可带等级，如「打雷5」",
-                "  §6▸ §e运行模式 §f— 纯附魔只消耗当前经验；挂机循环会补经验",
+                "  §6▸ §e运行模式 §f— 每个目标模式独立开关：纯附魔只消耗当前经验、不足停机；挂机循环自动补经验",
                 "  §6▸ §e成功提示音 §f— 命中目标词条时播放所选音效"
             ),
             new HelpScreen.HelpSection("原版附魔分类",
@@ -780,7 +799,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             toggle();
             return;
         }
-        if (运行模式.get() == RunMode.DRAIN && posHangout != null) {
+        if (当前运行模式() == RunMode.DRAIN && posHangout != null) {
             notify("§7当前为纯附魔模式，忽略挂机位，不会前往挂机区。");
         }
         if (!matchesCurrentPointContext()) {
@@ -829,10 +848,10 @@ public class AutoEnchantBook extends YiyiaddonModule {
      */
     private void announceStartup(int totalTasks, int vanillaTasks, int extensionTasks) {
         StringBuilder report = new StringBuilder();
-        report.append("§a§l✓ 扩展附魔 · 启动报告");
+        report.append("§a§l✓ 自动附魔 · 启动报告");
 
         // 运行模式：纯附魔 / 挂机循环
-        report.append("\n§7当前模式　§8▸ ").append(highlightFunction(运行模式.get().toString())).append("§r");
+        report.append("\n§7当前模式　§8▸ ").append(highlightFunction(当前运行模式().toString())).append("§r");
 
         // 目标词条统计：总量 + 原版/扩展拆分
         report.append("\n§7目标词条　§8▸ ").append(highlightNumber(totalTasks + " 本")).append("§r");
@@ -840,7 +859,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         report.append("\n§7扩展词条　§8▸ ").append(highlightNumber(extensionTasks + " 本")).append("§r");
 
         // 单轮抽取只在挂机循环生效，纯附魔模式忽略
-        if (运行模式.get() == RunMode.EXPERIENCE) {
+        if (当前运行模式() == RunMode.EXPERIENCE) {
             report.append("\n§7单轮抽取　§8▸ ").append(highlightNumber(单轮抽取次数.get() + " 次")).append("§r");
         }
 
@@ -949,11 +968,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
             return;
         }
         int xpLevel = mc.player.experienceLevel;
-        if (运行模式.get() == RunMode.DRAIN) {
+        if (当前运行模式() == RunMode.DRAIN) {
             if (xpLevel >= 30) {
                 setState(State.WALK_TO_ENCHANT);
             } else {
-                notify("§e纯附魔模式已完成，当前经验低于30级，停止自动化。请切换到挂机循环后重新启动。");
+                notify("§c✗ 停机 §8▸ 纯附魔经验低于 " + highlightNumber("30 级") + "§7，切换挂机循环后重新启动");
                 toggle();
             }
             return;
@@ -1113,7 +1132,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             case 6 -> {
                 mc.player.closeContainer();
                 guiTick = GUI操作延迟.get();
-                if (运行模式.get() == RunMode.EXPERIENCE) remainingAttempts--;
+                if (当前运行模式() == RunMode.EXPERIENCE) remainingAttempts--;
                 setState(State.CHECKING);
             }
         }
@@ -1596,13 +1615,13 @@ public class AutoEnchantBook extends YiyiaddonModule {
     /**
      * 启动自检：按当前目标模式只检查该模式需要的点位，交给 reportSelfCheck 一次性多行播报。
      * 三种模式互不污染——装备模式不检查空白书箱/青金石箱，附魔书/自定义模式不检查铁砧/装备箱。
-     * 挂机点在附魔书/自定义模式下仅挂机循环需要（纯附魔模式跳过）；装备模式下始终必需。
+     * 挂机点仅在「挂机循环」下需要，任一模式切到「纯附魔」都跳过挂机点检查。
      */
     private List<String> selfCheck() {
         List<String> missing = new ArrayList<>();
         TargetMode mode = 目标模式.get();
         for (PointType type : requiredPoints(mode)) {
-            if (type == PointType.AFK && mode != TargetMode.GEAR && 运行模式.get() == RunMode.DRAIN) {
+            if (type == PointType.AFK && 当前运行模式() == RunMode.DRAIN) {
                 continue;
             }
             if (getPointPos(type) == null) {
@@ -1898,7 +1917,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
     /** GEAR 启动播报（目标装备 + 方案 + 目标附魔数） */
     private void announceGearStartup() {
         StringBuilder report = new StringBuilder();
-        report.append("§a§l✓ 扩展附魔 · 原版装备附魔启动");
+        report.append("§a§l✓ 自动附魔 · 原版装备附魔启动");
+        report.append("\n§7运行模式　§8▸ ").append(highlightFunction(当前运行模式().toString())).append("§r");
         report.append("\n§7目标装备　§8▸ ").append(highlightText(gearProfile.gearName())).append("§r");
         report.append("\n§7极品方案　§8▸ ").append(highlightFunction(gearProfile.profileName())).append("§r");
         report.append("\n§7目标附魔　§8▸ ").append(highlightNumber(gearProfile.activeTargets().size() + " 项")).append("§r");
@@ -2109,8 +2129,13 @@ public class AutoEnchantBook extends YiyiaddonModule {
         }
         if (canOpenNow(posEnchant)) {
             stopBaritone();
-            // 附魔台固定需要 30 级，不足则先挂机补经验
+            // 附魔台固定需要 30 级；纯附魔模式下不足直接停机，挂机循环则去挂机补经验
             if (XpPlanner.needsEnchantGrinding(mc.player.experienceLevel)) {
+                if (当前运行模式() == RunMode.DRAIN) {
+                    notify("§c✗ 停机 §8▸ 纯附魔经验不足 " + highlightNumber("30 级") + "§7，切换挂机循环后重新启动");
+                    toggle();
+                    return;
+                }
                 gearTargetXp = XpPlanner.ENCHANT_TABLE_LEVEL;
                 gearReturnState = State.GEAR_WALK_ENCHANT;
                 setState(State.WALK_TO_FARM);
@@ -2606,6 +2631,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 }
                 if (mc.player.experienceLevel < cost) {
                     mc.player.closeContainer();
+                    // 铁砧经验不足：纯附魔模式下直接停机，挂机循环则去挂机补经验
+                    if (当前运行模式() == RunMode.DRAIN) {
+                        notify("§c✗ 停机 §8▸ 纯附魔经验不足铁砧费用 " + highlightNumber(cost + " 级") + "§7，切换挂机循环后重新启动");
+                        toggle();
+                        return;
+                    }
                     gearTargetXp = cost;
                     gearReturnState = State.GEAR_ANVIL;
                     setState(State.WALK_TO_FARM);

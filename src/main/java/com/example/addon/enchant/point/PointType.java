@@ -3,7 +3,7 @@ package com.example.addon.enchant.point;
 import java.util.List;
 
 /**
- * 扩展附魔 · 统一点位业务类型。
+ * 自动附魔 · 统一点位业务类型。
  *
  * <p>三种模式（原版装备 / 原版附魔书 / 自定义附魔）共享同一套点位业务类型，
  * GUI 按钮、.fumo 指令、启动自检、状态机全部通过本枚举访问同一个点位，

@@ -143,7 +143,7 @@ public final class AutoLoginSettings {
             .description("收到登录提示后等待多少 tick 再发送指令（20 tick = 1 秒）。")
             .defaultValue(20)
             .min(0)
-            .sliderRange(0, 100)
+            .noSlider()
             .visible(autoLogin::get)
             .build());
 
@@ -173,7 +173,7 @@ public final class AutoLoginSettings {
             .description("收到注册提示后等待多少 tick 再发送指令（20 tick = 1 秒）。")
             .defaultValue(20)
             .min(0)
-            .sliderRange(0, 100)
+            .noSlider()
             .visible(autoRegister::get)
             .build());
 
@@ -189,7 +189,7 @@ public final class AutoLoginSettings {
             .description("断线后等待多少 tick 再重连（20 tick = 1 秒）。")
             .defaultValue(100)
             .min(20)
-            .sliderRange(20, 1200)
+            .noSlider()
             .visible(autoReconnect::get)
             .build());
 
@@ -205,7 +205,7 @@ public final class AutoLoginSettings {
             .description("连续失败达到该次数后停止重连。")
             .defaultValue(5)
             .min(1)
-            .sliderRange(1, 20)
+            .noSlider()
             .visible(() -> autoReconnect.get() && !alwaysReconnect.get())
             .build());
 
@@ -235,7 +235,7 @@ public final class AutoLoginSettings {
             .description("登录完成后等待多少 tick 再执行指令（20 tick = 1 秒）。")
             .defaultValue(60)
             .min(0)
-            .sliderRange(0, 400)
+            .noSlider()
             .visible(() -> autoCommand.get() && (autoLogin.get() || autoRegister.get() || noLoginDetection.get()))
             .build());
 
@@ -279,7 +279,7 @@ public final class AutoLoginSettings {
             .description("使用菜单物品或点击按钮后等待的时间。")
             .defaultValue(20)
             .min(1)
-            .sliderRange(1, 100)
+            .noSlider()
             .visible(() -> usesStandardMenuRoute())
             .build());
 
@@ -288,7 +288,7 @@ public final class AutoLoginSettings {
             .description("等待菜单或目标关键词的最长时间，超时后停止，避免乱点。")
             .defaultValue(200)
             .min(20)
-            .sliderRange(20, 1200)
+            .noSlider()
             .visible(() -> usesStandardMenuRoute())
             .build());
 
@@ -311,7 +311,7 @@ public final class AutoLoginSettings {
             .description("确认目标区域后等待多少 tick 再执行指令。")
             .defaultValue(60)
             .min(0)
-            .sliderRange(0, 400)
+            .noSlider()
             .visible(autoEnterSubserver::get)
             .build());
 
@@ -334,7 +334,7 @@ public final class AutoLoginSettings {
             .description("到达稳定等待结束后额外等待多少 tick 再执行指令。")
             .defaultValue(60)
             .min(0)
-            .sliderRange(0, 400)
+            .noSlider()
             .visible(() -> autoEnterSubserver.get() && subserverCommand.get())
             .build());
 
@@ -429,7 +429,7 @@ public final class AutoLoginSettings {
             .defaultValue(10)
             .min(0)
             .max(120)
-            .sliderRange(0, 60)
+            .noSlider()
             .visible(() -> usesLeyuanMode() && leyuanAfkRecoveryEnabled.get())
             .build());
 
@@ -452,7 +452,7 @@ public final class AutoLoginSettings {
             .description("菜单打开、按钮点击和页面切换之间的等待时间。")
             .defaultValue(20)
             .min(1)
-            .sliderRange(1, 120)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -461,7 +461,7 @@ public final class AutoLoginSettings {
             .description("每个路线阶段的最长等待时间，超时后停止以避免乱点。")
             .defaultValue(600)
             .min(100)
-            .sliderRange(100, 2400)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -477,7 +477,7 @@ public final class AutoLoginSettings {
             .description("已识别到钟但右键未打开菜单时，等待多久再触发 Shift＋F。20 tick = 1 秒。")
             .defaultValue(80)
             .min(20)
-            .sliderRange(20, 400)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -487,7 +487,7 @@ public final class AutoLoginSettings {
             .defaultValue(20)
             .min(1)
             .max(30)
-            .sliderRange(1, 30)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -497,7 +497,7 @@ public final class AutoLoginSettings {
             .defaultValue(30)
             .min(5)
             .max(300)
-            .sliderRange(5, 300)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -507,7 +507,7 @@ public final class AutoLoginSettings {
             .defaultValue(30)
             .min(1)
             .max(60)
-            .sliderRange(1, 60)
+            .noSlider()
             .visible(this::usesLeyuanMode)
             .build());
 
@@ -517,7 +517,7 @@ public final class AutoLoginSettings {
             .description("进入服务器后等待多少 tick 再开始认证流程（20 tick = 1 秒）。")
             .defaultValue(200)
             .min(0)
-            .sliderRange(0, 600)
+            .noSlider()
             .visible(() -> autoLogin.get() || autoRegister.get() || noLoginDetection.get())
             .build());
 
@@ -526,7 +526,7 @@ public final class AutoLoginSettings {
             .description("开始监听后等待多少 tick 仍未收到登录/注册提示，则判定该服务器无需登录，直接进入就绪状态（20 tick = 1 秒）。")
             .defaultValue(200)
             .min(20)
-            .sliderRange(20, 1200)
+            .noSlider()
             .visible(() -> autoLogin.get() || autoRegister.get() || noLoginDetection.get())
             .build());
 

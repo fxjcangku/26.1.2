@@ -50,7 +50,7 @@ public final class UserStatsModule extends YiyiaddonModule {
         .defaultValue(3)
         .min(0)
         .max(300)
-        .sliderMax(120)
+        .noSlider()
         .build()
     );
     
@@ -60,7 +60,7 @@ public final class UserStatsModule extends YiyiaddonModule {
         .defaultValue(15)
         .min(5)
         .max(50)
-        .sliderMax(30)
+        .noSlider()
         .build()
     );
     
