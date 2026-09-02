@@ -23,7 +23,9 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
@@ -129,17 +131,6 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         .description("选择村民职业")
         .defaultValue(ProfessionChoice.图书管理员)
         .onChanged(value -> updateItemSettings())
-        .build()
-    );
-
-    private final Setting<Integer> searchRange = sgGeneral.add(new IntSetting.Builder()
-        .name("村民搜索范围")
-        .description("原地模式的搜索/自检半径（格）：范围内必须存在目标职业村民，否则自检不通过")
-        .defaultValue(16)
-        .min(4)
-        .max(32)
-        .noSlider()
-        .visible(() -> mode.get() == Mode.LOCAL)
         .build()
     );
 
@@ -308,7 +299,6 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         });
 
         fsm.configure(prof, targets, maxPrice, 32, quantity);
-        fsm.setSearchRange(searchRange.get());
         fsm.setDrainMode(drainMode.get());
         fsm.setSupplyStacks(emeraldSupplyStacks.get());
 
@@ -373,6 +363,9 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             report.append("\n§7目标物品　§8▸ ").append(highlightText(String.join(",", names))).append("§r");
             report.append("\n§7价格上限　§8▸ ").append(highlightText(String.valueOf(professionPriceSettings.get(profession.get().name()).get()))).append("§r");
             report.append("\n§7购买总量　§8▸ ").append(highlightText(drainMode.get() ? "不限(榨干)" : String.valueOf(quantity))).append("§r");
+            if (mode.get() == Mode.LOCAL) {
+                report.append("\n§e⚠ 原地模式　§8▸ 请靠近").append(highlightText(profession.get().name())).append("§r§f村民（约 3 格内）");
+            }
         }
 
         info(report.toString());
@@ -460,8 +453,8 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         }
 
         // 5. 目标职业村民检测：搜索半径内必须存在目标职业村民
-        //    原地模式用「村民搜索范围」设置；寻路/多任务模式与状态机一致，固定 96 格。
-        //    多任务模式对队列里出现的每个职业都检测一遍
+        //    原地模式用实际交易交互距离 3.2 格（与状态机 isValidTarget 一致）；
+        //    寻路/多任务模式与状态机一致，固定 96 格。多任务模式对队列里每个职业都检测一遍
         List<VillagerProfession> checkProfessions = new ArrayList<>();
         if (mode.get() == Mode.PIPELINE && pipelineTasks != null) {
             for (PipelineTask task : pipelineTasks) {
@@ -474,15 +467,16 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
         }
 
         if (mc.player != null && mc.level != null) {
-            double radius = mode.get() == Mode.LOCAL ? searchRange.get() : 96.0;
+            double radius = mode.get() == Mode.LOCAL ? 3.2 : 96.0;
             for (VillagerProfession p : checkProfessions) {
                 boolean found = !mc.level.getEntitiesOfClass(Villager.class,
                     mc.player.getBoundingBox().inflate(radius),
                     v -> isProfessionMatch(v, p)
                 ).isEmpty();
                 if (!found) {
-                    missing.add(String.format("§e%s村民§f·%.0f 格内未找到，请检查村民位置或调大搜索范围后重试",
-                        VillagerProfessionRegistry.getDisplayName(p), radius));
+                    missing.add(String.format("§e%s村民§f·%.0f 格内未找到%s",
+                        VillagerProfessionRegistry.getDisplayName(p), radius,
+                        mode.get() == Mode.LOCAL ? "，请靠近村民（原地模式需站在村民旁约 3 格）" : ""));
                 }
             }
         }
@@ -505,7 +499,10 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
     private static boolean isProfessionMatch(Villager villager, VillagerProfession prof) {
         if (villager == null || !villager.isAlive() || prof == null) return false;
         try {
-            return villager.getVillagerData().profession().value().equals(prof);
+            // 26.1.2：VillagerProfession 是 Record，常量是 ResourceKey，
+            // 必须用注册表 Identifier 比较，value().equals() 会把傻子/失业村民误匹配进来
+            Identifier targetId = BuiltInRegistries.VILLAGER_PROFESSION.getKey(prof);
+            return targetId != null && villager.getVillagerData().profession().is(targetId);
         } catch (Exception e) {
             return false;
         }
@@ -695,12 +692,11 @@ public class AutoVillagerTradeModule extends YiyiaddonModule {
             ),
             new HelpScreen.HelpSection("状态反馈",
                 "  §a✓ §f每笔交易成功播报 + 村民交易提示音",
-                "  §e✗ §f确认失败自动重发 §7(最多3次)§f，连败自动跳过",
+                "  §e✗ §f确认失败自动重发 1 次，连败自动跳过",
                 "  §7启动播报：模式/职业/物品/价格/总量，一目了然"
             ),
             new HelpScreen.HelpSection("注意事项",
                 "  §c⚠ §f原地模式交易距离仅约 3 格，请站在村民旁边",
-                "  §c⚠ §f搜索范围只在原地模式生效 §7(寻路模式固定96格)",
                 "  §c⚠ §f多任务模式至少给一个职业选择物品，否则无法启动"
             )
         );

@@ -2,7 +2,7 @@ package com.example.addon.core;
 
 import com.example.addon.commands.CommandExample;
 import com.example.addon.commands.CunminCommand;
-import com.example.addon.commands.NongChangCommand;
+import com.example.addon.autofarm.command.NongChangCommand;
 import com.example.addon.commands.WKCommand;
 import com.example.addon.commands.YiyiaddonUpdateCommand;
 import com.example.addon.commands.ReplyAdminCommand;
@@ -17,7 +17,7 @@ import com.example.addon.hud.HudExample;
 import com.example.addon.librarian.AutoLibrarianModule;
 import com.example.addon.modules.AdminDetectorModule;
 import com.example.addon.modules.AutoBoneMeal;
-import com.example.addon.modules.AutoFarmMatrix;
+import com.example.addon.autofarm.AutoFarmMatrix;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.AutoVillagerTradeModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;

@@ -39,51 +39,6 @@ public final class VillagerNavigationService {
     }
 
     /**
-     * 寻路到工作站附近站位
-     * 
-     * 核心逻辑：不直接走向村民，而是走向工作站正前方 1 格可站立位置
-     * 
-     * @param workstation 工作站坐标
-     * @return true 表示成功启动寻路
-     */
-    public boolean pathToWorkstation(BlockPos workstation) {
-        if (disabled || mc.player == null) {
-            return false;
-        }
-
-        try {
-            IBaritone baritone = getBaritone();
-            if (baritone == null) {
-                disabled = true;
-                return false;
-            }
-
-            // 计算工作站正前方站位（优先北面，依次尝试其他方向）
-            BlockPos standingPos = findStandingPosition(workstation);
-            if (standingPos == null) {
-                return false;
-            }
-
-            // 创建目标并开始寻路
-            Goal goal = new GoalBlock(standingPos);
-            baritone.getCustomGoalProcess().setGoalAndPath(goal);
-
-            // 重置卡死检测
-            if (mc.player != null) {
-                lastPos = mc.player.blockPosition();
-            }
-            stuckTicks = 0;
-            lastCheckTick = 0;
-
-            return true;
-
-        } catch (Throwable e) {
-            disabled = true;
-            return false;
-        }
-    }
-
-    /**
      * 寻路到容器（绿宝石箱/成品交易箱）
      * 
      * @param container 容器坐标

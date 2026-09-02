@@ -16,6 +16,29 @@ const fs = require('fs');
 const path = require('path');
 
 const 存档目录 = path.join(__dirname, '..', '映射存档');
+const 密钥文件 = path.join(__dirname, '..', '映射密钥.txt');
+
+/** 读映射密钥（32 字节 hex），不存在则提示先生成 */
+function 读密钥() {
+    if (!fs.existsSync(密钥文件)) {
+        console.log('\n找不到映射密钥文件 Obfuscation/映射密钥.txt。');
+        console.log('跑一次 gradlew buildOfficial 会自动生成（密钥不入库，需本地备份，丢失则映射无法还原）。\n');
+        process.exit(1);
+    }
+    const hex = fs.readFileSync(密钥文件, 'utf8').trim();
+    return Buffer.from(hex, 'hex');
+}
+
+/** XOR + Base64 解密映射密文，还原成 ProGuard 明文映射 */
+function 解密映射(密文) {
+    const 数据 = Buffer.from(密文, 'base64');
+    const 密钥 = 读密钥();
+    const 结果 = Buffer.alloc(数据.length);
+    for (let i = 0; i < 数据.length; i++) {
+        结果[i] = 数据[i] ^ 密钥[i % 密钥.length];
+    }
+    return 结果.toString('utf8');
+}
 
 /** 列出所有映射存档，按版本号文件名排序 */
 function 列出存档() {
@@ -35,7 +58,7 @@ function 列出存档() {
  * 建反向索引：混淆名 → 原名
  */
 function 解析映射(文件路径) {
-    const 内容 = fs.readFileSync(文件路径, 'utf8');
+    const 内容 = 解密映射(fs.readFileSync(文件路径, 'utf8'));
     const 类映射 = new Map();   // v            → com.example.addon.modules.AutoFarmMatrix
     const 成员映射 = new Map(); // v#a          → void onActivate()
     let 当前混淆类 = null;

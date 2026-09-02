@@ -408,7 +408,19 @@ public class CunminCommand extends Command {
 
         public void setBinding(String key, BlockPos pos, ResourceKey<Level> dimension) {
             positions.put(key, pos);
-            dimensions.put(key, dimension.toString());
+            dimensions.put(key, toDimensionId(dimension));
+        }
+
+        /**
+         * 把维度 ResourceKey 转成稳定裸 ID（minecraft:overworld/the_nether/the_end），
+         * 与 loadData 的规范化格式保持一致，避免首次绑定后 getDimension 解析成错误维度。
+         */
+        private static String toDimensionId(ResourceKey<Level> dimension) {
+            if (dimension == null) return "minecraft:overworld";
+            String id = dimension.toString();
+            if (id.contains("the_nether")) return "minecraft:the_nether";
+            if (id.contains("the_end")) return "minecraft:the_end";
+            return "minecraft:overworld";
         }
 
         public void removeBinding(String key) {

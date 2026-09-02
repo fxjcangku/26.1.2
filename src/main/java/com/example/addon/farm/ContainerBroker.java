@@ -2,12 +2,15 @@ package com.example.addon.farm;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.function.Predicate;
 
@@ -79,19 +82,28 @@ public final class ContainerBroker {
     }
 
     /**
-     * 容器（箱子侧）的槽位数量。
-     * menu.slots 前半部分是箱子槽位，后 36 格是玩家背包，靠 Slot.container 区分。
+     * 校验当前打开的容器是否就是绑定的目标容器。
+     *
+     * 打开容器后不能仅凭 containerId != 0 就认为开对了箱子；这里通过比对
+     * 箱子侧槽位的 container 引用与目标坐标的 BlockEntity 是否同一实例来兜底。
      */
-    public static int chestSlotCount(AbstractContainerMenu menu) {
-        LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null) return 0;
+    public static boolean isBoundContainer(BlockPos expected) {
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        if (player == null || mc.level == null) return false;
+
+        AbstractContainerMenu menu = openMenu();
+        if (menu == null) return false;
+
+        BlockEntity entity = mc.level.getBlockEntity(expected);
+        if (!(entity instanceof Container expectedContainer)) return false;
 
         Inventory inventory = player.getInventory();
-        int count = 0;
         for (Slot slot : menu.slots) {
-            if (slot.container != inventory) count++;
+            if (slot.container == inventory) continue;
+            if (slot.container == expectedContainer) return true;
         }
-        return count;
+        return false;
     }
 
     /** 箱子侧是否还有空位可以接收物品 */

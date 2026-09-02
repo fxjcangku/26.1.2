@@ -133,6 +133,9 @@ public final class SupplyService {
                 count += stack.getCount();
             }
         }
+        // 副手也计入：绿宝石可能拿在副手，漏计会导致补给量误判
+        ItemStack offhand = player.getOffhandItem();
+        if (!offhand.isEmpty() && offhand.getItem() == Items.EMERALD) count += offhand.getCount();
         return count;
     }
 

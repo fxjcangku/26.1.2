@@ -95,9 +95,9 @@ public final class ContainerRecord {
         return dataVersion;
     }
 
-    /** 记录是否已过期（超过给定毫秒时长，用于「已处理记录」的临时冷却） */
+    /** 记录是否已过期（超过给定毫秒时长，用于「已处理记录」的临时冷却）；0 或负数表示立即过期 */
     public boolean isExpired(long expireMs) {
-        if (expireMs <= 0) return false;
+        if (expireMs <= 0) return true;
         return System.currentTimeMillis() - processedAt > expireMs;
     }
 

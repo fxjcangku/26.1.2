@@ -5,8 +5,19 @@ import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
+import org.objectweb.asm.Type
+import org.objectweb.asm.tree.AbstractInsnNode
+import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.IntInsnNode
+import org.objectweb.asm.tree.LdcInsnNode
+import org.objectweb.asm.tree.LookupSwitchInsnNode
+import org.objectweb.asm.tree.MethodInsnNode
+import org.objectweb.asm.tree.MethodNode
+import org.objectweb.asm.tree.TableSwitchInsnNode
+import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.security.SecureRandom
 import java.util.Base64
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
@@ -176,7 +187,10 @@ tasks {
 
         // 保留字符串解密工具类与方法名：构建期加密任务注入的调用引用这个原始类名/方法名，
         // 若被 repackageclasses 移动或重命名，运行时解密调用会找不到方法导致功能异常。
-        keep("public class com.example.addon.utils.StringCrypto { public static java.lang.String d(java.lang.String); }")
+        keep("public class com.example.addon.utils.StringCrypto { public static java.lang.String d(java.lang.String); public static int di(int); public static long dl(long); public static float df(float); public static double dd(double); }")
+        // 不额外 keep 密钥字段：dontshrink 已保证字段不被删除，P/Q 既被 <clinit> 写入
+        // 又被 d() 读取，optimize 也不会内联可变数组字段。字段名交给 ProGuard 混淆，
+        // 让「密钥源 + 掩码」的两个 int[] 字段也变成 l/I 这类无语义名，进一步隐藏重组逻辑。
         
         // Mixin 类必须完整保留：类名 + 所有成员（方法签名、参数都不能被 optimize 改）。
         // 铁律：不能用 keepnames。keepnames 只保名字不保结构，optimize 会删除
@@ -217,10 +231,24 @@ tasks {
         // 保留访问边界，避免改变 Mixin 与第三方类之间的可见性语义。
         // allowaccessmodification()
         
-        // 映射文件直接写进 Obfuscation/映射存档/，不要留在 build/ 里。
+        // 映射文件加密后写进 Obfuscation/映射存档/：明文只经 build/ 临时文件，加密后删除。
+        // 密文即使随仓库泄露也无法直接还原类名，需 Obfuscation/映射密钥.txt 才能解密。
         // build/ 在 .gitignore 内，且 gradlew clean 会整个删掉——映射一旦丢失，
-        // 该版本的崩溃日志就永远无法还原成真实类名了。
-        printmapping(file("Obfuscation/映射存档/混淆映射-v${libs.versions.mod.version.get()}.txt"))
+        // 该版本的崩溃日志就永远无法还原成真实类名了，所以最终密文必须落在 Obfuscation/。
+        val mappingPlain = layout.buildDirectory.file("obfuscation-mapping-v${libs.versions.mod.version.get()}.txt")
+        printmapping(mappingPlain.get().asFile)
+
+        // 任务结束：把明文映射加密成密文存档，删除明文临时文件
+        doLast {
+            val plainFile = mappingPlain.get().asFile
+            if (plainFile.exists()) {
+                val key = loadOrCreateMappingKey(file("Obfuscation/映射密钥.txt"))
+                val 目标 = file("Obfuscation/映射存档/混淆映射-v${libs.versions.mod.version.get()}.txt")
+                目标.parentFile.mkdirs()
+                目标.writeText(xorEncryptBase64(plainFile.readText(StandardCharsets.UTF_8), key), StandardCharsets.UTF_8)
+                plainFile.delete()
+            }
+        }
         
         // 自定义字典：让混淆后的名字更难辨认（O0/l1/I1 这类易混字符）
         // 必须用 file() 传绝对路径，直接传相对路径字符串 ProGuard 找不到文件，
@@ -260,8 +288,9 @@ tasks {
 // 字符串必须是编译期常量）。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 abstract class EncryptStringsTask : DefaultTask() {
-    // 与 StringCrypto 里的 XOR 密钥保持一致
-    private val key = intArrayOf(0x2A, 0x5C, 0x7E, 0x19, 0x4B, 0x6D, 0x33, 0x1F)
+    // 密钥长度（字节）。真实密钥 K[i] = P[i] ^ Q[i]，P 为随机源、Q 为随机掩码。
+    // 构建期每次生成全新随机 P、Q，不存在固定密钥可反推。
+    private val keyLength = 32
 
     @get:InputFile
     abstract val inputJar: RegularFileProperty
@@ -275,6 +304,12 @@ abstract class EncryptStringsTask : DefaultTask() {
         val outFile = outputJar.get().asFile
         outFile.parentFile?.mkdirs()
 
+        // 每个发布版本一份全新随机密钥：P（随机源）+ Q（随机掩码），
+        // 运行时由 StringCrypto.d() 用 K[i] = P[i] ^ Q[i] 重组还原。
+        val random = SecureRandom()
+        val P = IntArray(keyLength) { random.nextInt(256) }
+        val Q = IntArray(keyLength) { random.nextInt(256) }
+
         JarFile(inFile).use { jin ->
             JarOutputStream(FileOutputStream(outFile)).use { jout ->
                 val entries = jin.entries()
@@ -283,7 +318,7 @@ abstract class EncryptStringsTask : DefaultTask() {
                     val bytes = jin.getInputStream(entry).readBytes()
                     // 只处理主 jar 里的 class（嵌套的 baritone 等第三方 jar 是独立文件，不加密）
                     val outBytes = if (entry.name.endsWith(".class")) {
-                        encryptClass(bytes)
+                        encryptClass(bytes, P, Q)
                     } else {
                         bytes
                     }
@@ -295,28 +330,34 @@ abstract class EncryptStringsTask : DefaultTask() {
         }
     }
 
-    // XOR + Base64 加密，与 StringCrypto.d 解密逻辑对应
-    private fun encrypt(s: String): String {
+    // XOR + Base64 加密，与 StringCrypto.d 解密逻辑对应（K[i] = P[i] ^ Q[i]）
+    private fun encrypt(s: String, P: IntArray, Q: IntArray): String {
         val b = s.toByteArray(StandardCharsets.UTF_8)
         for (i in b.indices) {
-            b[i] = (b[i].toInt() xor key[i % key.size]).toByte()
+            val k = i and (keyLength - 1)
+            b[i] = (b[i].toInt() xor (P[k] xor Q[k])).toByte()
         }
         return Base64.getEncoder().encodeToString(b)
     }
 
-    private fun encryptClass(bytes: ByteArray): ByteArray {
+    private fun encryptClass(bytes: ByteArray, P: IntArray, Q: IntArray): ByteArray {
         val cr = ClassReader(bytes)
+        // 枚举类走 Tree API：需要回溯构造调用点，精确区分 name/ordinal（保留）
+        // 与用户中文字段（加密）。流式 MethodVisitor 无法回溯前驱指令，故单独处理。
+        if ((cr.access and Opcodes.ACC_ENUM) != 0) {
+            return encryptEnumClass(bytes, P, Q)
+        }
         // COMPUTE_MAXS：重算栈深度以容纳新增的解密调用，但保留原 StackMapTable，
         // 不解析类型层次（避免因 Minecraft 类不在 classpath 而失败）。
         val cw = ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
         val cv = object : ClassVisitor(Opcodes.ASM9, cw) {
             private var isMixin = false
-            private var isEnum = false
+            private var isCrypto = false
 
-            // 检测枚举类（ACC_ENUM 标志）：枚举 <clinit> 用字符串构造枚举常量，
-            // 加密会破坏 name 字段/getEnumConstants()，导致 EnumSetting 构造时 NPE 崩溃。
             override fun visit(version: Int, access: Int, name: String?, signature: String?, superName: String?, interfaces: Array<out String>?) {
-                isEnum = (access and Opcodes.ACC_ENUM) != 0
+                // StringCrypto 自身：跳过字符串加密（避免 d() 内部自引用递归），
+                // 改由 <clinit> 注入随机密钥 P、Q。
+                isCrypto = name == "com/example/addon/utils/StringCrypto"
                 return super.visit(version, access, name, signature, superName, interfaces)
             }
 
@@ -328,10 +369,26 @@ abstract class EncryptStringsTask : DefaultTask() {
             }
 
             override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
+                // StringCrypto 的 <clinit>：重写为注入随机密钥 P、Q 的字节码，
+                // 覆盖源码里的默认占位值，实现「构建期随机密钥 + 运行时重组」。
+                if (isCrypto && name == "<clinit>") {
+                    val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
+                    mv.visitCode()
+                    emitIntArray(mv, P)
+                    mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "P", "[I")
+                    emitIntArray(mv, Q)
+                    mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "Q", "[I")
+                    mv.visitInsn(Opcodes.RETURN)
+                    mv.visitMaxs(0, 0)
+                    mv.visitEnd()
+                    // 丢弃原 <clinit> 方法体事件（旧占位初始化已无意义）
+                    return object : MethodVisitor(Opcodes.ASM9) {}
+                }
+
                 val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
-                // Mixin 类或枚举类整体跳过：Mixin 字符串是注入绑定必需；枚举字符串
-                // 影响 name/getEnumConstants/switch，加密会导致运行时崩溃。
-                if (isMixin || isEnum) return mv
+                // Mixin 类或 StringCrypto 自身跳过：Mixin 字符串是注入绑定必需；
+                // 枚举已在 encryptClass 入口分流到 Tree API，不会走到这里。
+                if (isMixin || isCrypto) return mv
                 return object : MethodVisitor(Opcodes.ASM9, mv) {
                     // switch 的 case 字符串必须是编译期常量，一旦加密会导致 hash/equals 匹配不上
                     private var hasSwitch = false
@@ -349,7 +406,7 @@ abstract class EncryptStringsTask : DefaultTask() {
                     override fun visitLdcInsn(value: Any) {
                         if (value is String && !hasSwitch) {
                             // 明文 LDC 替换为「密文 LDC + StringCrypto.d()」调用
-                            super.visitLdcInsn(encrypt(value))
+                            super.visitLdcInsn(encrypt(value, P, Q))
                             super.visitMethodInsn(
                                 Opcodes.INVOKESTATIC,
                                 "com/example/addon/utils/StringCrypto",
@@ -363,8 +420,232 @@ abstract class EncryptStringsTask : DefaultTask() {
                     }
                 }
             }
+
+            // 生成 `new int[len]` + 逐元素 IASTORE 的数组初始化字节码序列（值保留在栈上）
+            private fun emitIntArray(mv: MethodVisitor, values: IntArray) {
+                pushInt(mv, values.size)
+                mv.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_INT)
+                for (i in values.indices) {
+                    mv.visitInsn(Opcodes.DUP)
+                    pushInt(mv, i)
+                    pushInt(mv, values[i])
+                    mv.visitInsn(Opcodes.IASTORE)
+                }
+            }
+
+            // 按取值范围选最优的整型常量压栈指令（ICONST / BIPUSH / SIPUSH / LDC）
+            private fun pushInt(mv: MethodVisitor, v: Int) {
+                when {
+                    v in -1..5 -> mv.visitInsn(Opcodes.ICONST_0 + v)
+                    v in Byte.MIN_VALUE..Byte.MAX_VALUE -> mv.visitIntInsn(Opcodes.BIPUSH, v)
+                    v in Short.MIN_VALUE..Short.MAX_VALUE -> mv.visitIntInsn(Opcodes.SIPUSH, v)
+                    else -> mv.visitLdcInsn(v)
+                }
+            }
         }
         cr.accept(cv, 0)
+        // 普通类（非 Mixin、非 Crypto）额外做数字常量加密，隐藏魔法数字
+        return encryptNumbers(cw.toByteArray(), P, Q)
+    }
+
+    // ── 枚举类字符串加密（Tree API）────────────────────────────────────────
+    // 枚举 name 是 Enum.name()/valueOf()/getEnumConstants() 的绑定标识，必须保留明文；
+    // 但构造函数的「用户中文字段」、toString 等普通方法的字符串可以加密。
+    // 用 Tree API 才能从构造调用点回溯参数，区分 name/ordinal 与用户字段。
+
+    private fun encryptEnumClass(bytes: ByteArray, P: IntArray, Q: IntArray): ByteArray {
+        val cn = ClassNode()
+        ClassReader(bytes).accept(cn, 0)
+        for (method in cn.methods) {
+            if (method.name == "<clinit>") {
+                encryptEnumClinit(method, P, Q)
+            } else {
+                encryptMethodStrings(method, P, Q)
+            }
+        }
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cn.accept(cw)
         return cw.toByteArray()
     }
+
+    // 枚举 <clinit>：定位枚举构造调用，加密 name、ordinal 之外的 String 参数。
+    // 枚举常量初始化字节码固定为 new / dup / [name] / [ordinal] / [用户字段...] / invokespecial，
+    // 故从调用点向前收集「参数个数」条指令即为各参数（name 与 ordinal 各占一条压栈指令）。
+    private fun encryptEnumClinit(method: MethodNode, P: IntArray, Q: IntArray) {
+        val insns = method.instructions
+        for (node in insns.toArray()) {
+            if (node !is MethodInsnNode) continue
+            if (node.opcode != Opcodes.INVOKESPECIAL || node.name != "<init>") continue
+            val args = Type.getArgumentTypes(node.desc)
+            // 参数 0=name、1=ordinal，都是编译器隐式注入；索引 2 起才是用户字段
+            if (args.size < 3) continue
+            val argNodes = collectArgNodes(node, args.size)
+            for (i in 2 until args.size) {
+                val arg = argNodes.getOrNull(i) ?: continue
+                if (arg is LdcInsnNode && arg.cst is String) {
+                    arg.cst = encrypt(arg.cst as String, P, Q)
+                    insns.insert(arg, MethodInsnNode(
+                        Opcodes.INVOKESTATIC,
+                        "com/example/addon/utils/StringCrypto",
+                        "d",
+                        "(Ljava/lang/String;)Ljava/lang/String;",
+                        false
+                    ))
+                }
+            }
+        }
+    }
+
+    // 普通方法：加密 LDC 字符串；含 switch 的方法整体跳过（case 字符串是编译期常量）
+    private fun encryptMethodStrings(method: MethodNode, P: IntArray, Q: IntArray) {
+        for (node in method.instructions.toArray()) {
+            if (node is LookupSwitchInsnNode || node is TableSwitchInsnNode) return
+        }
+        for (node in method.instructions.toArray()) {
+            if (node is LdcInsnNode && node.cst is String) {
+                node.cst = encrypt(node.cst as String, P, Q)
+                method.instructions.insert(node, MethodInsnNode(
+                    Opcodes.INVOKESTATIC,
+                    "com/example/addon/utils/StringCrypto",
+                    "d",
+                    "(Ljava/lang/String;)Ljava/lang/String;",
+                    false
+                ))
+            }
+        }
+    }
+
+    // 从调用点向前收集恰好 count 条指令，作为该调用的参数（按序返回 [arg0, arg1, ...]）
+    private fun collectArgNodes(methodInsn: MethodInsnNode, count: Int): List<AbstractInsnNode> {
+        val result = ArrayList<AbstractInsnNode>()
+        var node: AbstractInsnNode? = methodInsn.previous
+        while (node != null && result.size < count) {
+            result.add(node)
+            node = node.previous
+        }
+        return result.reversed()
+    }
+
+    // ── 数字常量加密（Tree API）────────────────────────────────────────────
+    // 把 BIPUSH/SIPUSH/LDC int 常量 XOR 加密为密文 + StringCrypto.di() 还原。
+    // XOR 加密 + 解密是透明的：每个加密常量后紧跟 di() 调用，任何使用点拿到的都是原值，
+    // 因此无需排除数组长度等场景。ICONST(-1..5) 是 InsnNode 不在此列，天然保留。
+
+    private fun encryptNumbers(bytes: ByteArray, P: IntArray, Q: IntArray): ByteArray {
+        val cn = ClassNode()
+        ClassReader(bytes).accept(cn, 0)
+        // Mixin 与 StringCrypto 自身跳过：Mixin 常量可能是注入绑定所需，Crypto 的 di 自身不能加密
+        if (cn.name == "com/example/addon/utils/StringCrypto") return bytes
+        if (cn.visibleAnnotations?.any { it.desc == "Lorg/spongepowered/asm/mixin/Mixin;" } == true) return bytes
+        for (method in cn.methods) {
+            encryptMethodInts(method, P, Q)
+        }
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cn.accept(cw)
+        return cw.toByteArray()
+    }
+
+    // 遍历方法指令，加密数值常量（int/long/float/double）
+    private fun encryptMethodInts(method: MethodNode, P: IntArray, Q: IntArray) {
+        val insns = method.instructions
+        for (node in insns.toArray()) {
+            when (node) {
+                is IntInsnNode -> {
+                    if (node.opcode == Opcodes.BIPUSH || node.opcode == Opcodes.SIPUSH) {
+                        val ldc = LdcInsnNode(encryptInt(node.operand, P, Q))
+                        val inv = MethodInsnNode(
+                            Opcodes.INVOKESTATIC,
+                            "com/example/addon/utils/StringCrypto",
+                            "di",
+                            "(I)I",
+                            false
+                        )
+                        insns.set(node, ldc)
+                        insns.insert(ldc, inv)
+                    }
+                }
+                is LdcInsnNode -> {
+                    when (node.cst) {
+                        is Int -> {
+                            node.cst = encryptInt(node.cst as Int, P, Q)
+                            insns.insert(node, MethodInsnNode(
+                                Opcodes.INVOKESTATIC, "com/example/addon/utils/StringCrypto", "di", "(I)I", false
+                            ))
+                        }
+                        is Long -> {
+                            node.cst = encryptLong(node.cst as Long, P, Q)
+                            insns.insert(node, MethodInsnNode(
+                                Opcodes.INVOKESTATIC, "com/example/addon/utils/StringCrypto", "dl", "(J)J", false
+                            ))
+                        }
+                        is Float -> {
+                            node.cst = encryptFloat(node.cst as Float, P, Q)
+                            insns.insert(node, MethodInsnNode(
+                                Opcodes.INVOKESTATIC, "com/example/addon/utils/StringCrypto", "df", "(F)F", false
+                            ))
+                        }
+                        is Double -> {
+                            node.cst = encryptDouble(node.cst as Double, P, Q)
+                            insns.insert(node, MethodInsnNode(
+                                Opcodes.INVOKESTATIC, "com/example/addon/utils/StringCrypto", "dd", "(D)D", false
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 32 位密钥：由 P/Q 前四字节派生，与 StringCrypto.di/df 一致
+    private fun keyInt(P: IntArray, Q: IntArray): Int =
+        ((P[0] xor Q[0]) shl 24) or ((P[1] xor Q[1]) shl 16) or ((P[2] xor Q[2]) shl 8) or (P[3] xor Q[3])
+
+    // 64 位密钥：keyInt 复用为高/低 32 位，与 StringCrypto.dl/dd 一致
+    private fun keyLong(P: IntArray, Q: IntArray): Long {
+        val k = keyInt(P, Q)
+        return (k.toLong() shl 32) or (k.toLong() and 0xFFFFFFFFL)
+    }
+
+    private fun encryptInt(v: Int, P: IntArray, Q: IntArray): Int = v xor keyInt(P, Q)
+
+    private fun encryptLong(v: Long, P: IntArray, Q: IntArray): Long = v xor keyLong(P, Q)
+
+    // float 加密：清除 exponent 位（bit 23..30），保证 XOR 结果不是 NaN，避免 intBitsToFloat 规范化
+    private fun encryptFloat(v: Float, P: IntArray, Q: IntArray): Float =
+        Float.fromBits(v.toRawBits() xor (keyInt(P, Q) and 0x7F800000.inv()))
+
+    // double 加密：清除 exponent 位（bit 52..62），保证 XOR 结果不是 NaN，避免 longBitsToDouble 规范化
+    private fun encryptDouble(v: Double, P: IntArray, Q: IntArray): Double =
+        Double.fromBits(v.toRawBits() xor (keyLong(P, Q) and 0x7FF0000000000000L.inv()))
 }
+
+// ── 映射文件加密辅助（XOR + Base64）────────────────────────────────────────
+// 映射文件是「还原类名的钥匙」，随 source 分支入库有泄露风险。这里把它加密成密文，
+// 密钥随机生成存 Obfuscation/映射密钥.txt（加入 .gitignore，不进仓库）。
+// 还原崩溃日志.js 用同一密钥解密，密钥文件丢失则该版本映射无法还原。
+
+fun loadOrCreateMappingKey(keyFile: File): ByteArray {
+    if (keyFile.exists()) {
+        return hexToBytes(keyFile.readText().trim())
+    }
+    val key = ByteArray(32)
+    SecureRandom().nextBytes(key)
+    keyFile.parentFile?.mkdirs()
+    keyFile.writeText(bytesToHex(key))
+    return key
+}
+
+fun xorEncryptBase64(plain: String, key: ByteArray): String {
+    val data = plain.toByteArray(StandardCharsets.UTF_8)
+    val out = ByteArray(data.size)
+    for (i in data.indices) {
+        out[i] = (data[i].toInt() xor (key[i % key.size].toInt() and 0xFF)).toByte()
+    }
+    return Base64.getEncoder().encodeToString(out)
+}
+
+fun bytesToHex(bytes: ByteArray): String =
+    bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+
+fun hexToBytes(hex: String): ByteArray =
+    ByteArray(hex.length / 2) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }

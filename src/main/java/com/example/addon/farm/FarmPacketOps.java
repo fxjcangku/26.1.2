@@ -8,13 +8,10 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -144,35 +141,8 @@ public final class FarmPacketOps {
             player.connection.send(new ServerboundUseItemOnPacket(hand, hitResult, sequence));
         }
 
-        player.swing(hand);
+        // 开箱/开附魔台等交互不依赖挥手动画，取消 swing 实现全模块静默（自动附魔/箱子/农场/补给卸货共用）
         return true;
-    }
-
-    /**
-     * 读取主手工具的时运等级。
-     *
-     * 26.x 附魔是动态注册表，Enchantments.FORTUNE 只是 ResourceKey，
-     * 必须通过世界注册表解析成 Holder 才能查等级。断线或注册表缺失时返回 0。
-     */
-    public static int getFortuneLevel(ItemStack stack) {
-        if (stack.isEmpty()) return 0;
-
-        ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
-        if (enchantments == null || enchantments.isEmpty()) return 0;
-
-        Minecraft mc = Minecraft.getInstance();
-        ClientLevel level = mc.level;
-        if (level == null) return 0;
-
-        try {
-            var lookup = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
-            var holder = lookup.get(Enchantments.FORTUNE).orElse(null);
-            if (holder == null) return 0;
-            return enchantments.getLevel(holder);
-        } catch (Exception ignored) {
-            // 注册表尚未同步完成时静默返回 0，交由调用方决定是否继续
-            return 0;
-        }
     }
 
     /**

@@ -73,7 +73,6 @@ public final class VillagerTradeFSM {
     private int supplyStacks = 1;         // 每次补给追加组数（1组=64个），补给目标=阈值+组数×64
     private boolean drainMode = false;    // 榨干模式：忽略购买总量，买到目标交易全部售罄为止
     private int targetQuantity = 64;      // 本次购买总量（件）
-    private double searchRange = 16.0;
 
     private List<PipelineTask> pipelineTasks = new ArrayList<>();
     private int currentTaskIndex = 0;
@@ -150,10 +149,6 @@ public final class VillagerTradeFSM {
         this.maxPrice = maxPrice;
         this.emeraldThreshold = emeraldThreshold;
         this.targetQuantity = Math.max(1, targetQuantity);
-    }
-
-    public void setSearchRange(double range) {
-        this.searchRange = Math.max(4.0, range);
     }
 
     /**
@@ -319,14 +314,14 @@ public final class VillagerTradeFSM {
                 log("§e⚠ 搜索超时 §8▸ 未找到" + VillagerProfessionRegistry.getDisplayName(targetProfession) + "村民，跳过此任务");
                 enterState(State.NEXT_TASK);
             } else {
-                log(drainMode ? "§d⚠ 该职业已榨干 §8▸ 范围内没有更多可用村民" : "§e⚠ 搜索超时 §8▸ 未找到可用村民");
+                log(drainMode ? "§d⚠ " + profName() + "已榨干 §8▸ 范围内没有更多可用村民" : "§e⚠ 搜索超时 §8▸ 未找到可用" + profName() + "村民");
                 enterState(State.DONE);
             }
             return;
         }
 
         // LOCAL 只搜身边，寻路模式搜更大范围（村民寻路距离不受限）
-        double range = mode == Mode.LOCAL ? Math.min(searchRange, 16.0) : 96.0;
+        double range = mode == Mode.LOCAL ? 16.0 : 96.0;
 
         List<Villager> villagers = mc.level.getEntitiesOfClass(
             Villager.class,
@@ -393,7 +388,7 @@ public final class VillagerTradeFSM {
 
         BlockPos workstation = findNearbyWorkstation(currentVillager.blockPosition(), workstationBlock, 8);
         if (workstation == null) {
-            log("§e⚠ 村民附近未找到工作站，换下一个");
+            log("§e⚠ " + profName() + "村民附近未找到工作站 §8▸ 换下一个");
             exhaustedVillagers.add(currentVillager);
             currentVillager = null;
             enterState(State.SEARCHING);
@@ -416,8 +411,8 @@ public final class VillagerTradeFSM {
             fail("寻路超时或卡死");
             return;
         }
-        if (currentWorkstation == null) {
-            fail("工作站无效");
+        if (currentVillager == null || !currentVillager.isAlive()) {
+            fail("村民无效");
             return;
         }
 
@@ -427,7 +422,8 @@ public final class VillagerTradeFSM {
             return;
         }
 
-        if (navigation.hasArrived(currentWorkstation, 2.5)) {
+        // 到达判断：村民进入交互距离即开交易（村民才是交易目标，不是工作站）
+        if (mc.player.distanceTo(currentVillager) <= INTERACT_RANGE) {
             navigation.stop();
             interactTries = 0;
             enterState(State.OPENING_MENU);
@@ -435,9 +431,13 @@ public final class VillagerTradeFSM {
     }
 
     private boolean startPathToVillager() {
+        // 村民被困在工作方块正前方固定不动：直接寻路到村民相邻站位（村民才是交互目标），
+        // 不再寻路工作方块侧面，否则会走到村民对侧隔着方块无法交互
+        if (currentVillager != null && currentVillager.isAlive()) {
+            if (navigation.pathToContainer(currentVillager.blockPosition())) return true;
+        }
         if (currentWorkstation == null) return false;
-        return navigation.pathToWorkstation(currentWorkstation)
-            || navigation.pathToContainer(currentWorkstation);
+        return navigation.pathToContainer(currentWorkstation);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -471,7 +471,7 @@ public final class VillagerTradeFSM {
                 enterState(State.NAVIGATING);
                 return;
             }
-            log("§e⚠ 无法与村民交互，换下一个");
+            log("§e⚠ 无法与" + profName() + "村民交互 §8▸ 换下一个");
             exhaustedVillagers.add(currentVillager);
             currentVillager = null;
             enterState(State.SEARCHING);
@@ -543,7 +543,7 @@ public final class VillagerTradeFSM {
 
         // 界面被意外关闭：本次村民会话结束
         if (!(player.containerMenu instanceof MerchantMenu)) {
-            log("§e⚠ 交易界面已关闭");
+            log("§e⚠ " + profName() + "交易界面已关闭");
             if (currentVillager != null) exhaustedVillagers.add(currentVillager);
             currentVillager = null;
             enterState(State.SEARCHING);
@@ -559,7 +559,7 @@ public final class VillagerTradeFSM {
 
         // 僵局检测：10 秒没有任何成交
         if (stateTicks - lastProgressAt > TRADE_IDLE_TIMEOUT) {
-            log("§e⚠ 该村民长时间无进展，换下一个");
+            log("§e⚠ " + profName() + "长时间无进展 §8▸ 换下一个");
             exhaustedVillagers.add(currentVillager);
             closeMenuAndRoute(Route.SEARCH_NEXT);
             return;
@@ -574,13 +574,13 @@ public final class VillagerTradeFSM {
     private void tickTradeSelect(LocalPlayer player) {
         // 退出条件 1：购买总量达成（榨干模式忽略总量，只认售罄）
         if (!drainMode && purchasedCount >= targetQuantity) {
-            log("§a✓ 购买目标达成 §8▸ " + purchasedCount + " 件");
+            log("§a✓ 购买目标达成 §8▸ " + targetSummary() + " × " + purchasedCount + " 件");
             closeMenuAndRoute(Route.UNLOAD);
             return;
         }
         // 退出条件 2：背包满
         if (!TradeEngine.hasSpace()) {
-            log("§e⚠ 背包已满 §8▸ 前往卸货");
+            log("§e⚠ 背包已满 §8▸ " + profName() + "交易暂停，前往卸货");
             closeMenuAndRoute(Route.UNLOAD);
             return;
         }
@@ -592,7 +592,18 @@ public final class VillagerTradeFSM {
         int index = TradeEngine.findBestOfferIndex(offers, targets, maxPrice, skipOfferIndexes);
         // 退出条件 3：所有匹配交易售罄/无效
         if (index < 0) {
-            log("§e⚠ 目标交易已全部售罄或无效");
+            // 区分「村民没刷出目标物品」与「目标物品已售罄/超价」，避免笼统提示误导
+            boolean hasItem = false;
+            for (var offer : offers) {
+                if (TradeMatcher.matchesItemOnly(offer, targets)) { hasItem = true; break; }
+            }
+            if (hasItem) {
+                log("§e⚠ " + targetSummary() + "已售罄或超价 §8▸ 换下一个");
+            } else {
+                List<String> names = new ArrayList<>();
+                for (VillagerTradeTarget t : targets) names.add(t.getDisplayName());
+                log("§e⚠ " + profName() + "未刷出目标物品 §8▸ " + String.join("、", names));
+            }
             exhaustedVillagers.add(currentVillager);
             closeMenuAndRoute(Route.SEARCH_NEXT);
             return;
@@ -601,7 +612,7 @@ public final class VillagerTradeFSM {
         int cost = TradeMatcher.getEmeraldCost(offers.get(index));
         // 退出条件 4：绿宝石不够买这一单
         if (TradeEngine.countEmeralds() < cost) {
-            log("§e⚠ 绿宝石不足 §8▸ 前往补给");
+            log("§e⚠ 绿宝石不足 §8▸ 无法购买" + targetSummary() + "，前往补给");
             closeMenuAndRoute(Route.SUPPLY);
             return;
         }
@@ -625,8 +636,9 @@ public final class VillagerTradeFSM {
         int usesNow = (offerIndex < offers.size()) ? offers.get(offerIndex).getUses() : -1;
         int emeraldNow = TradeEngine.countEmeralds();
 
-        // 成功信号：服务端刷新了 offer 用量，或绿宝石被扣除
-        boolean success = (usesNow >= 0 && usesNow != usesSnapshot) || emeraldNow < emeraldSnapshot;
+        // 成功信号：服务端刷新了 offer 用量（uses 递增），或绿宝石被扣除。
+        // 只认 uses 递增：村民工作刷新会把 uses 重置为 0，递减不能算成交
+        boolean success = usesNow > usesSnapshot || emeraldNow < emeraldSnapshot;
 
         if (success) {
             tradeCount++;
@@ -740,6 +752,10 @@ public final class VillagerTradeFSM {
             fail("未绑定绿宝石箱");
             return;
         }
+        if (!isSameDimension(binding.getEmeraldBoxDimension())) {
+            fail("绿宝石箱在其他维度");
+            return;
+        }
         if (stateTicks > NAV_TIMEOUT || navigation.isStuck()) {
             fail("前往绿宝石箱超时或卡死");
             return;
@@ -804,6 +820,10 @@ public final class VillagerTradeFSM {
         BlockPos box = binding == null ? null : binding.getUnloadBox();
         if (box == null) {
             fail("未绑定成品交易箱");
+            return;
+        }
+        if (!isSameDimension(binding.getUnloadBoxDimension())) {
+            fail("成品交易箱在其他维度");
             return;
         }
         if (stateTicks > NAV_TIMEOUT || navigation.isStuck()) {
@@ -898,9 +918,9 @@ public final class VillagerTradeFSM {
 
         String summary;
         if (purchasedCount > 0) {
-            summary = "§a✓ 交易完成 §8▸ 共执行 " + tradeCount + " 笔 · 购入 " + purchasedCount + " 件目标物品";
+            summary = "§a✓ 交易完成 §8▸ " + profName() + " · 共执行 " + tradeCount + " 笔 · 购入 " + purchasedCount + " 件";
         } else {
-            summary = "§e⚠ 交易结束 §8▸ 未购买到任何目标物品";
+            summary = "§e⚠ 交易结束 §8▸ " + profName() + "未购买到任何目标物品";
         }
         if (drainMode) summary += " §7(榨干模式)";
         log(summary);
@@ -931,6 +951,17 @@ public final class VillagerTradeFSM {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
+     * 判断绑定箱子的维度是否等于当前玩家所在维度（用字符串 contains 兼容裸 ID 与旧 ResourceKey 格式）。
+     */
+    private boolean isSameDimension(String boundDim) {
+        if (mc.level == null || boundDim == null) return false;
+        String cur = mc.level.dimension().toString();
+        if (boundDim.contains("the_nether")) return cur.contains("the_nether");
+        if (boundDim.contains("the_end")) return cur.contains("the_end");
+        return cur.contains("overworld");
+    }
+
+    /**
      * 搜索村民附近的工作站（与旧实现相同的扫描范围）。
      */
     private BlockPos findNearbyWorkstation(BlockPos center, Block targetBlock, int range) {
@@ -956,8 +987,29 @@ public final class VillagerTradeFSM {
 
     private void log(String message) {
         if (logger != null) {
-            logger.accept(message);
+            logger.accept("§8[" + modePrefix() + "]§r " + message);
         }
+    }
+
+    /** 运行模式中文前缀（每次日志统一带，方便区分当前模式）。 */
+    private String modePrefix() {
+        return switch (mode) {
+            case LOCAL -> "原地交易";
+            case SINGLE_PATH -> "寻路单点";
+            case PIPELINE -> "多任务";
+        };
+    }
+
+    /** 目标职业中文名（统一取用，避免各处重复拼职业名）。 */
+    private String profName() {
+        return VillagerProfessionRegistry.getDisplayName(targetProfession);
+    }
+
+    /** 目标物品摘要：单物品返回其名，多物品返回「首个 等N种」。 */
+    private String targetSummary() {
+        if (targets == null || targets.isEmpty()) return "目标物品";
+        if (targets.size() == 1) return targets.get(0).getDisplayName();
+        return targets.get(0).getDisplayName() + " 等" + targets.size() + "种";
     }
 
     public State getCurrentState() {

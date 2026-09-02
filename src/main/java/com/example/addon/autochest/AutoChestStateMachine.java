@@ -266,12 +266,13 @@ public final class AutoChestStateMachine {
         return module.selector.select(candidates, playerPos, dim, module.recordManager, expireMs);
     }
 
-    /** 过滤候选：仅保留当前维度、不在临时冷却中、未被其他玩家占用的容器 */
+    /** 过滤候选：仅保留当前维度、不在临时冷却中、未被其他玩家占用的容器（多人保护开关关闭时不按玩家占用过滤） */
     private List<ChestTarget> filterAvailable(List<ChestTarget> candidates) {
+        boolean protect = module.moduleSettings.multiplayerProtect.get();
         return candidates.stream()
             .filter(ChestTarget::inCurrentDimension)
             .filter(c -> !isCoolingDown(c))
-            .filter(c -> !hasNearbyPlayer(c.pos()))
+            .filter(c -> !protect || !hasNearbyPlayer(c.pos()))
             .toList();
     }
 
@@ -407,6 +408,12 @@ public final class AutoChestStateMachine {
             }
 
             case MATCHING -> {
+                // 匹配阶段容器被他人抢关：有限重试回开箱，绝不能误标已处理
+                if (!module.interactionService.isOpen()) {
+                    module.interactionService.reset();
+                    fail("容器意外关闭", State.OPENING);
+                    return;
+                }
                 ChestInteractionService.MatchResult match =
                     module.interactionService.matchOnce(module.moduleSettings.withdrawMode.get());
                 switch (match) {
@@ -435,8 +442,19 @@ public final class AutoChestStateMachine {
             }
 
             case VERIFYING -> {
-                // 取物完成校验通过：进入关箱
-                transitionTo(State.CLOSING);
+                // 校验：容器已关视为取完（能到这里说明 TAKING 已判 FINISHED 无可取）；
+                // 仍开着则复核是否真的无可取，兜底「发包即完成」导致的漏取
+                if (!module.interactionService.isOpen()) {
+                    transitionTo(State.CLOSING);
+                    return;
+                }
+                ChestInteractionService.MatchResult verify =
+                    module.interactionService.matchOnce(module.moduleSettings.withdrawMode.get());
+                switch (verify) {
+                    case DONE -> transitionTo(State.CLOSING);
+                    case TAKABLE -> transitionTo(State.TAKING);
+                    case INVENTORY_FULL -> stopToStopped("背包空间不足");
+                }
             }
 
             case CLOSING -> {

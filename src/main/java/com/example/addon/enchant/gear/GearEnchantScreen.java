@@ -1,9 +1,11 @@
 package com.example.addon.enchant.gear;
 
+import com.example.addon.enchant.report.GearCraftReport;
 import com.example.addon.enchant.vanilla.VanillaEnchantDatabase;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.WindowScreen;
 import meteordevelopment.meteorclient.gui.widgets.WItem;
+import meteordevelopment.meteorclient.gui.widgets.WLabel;
 import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
@@ -36,6 +38,7 @@ public final class GearEnchantScreen extends WindowScreen {
     private String typeKey;
     private String materialKey;
     private WTable table;
+    private WLabel 报告提示;
 
     public GearEnchantScreen(GuiTheme theme, GearEnchantSetting setting) {
         super(theme, "原版装备附魔配置");
@@ -74,6 +77,20 @@ public final class GearEnchantScreen extends WindowScreen {
             table.add(theme.horizontalSeparator()).expandX();
             table.row();
         }
+
+        // 合成报告入口：一键打开报告目录 / 一键删除全部记录（仅原版装备附魔配置页展示）
+        WHorizontalList 报告行 = table.add(theme.horizontalList()).expandX().widget();
+        报告行.spacing = 8;
+        WButton 查看按钮 = 报告行.add(theme.button("§b合成附魔详细")).expandCellX().widget();
+        查看按钮.action = GearCraftReport::openFolder;
+        WButton 删除按钮 = 报告行.add(theme.button("§c删除合成记录")).widget();
+        删除按钮.action = () -> {
+            int n = GearCraftReport.deleteAll();
+            if (报告提示 != null) 报告提示.set(n > 0 ? "§a已删除 " + n + " 份合成报告" : "§8暂无合成报告可删除");
+        };
+        table.row();
+        报告提示 = table.add(theme.label("")).expandX().widget();
+        table.row();
 
         // 分类选择区：独立表格（标签列 + 下拉框列），列宽互不干扰，标签/下拉框自动对齐
         WTable form = theme.table();

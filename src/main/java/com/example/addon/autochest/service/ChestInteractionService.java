@@ -273,7 +273,7 @@ public final class ChestInteractionService {
         return null;
     }
 
-    /** 统计玩家背包（含快捷栏，共 36 格）中匹配给定身份的物品总数 */
+    /** 统计玩家背包（含快捷栏，共 36 格）+ 副手中匹配给定身份的物品总数 */
     private int countPlayerHas(Inventory inventory, ItemIdentity identity) {
         int total = 0;
         for (int i = 0; i < inventory.getContainerSize(); i++) {
@@ -281,6 +281,9 @@ public final class ChestInteractionService {
             if (stack.isEmpty()) continue;
             if (identity.matches(stack)) total += stack.getCount();
         }
+        // 副手也计入：TARGET_COUNT 差额计算需覆盖副手持有的目标物品，否则会多取
+        ItemStack offhand = mc.player.getOffhandItem();
+        if (!offhand.isEmpty() && identity.matches(offhand)) total += offhand.getCount();
         return total;
     }
 

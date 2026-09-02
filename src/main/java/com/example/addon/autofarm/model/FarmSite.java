@@ -1,4 +1,4 @@
-package com.example.addon.farm;
+package com.example.addon.autofarm.model;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;

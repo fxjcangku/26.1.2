@@ -1,32 +1,24 @@
-package com.example.addon.farm;
+package com.example.addon.autofarm.navigation;
 
 import net.minecraft.core.BlockPos;
 
 /**
  * Baritone 隔离层。
  *
- * 工程虽然把 Baritone 打包进了 META-INF/jars，但用户实例里 Baritone 仍有可能加载失败
- * （版本不匹配、被其他模组抢先加载、jar 被裁剪）。如果主模块直接硬引用 BaritoneAPI，
- * 类加载阶段就会抛 NoClassDefFoundError，整个模块连开都开不起来。
- *
- * 所以这里把全部 Baritone 调用包在 try/catch(Throwable) 里，一次失败就永久降级：
- * 之后所有导航请求直接返回 false，主模块改成"原地干活不移动"，其他功能照常。
+ * 与旧实现的关键区别：不再用「一次失败永久 disabled」的降级策略。
+ * 每次调用独立判断，失败返回 false，由 Controller 把当前移动任务标记为
+ * NavigationFailed 并重新规划，绝不因 Baritone 不可用而卡死或无限循环。
  */
 public final class FarmNav {
-
-    /** 是否已确认 Baritone 不可用，一旦置位不再重试 */
-    private static boolean disabled;
 
     private FarmNav() {
     }
 
     /** Baritone 当前是否可用 */
     public static boolean available() {
-        if (disabled) return false;
         try {
             return baritone() != null;
         } catch (Throwable ignored) {
-            disabled = true;
             return false;
         }
     }
@@ -34,11 +26,10 @@ public final class FarmNav {
     /**
      * 前往目标坐标附近。
      *
-     * @param radius 允许的停靠半径，箱子交互给 3 以内，田里巡逻给 1
-     * @return 是否成功下发了寻路任务
+     * @param radius 停靠半径（GoalNear 语义为距离平方）
+     * @return 是否成功下发寻路任务
      */
     public static boolean goTo(BlockPos pos, int radius) {
-        if (disabled) return false;
         try {
             var b = baritone();
             if (b == null) return false;
@@ -46,33 +37,42 @@ public final class FarmNav {
                 new baritone.api.pathing.goals.GoalNear(pos, radius));
             return true;
         } catch (Throwable ignored) {
-            disabled = true;
             return false;
         }
     }
 
     /** 是否正在寻路中 */
     public static boolean pathing() {
-        if (disabled) return false;
         try {
             var b = baritone();
             return b != null && b.getPathingBehavior().isPathing();
         } catch (Throwable ignored) {
-            disabled = true;
             return false;
         }
     }
 
-    /** 取消当前寻路任务。模块关闭或状态切换时必须调用，否则 Baritone 会继续跑 */
+    /** 取消当前寻路任务 */
     public static void cancel() {
-        if (disabled) return;
         try {
             var b = baritone();
             if (b == null) return;
             b.getPathingBehavior().cancelEverything();
             b.getCustomGoalProcess().setGoal(null);
         } catch (Throwable ignored) {
-            disabled = true;
+        }
+    }
+
+    /** 玩家是否已到达目标附近（用于任务层判断能否交互） */
+    public static boolean arrived(BlockPos pos, double reach) {
+        try {
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.player == null) return false;
+            double dx = pos.getX() + 0.5 - mc.player.getX();
+            double dy = pos.getY() + 0.5 - mc.player.getY();
+            double dz = pos.getZ() + 0.5 - mc.player.getZ();
+            return dx * dx + dy * dy + dz * dz <= reach * reach;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

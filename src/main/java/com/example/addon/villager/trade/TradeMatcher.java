@@ -58,6 +58,19 @@ public final class TradeMatcher {
     }
 
     /**
+     * 只判断交易输出物品是否命中目标白名单（忽略售罄与价格，用于区分「未刷出」与「售罄/超价」）。
+     */
+    public static boolean matchesItemOnly(MerchantOffer offer, List<VillagerTradeTarget> targets) {
+        if (offer == null) return false;
+        ItemStack result = offer.getResult();
+        if (result.isEmpty()) return false;
+        for (VillagerTradeTarget target : targets) {
+            if (matchesTarget(result, target)) return true;
+        }
+        return false;
+    }
+
+    /**
      * 判断 ItemStack 是否匹配单个目标
      */
     private static boolean matchesTarget(ItemStack stack, VillagerTradeTarget target) {

@@ -558,6 +558,41 @@ package com.example.addon.convention;
 //   6. Release notes 已说明混淆配置变化
 //   ✗ 禁止手动改 jar 文件名，必须通过 libs.versions.toml 改版本号。
 //
+//   【字符串与数字常量加密方案】
+//   构建期（build.gradle.kts 的 EncryptStringsTask，ASM）对源码常量做加密，
+//   运行时由 com.example.addon.utils.StringCrypto 还原。三类加密各有取舍：
+//
+//     1. 字符串常量（LDC）→ StringCrypto.d(密文) 解密。
+//        · 密钥不再固定：构建期用 SecureRandom 生成 32 字节随机密钥，拆成
+//          P（密钥源）+ Q（掩码）两段，真实密钥 K[i] = P[i] ^ Q[i]，由 ASM
+//          重写 StringCrypto.<clinit> 注入随机值。
+//        · 每个发布版本密钥不同，无法用旧版本密钥解新版本，也无法从源码反推。
+//        · P/Q 字段名交给 ProGuard 混淆（变 l/I），运行时由 d() 重组还原。
+//     2. 枚举常量 → 只加密「用户中文字段」，name 必须保留明文。
+//        · 枚举 name 是 Enum.name()/valueOf()/getEnumConstants() 的绑定标识，
+//          加密会导致 getEnumConstants() 返回 null 崩溃，故绝不加密。
+//        · 用 ASM Tree API 从构造调用点回溯参数：name=参数0、ordinal=参数1
+//          均跳过，参数 2 起的 String 才加密（如 PointType 的 title/node）。
+//     3. 数值常量（int/long/float/double）→ StringCrypto.di/dl/df/dd 解密。
+//        · XOR 加密+解密是透明的，每个常量后紧跟解密调用即还原原值，
+//          因此无需排除数组长度等场景；ICONST(-1..5) 是单指令不在此列。
+//        · float/double 特殊：密钥清除 exponent 位，避免 XOR 结果落入 NaN
+//          位模式被 intBitsToFloat/longBitsToDouble 规范化，导致解密不可逆。
+//
+//   【改动 StringCrypto 时必须三处同步】
+//   密钥结构与加密算法在「构建期 EncryptStringsTask」与「运行时 StringCrypto」
+//   各有一份，改算法必须两边同步改，否则所有密文解不出来、功能全崩：
+//     build.gradle.kts 的 encrypt()/encryptInt()/encryptLong()/encryptFloat()/encryptDouble()
+//       ←→  StringCrypto.d()/di()/dl()/df()/dd()
+//
+//   【映射文件保护】
+//   映射文件是「还原类名的钥匙」，随 source 分支入库有泄露风险。构建期把
+//   ProGuard 明文映射加密成 Base64 密文再落盘，密钥随机生成存
+//   Obfuscation/映射密钥.txt（.gitignore 排除，不入库）。
+//   · 还原崩溃日志.js 读映射时先用同一密钥 XOR 解密；密钥文件丢失则该版本
+//     映射永远无法还原，必须本地备份密钥。
+//   · printmapping 先写 build/ 临时明文，任务 doLast 加密成密文后删除临时明文。
+//
 // ════════════════════════════════════════════════════════════════════════════
 //  第九章 · 构建命令与环境
 // ════════════════════════════════════════════════════════════════════════════

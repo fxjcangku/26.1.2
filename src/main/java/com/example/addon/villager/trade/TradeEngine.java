@@ -4,7 +4,6 @@ import com.example.addon.villager.data.VillagerTradeTarget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundSelectTradePacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -67,8 +66,8 @@ public final class TradeEngine {
         LocalPlayer player = mc.player;
         if (player == null || player.connection == null) return;
 
+        // 交易选择包本身不依赖挥手动画，取消 swing 避免每笔交易都有手臂挥动视觉残留
         player.connection.send(new ServerboundSelectTradePacket(offerIndex));
-        player.swing(InteractionHand.MAIN_HAND);
     }
 
     /**
@@ -86,6 +85,9 @@ public final class TradeEngine {
                 count += stack.getCount();
             }
         }
+        // 副手也计入：绿宝石/目标物品可能拿在副手，漏计会导致绿宝石差额误判
+        ItemStack offhand = player.getOffhandItem();
+        if (!offhand.isEmpty() && offhand.getItem() == item) count += offhand.getCount();
         return count;
     }
 

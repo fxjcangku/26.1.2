@@ -56,7 +56,7 @@ public final class EnchantPlanningEngine {
      * @param profile 目标极品方案
      * @param gears   当前背包已附魔的目标装备（含保留的中间态）
      */
-    public static Decision decide(TargetProfile profile, List<ItemStack> gears) {
+    public static Decision decide(TargetProfile profile, List<ItemStack> gears, AnvilPlanner.Strategy strategy) {
         if (gears == null || gears.isEmpty()) {
             return new Decision(Action.CONTINUE, null, null, 0, 0, "无已附魔装备，继续附魔");
         }
@@ -101,7 +101,7 @@ public final class EnchantPlanningEngine {
 
         // 4. 有价值中间态 ≥ 2 且可互补合并 → 铁砧
         if (valuable.size() >= 2) {
-            AnvilPlan plan = AnvilPlanner.plan(profile, valuable);
+            AnvilPlan plan = AnvilPlanner.plan(profile, valuable, strategy);
             if (plan.hasNext()) {
                 return new Decision(Action.ANVIL, null, plan, valuable.size(), junk, "规划铁砧合并 " + plan.steps().size() + " 步");
             }

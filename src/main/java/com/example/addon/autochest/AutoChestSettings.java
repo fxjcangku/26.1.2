@@ -30,7 +30,6 @@ public final class AutoChestSettings {
     // ── 分组 ──
     private final SettingGroup grpMode;
     private final SettingGroup grpPlayer;
-    private final SettingGroup grpPathing;
     private final SettingGroup grpMarker;
     private final SettingGroup grpContainer;
     private final SettingGroup grpProtect;
@@ -44,9 +43,6 @@ public final class AutoChestSettings {
 
     // ── 玩家控制模式 ──
     public final Setting<Integer> triggerDistance;
-
-    // ── 寻路模式 ──
-    public final Setting<Integer> arriveDistance;
 
     // ── 标点模式 ──
     public final InfoTextSetting markerHint;
@@ -83,7 +79,6 @@ public final class AutoChestSettings {
     public AutoChestSettings(Settings settings, ItemIdManager idManager) {
         grpMode      = settings.createGroup("运行模式");
         grpPlayer    = settings.createGroup("玩家控制模式");
-        grpPathing   = settings.createGroup("寻路模式");
         grpMarker    = settings.createGroup("标点模式");
         grpContainer = settings.createGroup("容器");
         grpProtect   = settings.createGroup("保护");
@@ -108,21 +103,12 @@ public final class AutoChestSettings {
         // ── 玩家控制模式 ─────────────────────────────────────
         triggerDistance = grpPlayer.add(new IntSetting.Builder()
             .name("触发距离")
-            .description("玩家控制模式下，距离容器多少格内自动处理。")
+            .description("玩家控制模式下，距离容器多少格内自动处理（受开箱可达距离约 4.5 格限制，上限 4）。")
             .defaultValue(4)
             .min(1)
+            .max(4)
             .noSlider()
             .visible(() -> scanMode.get() == ScanMode.PLAYER_CONTROL)
-            .build());
-
-        // ── 寻路模式 ─────────────────────────────────────────
-        arriveDistance = grpPathing.add(new IntSetting.Builder()
-            .name("到达判定距离")
-            .description("寻路模式下，走到距容器多少格内即视为到达并开箱。")
-            .defaultValue(2)
-            .min(1)
-            .noSlider()
-            .visible(() -> scanMode.get() == ScanMode.PATHING)
             .build());
 
         // ── 标点模式 ─────────────────────────────────────────

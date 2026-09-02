@@ -2,6 +2,7 @@ package com.example.addon.enchant.gear;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -42,6 +43,30 @@ public final class AnvilPlanner {
     /** 默认最大铁砧操作次数（防无限操作） */
     public static final int DEFAULT_MAX_OPERATIONS = 6;
 
+    /**
+     * 铁砧合并策略（原版装备附魔界面下拉切换，供对比不同逻辑的经验消耗）。
+     * 三套策略只改变「主装备选择」与「材料排序」权重，不改互补/互斥合并判定。
+     */
+    public enum Strategy {
+        /** 简单逻辑：贡献优先、其次低惩罚，适合附魔少/无互斥/成本低的普通装备 */
+        SIMPLE("简单"),
+        /** 节能逻辑：低惩罚 + 低铁砧成本优先，适合满级合金剑/荆棘三胸甲等高消耗困难装备 */
+        SAVE_XP("节能"),
+        /** 快速逻辑：提升价值优先、其次低成本，减少铁砧合并次数 */
+        FAST("快速");
+
+        private final String title;
+
+        Strategy(String title) {
+            this.title = title;
+        }
+
+        @Override
+        public String toString() {
+            return title;
+        }
+    }
+
     private AnvilPlanner() {
     }
 
@@ -52,20 +77,20 @@ public final class AnvilPlanner {
      * @param gears   多件已附魔的同类型装备（如 4 把钻石剑）
      * @return 铁砧合并计划（空计划表示无需合并或材料不足）
      */
-    public static AnvilPlan plan(TargetProfile profile, List<ItemStack> gears) {
+    public static AnvilPlan plan(TargetProfile profile, List<ItemStack> gears, Strategy strategy) {
         if (gears == null || gears.size() < 2) {
             return new AnvilPlan(List.of(), DEFAULT_MAX_OPERATIONS);
         }
+        Strategy s = strategy == null ? Strategy.SIMPLE : strategy;
 
-        // 选对目标贡献最多的装备作为主装备（基础件）
-        ItemStack base = selectBase(profile, gears);
+        // 按策略选主装备（基础件）：节能优先低惩罚+低成本，简单/快速优先贡献
+        ItemStack base = selectBase(profile, gears, s);
         Map<String, Integer> baseEnch = new HashMap<>(EnchantEvaluationService.readEnchantments(base));
 
         List<AnvilStep> steps = new ArrayList<>();
         int order = 1;
-        // 材料按「相对主装备的提升价值」降序：先补缺失附魔、再升级等级不足，
-        // 减少无谓合并，压低 prior work penalty 与铁砧次数
-        for (ItemStack material : sortedMaterials(profile, base, baseEnch, gears)) {
+        // 材料按策略排序：节能先低惩罚低成本，简单/快速先补最高提升
+        for (ItemStack material : sortedMaterials(profile, base, baseEnch, gears, s)) {
             Map<String, Integer> matEnch = EnchantEvaluationService.readEnchantments(material);
             if (!isComplementary(baseEnch, matEnch, profile)) continue;
             if (hasConflict(baseEnch, matEnch)) continue;
@@ -79,18 +104,41 @@ public final class AnvilPlanner {
         return new AnvilPlan(steps, DEFAULT_MAX_OPERATIONS);
     }
 
-    /** 选对目标贡献最多的装备作为主装备（贡献分数最高者） */
-    public static ItemStack selectBase(TargetProfile profile, List<ItemStack> gears) {
+    /** 按策略选主装备（基础件） */
+    public static ItemStack selectBase(TargetProfile profile, List<ItemStack> gears, Strategy strategy) {
         ItemStack best = gears.get(0);
-        int bestScore = -1;
+        int bestRepair = repairCost(best);
+        int bestWeight = anvilCostWeight(best);
+        int bestScore = contributionScore(best, profile);
         for (ItemStack gear : gears) {
+            int rep = repairCost(gear);
+            int weight = anvilCostWeight(gear);
             int score = contributionScore(gear, profile);
-            if (score > bestScore) {
-                bestScore = score;
+            if (preferBase(score, rep, weight, bestScore, bestRepair, bestWeight, strategy)) {
                 best = gear;
+                bestRepair = rep;
+                bestWeight = weight;
+                bestScore = score;
             }
         }
         return best;
+    }
+
+    /** 主装备择优比较：返回 true 表示候选优于当前 */
+    private static boolean preferBase(int score, int rep, int weight,
+                                      int bestScore, int bestRepair, int bestWeight, Strategy strategy) {
+        Strategy s = strategy == null ? Strategy.SIMPLE : strategy;
+        return switch (s) {
+            case SIMPLE -> score > bestScore
+                || (score == bestScore && rep < bestRepair)
+                || (score == bestScore && rep == bestRepair && weight < bestWeight);
+            case SAVE_XP -> rep < bestRepair
+                || (rep == bestRepair && weight < bestWeight)
+                || (rep == bestRepair && weight == bestWeight && score > bestScore);
+            case FAST -> score > bestScore
+                || (score == bestScore && weight < bestWeight)
+                || (score == bestScore && weight == bestWeight && rep < bestRepair);
+        };
     }
 
     /** 装备对目标的贡献分数：命中 +1，再按等级加权（等级越贴近目标越值钱，选主装备更准） */
@@ -103,6 +151,25 @@ public final class AnvilPlanner {
             score += 1 + Math.min(level, target.level());
         }
         return score;
+    }
+
+    /** 读装备 prior work penalty（铁砧累积惩罚），值越高后续合并越贵，缺失按 0 处理 */
+    public static int repairCost(ItemStack stack) {
+        return stack.getOrDefault(DataComponents.REPAIR_COST, 0);
+    }
+
+    /** 估算装备的铁砧成本权重：Σ(附魔 getAnvilCost × 等级)，用于低成本优先排序（不模拟 XP） */
+    public static int anvilCostWeight(ItemStack stack) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return 0; // 注册表未就绪，返回 0 兜底
+        int weight = 0;
+        for (Map.Entry<String, Integer> e : EnchantEvaluationService.readEnchantments(stack).entrySet()) {
+            Holder<Enchantment> holder = enchantmentOf(mc, e.getKey());
+            if (holder != null) {
+                weight += holder.value().getAnvilCost() * Math.max(0, e.getValue());
+            }
+        }
+        return weight;
     }
 
     /** 装备对目标的主要贡献附魔 id（第一个命中的目标附魔），无贡献返回 null */
@@ -176,17 +243,49 @@ public final class AnvilPlanner {
         }
     }
 
-    /** 材料按相对主装备的提升价值降序排列（先补缺失，再升级等级不足） */
+    /** 材料按策略排序（仅排序，互补/互斥判定仍走主流程） */
     private static List<ItemStack> sortedMaterials(TargetProfile profile, ItemStack base,
-                                                   Map<String, Integer> baseEnch, List<ItemStack> gears) {
+                                                   Map<String, Integer> baseEnch, List<ItemStack> gears,
+                                                   Strategy strategy) {
         List<ItemStack> list = new ArrayList<>();
         for (ItemStack gear : gears) {
             if (gear != base) list.add(gear);
         }
-        list.sort((a, b) -> Integer.compare(
-            improvement(baseEnch, EnchantEvaluationService.readEnchantments(b), profile),
-            improvement(baseEnch, EnchantEvaluationService.readEnchantments(a), profile)));
+        list.sort((a, b) -> compareMaterial(a, b, baseEnch, profile,
+            strategy == null ? Strategy.SIMPLE : strategy));
         return list;
+    }
+
+    /** 材料排序比较：返回负数表示 a 优先，正数表示 b 优先 */
+    private static int compareMaterial(ItemStack a, ItemStack b, Map<String, Integer> base,
+                                       TargetProfile profile, Strategy strategy) {
+        int impA = improvement(base, EnchantEvaluationService.readEnchantments(a), profile);
+        int impB = improvement(base, EnchantEvaluationService.readEnchantments(b), profile);
+        int repA = repairCost(a);
+        int repB = repairCost(b);
+        int wA = anvilCostWeight(a);
+        int wB = anvilCostWeight(b);
+        return switch (strategy) {
+            case SIMPLE -> {
+                int c = Integer.compare(impB, impA); // 提升价值降序
+                if (c != 0) yield c;
+                yield Integer.compare(repA, repB);   // 低惩罚升序
+            }
+            case SAVE_XP -> {
+                int c = Integer.compare(repA, repB); // 低惩罚升序
+                if (c != 0) yield c;
+                c = Integer.compare(wA, wB);         // 低成本升序
+                if (c != 0) yield c;
+                yield Integer.compare(impB, impA);   // 提升价值降序
+            }
+            case FAST -> {
+                int c = Integer.compare(impB, impA); // 提升价值降序
+                if (c != 0) yield c;
+                c = Integer.compare(wA, wB);         // 低成本升序
+                if (c != 0) yield c;
+                yield Integer.compare(repA, repB);   // 低惩罚升序
+            }
+        };
     }
 
     /** 材料相对主装备的提升价值：新增缺失附魔 +2，升级等级不足 +1 */

@@ -20,6 +20,7 @@ import com.example.addon.enchant.vanilla.TargetMatcher;
 import com.example.addon.enchant.vanilla.VanillaEnchantDatabase;
 import com.example.addon.enchant.vanilla.VanillaEnchantRuleValidator;
 import com.example.addon.enchant.point.PointType;
+import com.example.addon.enchant.report.GearCraftReport;
 import com.example.addon.farm.FarmPacketOps;
 import com.example.addon.ui.HelpScreen;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
@@ -58,11 +59,16 @@ import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.EnchantmentMenu;
 import net.minecraft.world.inventory.GrindstoneMenu;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
@@ -158,12 +164,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
         .name("返回挂机视角").description("到达挂机位后恢复设置该点位时记录的视角").defaultValue(true).visible(() -> false).build());
 
     private final Setting<Boolean> 成功提示音 = sgBasic.add(new BoolSetting.Builder()
-        .name("成功提示音").description("刷到已选择的目标附魔书时播放本地提示音").defaultValue(true)
-        .visible(() -> 目标模式.get() != TargetMode.GEAR).build());
+        .name("成功提示音").description("达成目标时播放本地提示音（命中附魔书 / 装备达成极品）").defaultValue(true)
+        .build());
 
     private final Setting<SuccessSound> 成功提示音类型 = sgBasic.add(new EnumSetting.Builder<SuccessSound>()
-        .name("成功提示音类型").description("选择刷到目标附魔书时播放的音效").defaultValue(SuccessSound.CHALLENGE_COMPLETE)
-        .visible(() -> 目标模式.get() != TargetMode.GEAR && 成功提示音.get()).build());
+        .name("成功提示音类型").description("选择达成目标时播放的音效").defaultValue(SuccessSound.CHALLENGE_COMPLETE)
+        .visible(() -> 成功提示音.get()).build());
 
     // ── 剑类极品 ────────────────────────────────────────────────────────
     // 传说
@@ -420,10 +426,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private boolean gearGrindFromAnvil = false;         // 铁砧「太昂贵」送砂轮清零的标志（此时磨主装备而非找垃圾）
     private boolean gearRelaxAccept = false;            // 太昂贵降级验收标志：必需满级即可成品（放弃剩余可选附魔）
     private int gearAnvilChestSlot = -1;                // 铁砧箱里被拿起的那个铁砧槽位（跨 phase 记住，放回时用）
+    private boolean gearAnvil原视角已存 = false;          // 放置铁砧前是否已保存原视角（放置后恢复用）
+    private float gearAnvil原Yaw = 0;                    // 放置铁砧前的原 yaw（放置后恢复，避免视角被转走）
+    private float gearAnvil原Pitch = 0;                  // 放置铁砧前的原 pitch
     private String 合并前主装备 = "";                    // 铁砧合并前主装备附魔摘要（详细播报用）
     private String 合并前材料 = "";                      // 铁砧合并前材料装备附魔摘要（详细播报用）
     private int 合并费用 = 0;                            // 铁砧合并费用（详细播报用）
     private String 砂轮磨前附魔 = "";                    // 砂轮清除前装备附魔摘要（详细播报用）
+    private String 成品词条 = "";                        // 入箱前最终成品附魔摘要（合成报告用）
     // 运行统计（不影响核心流程）
     private int statTotal = 0, statDone = 0, statError = 0;
     private int statEnchant = 0, statGrind = 0, statAnvil = 0, statFarm = 0;
@@ -434,6 +444,19 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private final EnchantmentSelectSetting 护甲附魔选择;
     private final EnchantmentSelectSetting 工具通用附魔选择;
     private final GearEnchantSetting 装备附魔配置;
+    /** 合成报告记录开关（调试用，默认关闭；开启后才生成彩色 HTML 合成报告） */
+    private final Setting<Boolean> 记录合成日志 = sgGear.add(new BoolSetting.Builder()
+        .name("记录合成日志")
+        .description("开启后记录原版装备附魔的完整合成过程，生成彩色 HTML 报告到 .minecraft/yiyiaddon-reports/装备附魔合成/")
+        .defaultValue(false)
+        .build());
+
+    /** 铁砧合并策略：简单 / 节能 / 快速，供对比不同逻辑的经验消耗 */
+    private final Setting<AnvilPlanner.Strategy> 合成策略 = sgGear.add(new EnumSetting.Builder<AnvilPlanner.Strategy>()
+        .name("合成策略")
+        .description("铁砧装备+装备合并排序策略：简单=贡献优先、节能=低惩罚+低成本优先、快速=提升优先少步骤，用于对比经验消耗")
+        .defaultValue(AnvilPlanner.Strategy.SAVE_XP)
+        .build());
 
     /** 目标模式：原版装备附魔 / 原版附魔书 / 自定义附魔，三模式互斥 */
     public enum TargetMode {
@@ -875,6 +898,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
             lastNotifiedState = "";
             guiTick = 0;
             guiPhase = 0;
+            // 仅在「记录合成日志」开关开启时记录合成报告，否则禁用（残留状态清零）
+            if (记录合成日志.get()) {
+                GearCraftReport.begin(gearProfile.gearName(), gearProfile.profileName(), 目标词条摘要(gearProfile), 合成策略.get().toString());
+            } else {
+                GearCraftReport.disable();
+            }
             announceGearStartup();
             return;
         }
@@ -923,6 +952,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
     public void onDeactivate() {
         stopKillAura();
         stopBaritone();
+        // 停止时兜底落盘一次合成报告（若本次 GEAR 模式已有记录）
+        GearCraftReport.flush();
     }
 
     /**
@@ -2079,6 +2110,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
         if (gearTask != null) gearTask.markError(reason);
         statError++;
         notifyError("装备处理失败 → " + reason + "，已跳过该件。");
+        GearCraftReport.recordSkip(reason.toString());
         gearNext();
         setState(State.GEAR_IDLE);
     }
@@ -2135,13 +2167,17 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private int findBestGearSlot() {
         int bestSlot = -1;
         int bestScore = -1;
+        int bestRepair = Integer.MAX_VALUE;
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!stack.is(gearTargetItem)) continue;
             // 排除垃圾装备（禁止/互斥/零命中），避免铁砧合并到含 fire_protection 等互斥附魔的装备导致费用=0 死循环
             if (TargetMatcher.isJunk(stack, gearProfile)) continue;
             int score = AnvilPlanner.contributionScore(stack, gearProfile);
-            if (score > bestScore) {
+            int rep = AnvilPlanner.repairCost(stack);
+            // PWP 低优先（主装备 PWP 累积到后续合并），PWP 相同贡献高优先
+            if (rep < bestRepair || (rep == bestRepair && score > bestScore)) {
+                bestRepair = rep;
                 bestScore = score;
                 bestSlot = i;
             }
@@ -2151,14 +2187,25 @@ public class AutoEnchantBook extends YiyiaddonModule {
 
     /** 找带目标附魔的另一件装备槽位（作为铁砧合并材料，排除主装备槽位），无则 -1 */
     private int findMergeGearSlot(int excludeSlot) {
+        int bestSlot = -1;
+        int bestRepair = Integer.MAX_VALUE;
+        int bestScore = -1;
         for (int i = 0; i < 36; i++) {
             if (i == excludeSlot) continue;
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!stack.is(gearTargetItem)) continue;
             if (TargetMatcher.isJunk(stack, gearProfile)) continue;
-            if (AnvilPlanner.hasTargetContribution(stack, gearProfile)) return i;
+            if (!AnvilPlanner.hasTargetContribution(stack, gearProfile)) continue;
+            // PWP 低优先（低惩罚材料先合并），PWP 相同贡献高优先，替代原「按槽位顺序找第一个」
+            int rep = AnvilPlanner.repairCost(stack);
+            int score = AnvilPlanner.contributionScore(stack, gearProfile);
+            if (rep < bestRepair || (rep == bestRepair && score > bestScore)) {
+                bestRepair = rep;
+                bestScore = score;
+                bestSlot = i;
+            }
         }
-        return -1;
+        return bestSlot;
     }
 
     /** 查找某个装备快照在背包里的槽位，无则 -1 */
@@ -2460,6 +2507,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             sb.append("\n§7还缺词条 §8▸ ").append(highlightText(缺.toString()));
         }
         notify(sb.toString());
+        GearCraftReport.recordEnchant(附魔摘要(stack));
     }
 
     /** 装备附魔摘要（中文名+等级，顿号连接），无附魔返回「无」 */
@@ -2490,6 +2538,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             sb.append("\n§7进度 §8▸ ").append(highlightNumber(m.satisfied().size() + "/" + gearProfile.activeTargets().size() + " 项"));
         }
         notify(sb.toString());
+        GearCraftReport.recordAnvil(合并前主装备, 合并前材料, 附魔摘要(产物), 合并费用);
     }
 
     /** 砂轮清除完成播报：去除了什么词条 */
@@ -2513,6 +2562,17 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private String 短名(String id) {
         int i = id == null ? -1 : id.indexOf(':');
         return i < 0 ? (id == null ? "" : id) : id.substring(i + 1);
+    }
+
+    /** 目标方案全部启用附魔的中文摘要（名称+等级，顿号连接），供合成报告概览使用 */
+    private String 目标词条摘要(TargetProfile profile) {
+        if (profile == null) return "无";
+        StringBuilder sb = new StringBuilder();
+        for (TargetProfile.TargetEnchantment t : profile.activeTargets()) {
+            if (sb.length() > 0) sb.append("、");
+            sb.append(t.name()).append(t.level());
+        }
+        return sb.toString();
     }
 
     private void tickGearWalkLapis() {
@@ -2581,7 +2641,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             return;
         }
         // 规划引擎决策：成品 / 铁砧 / 砂轮（只磨垃圾）/ 继续附魔 / 不可达
-        EnchantPlanningEngine.Decision decision = EnchantPlanningEngine.decide(gearProfile, gears);
+        EnchantPlanningEngine.Decision decision = EnchantPlanningEngine.decide(gearProfile, gears, 合成策略.get());
         switch (decision.action()) {
             case COMPLETE -> {
                 gearEquipSlot = slotOfItem(decision.completeItem());
@@ -2677,6 +2737,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 guiTick = GUI操作延迟.get();
                 statGrind++;
                 砂轮播报();
+                GearCraftReport.recordGrind(砂轮磨前附魔);
                 // 太昂贵送来的主装备磨完后清标志并重新评估；否则继续磨下一件垃圾
                 if (gearGrindFromAnvil) {
                     gearGrindFromAnvil = false;
@@ -2831,13 +2892,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     private void tickGearWalkAnvilPos() {
+        // 能摸到铁砧位就直接进入放置，放置前会程序化转对 yaw（铁砧朝向只由 yaw 决定，
+        // 与站位无关），不需要走到朝向侧；距离远时才寻路靠近
         double range = mc.player.blockInteractionRange() + 0.5;
         if (mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(posAnvil)) <= range) {
             stopBaritone();
             setState(State.GEAR_PLACE_ANVIL);
         } else {
-            // 寻路到铁砧朝向方向的相邻块（正确站位）：站在朝向侧、面向朝向对面，放置时 FACING 才准确
-            BlockPos stand = posAnvilFacing != null ? posAnvil.relative(posAnvilFacing) : posAnvil;
+            BlockPos stand = posAnvilFacing != null ? posAnvil.relative(posAnvilFacing) : posAnvil.above();
             if (!isPathing()) {
                 BaritoneAPI.getProvider().getPrimaryBaritone()
                     .getCustomGoalProcess().setGoalAndPath(
@@ -2854,6 +2916,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
             if (!mc.player.getMainHandItem().isEmpty() && isAnvilItem(mc.player.getMainHandItem())) {
                 mc.player.getMainHandItem().setCount(0);
             }
+            // 恢复放置前视角：铁砧朝向已按 yaw 放正，恢复后玩家视角不被打扰
+            if (gearAnvil原视角已存) {
+                mc.player.setYRot(gearAnvil原Yaw);
+                mc.player.setXRot(gearAnvil原Pitch);
+                gearAnvil原视角已存 = false;
+            }
             notify("§a✓ 铁砧已更换完成，继续原任务。");
             setState(State.GEAR_WALK_ANVIL);
             return;
@@ -2865,11 +2933,43 @@ public class AutoEnchantBook extends YiyiaddonModule {
             return;
         }
         selectItem(anvilSlot);
-        // 不转视角直接放置：hitResult 已精确指定放置位置，铁砧朝向随当前朝向（任意朝向都能打开 GUI）
+        // 首次转向前保存原视角，放置完成后恢复，避免视角被永久转走
+        if (!gearAnvil原视角已存) {
+            gearAnvil原Yaw = mc.player.getYRot();
+            gearAnvil原Pitch = mc.player.getXRot();
+            gearAnvil原视角已存 = true;
+        }
+        // 放置前把玩家水平朝向转到能还原 posAnvilFacing 的方向（铁砧 FACING 由放置时朝向决定，
+        // 不转的话 Baritone 到达后朝向随机，铁砧会放歪）
+        转向铁砧朝向();
         Vec3 hitVec = new Vec3(posAnvil.getX() + 0.5, posAnvil.getY(), posAnvil.getZ() + 0.5);
         BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, posAnvil.below(), false);
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
         guiTick = GUI操作延迟.get();
+    }
+
+    /** 程序化转向：枚举 4 个水平方向实测 getStateForPlacement，匹配 posAnvilFacing 后锁定该 yaw */
+    private void 转向铁砧朝向() {
+        if (posAnvilFacing == null) return;
+        ItemStack anvil = mc.player.getMainHandItem();
+        if (!(anvil.getItem() instanceof BlockItem blockItem) || !(blockItem.getBlock() instanceof AnvilBlock anvilBlock)) {
+            return;
+        }
+        Vec3 hitVec = new Vec3(posAnvil.getX() + 0.5, posAnvil.getY(), posAnvil.getZ() + 0.5);
+        BlockHitResult hit = new BlockHitResult(hitVec, Direction.UP, posAnvil.below(), false);
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            float yaw = facing.toYRot();
+            mc.player.setYRot(yaw);
+            mc.player.setXRot(0);
+            BlockPlaceContext ctx = new BlockPlaceContext(
+                new UseOnContext(mc.level, mc.player, InteractionHand.MAIN_HAND, anvil, hit) {});
+            BlockState placed = anvilBlock.getStateForPlacement(ctx);
+            if (placed != null && placed.getValue(AnvilBlock.FACING) == posAnvilFacing) {
+                mc.player.setYRot(yaw);
+                mc.player.setXRot(0);
+                return;
+            }
+        }
     }
 
     private void tickGearAnvil() {
@@ -2979,9 +3079,11 @@ public class AutoEnchantBook extends YiyiaddonModule {
                     // 否则核心未达标，该装备已废，送砂轮清零重来
                     if (!mainGear.isEmpty() && TargetMatcher.isRequiredComplete(mainGear, gearProfile)) {
                         notify("§e⚠ 铁砧费用过高 §8▸ 保留必需附魔成品，放弃剩余可选附魔");
+                        GearCraftReport.recordTooExpensive(附魔摘要(mainGear), true);
                         gearRelaxAccept = true;
                         setState(State.GEAR_WALK_OUTPUT);
                     } else {
+                        GearCraftReport.recordTooExpensive(附魔摘要(mainGear), false);
                         gearGrindFromAnvil = true;
                         setState(State.GEAR_WALK_GRIND);
                     }
@@ -3077,6 +3179,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
                     setState(State.GEAR_IDLE);
                     return;
                 }
+                // 入箱前记录最终成品附魔摘要（合成报告用，重试时幂等覆盖）
+                成品词条 = 附魔摘要(mc.player.getInventory().getItem(gearEquipSlot));
                 mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, gearEquipSlot), 0, ContainerInput.QUICK_MOVE, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 1;
@@ -3099,7 +3203,10 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 if (gearTask != null) gearTask.markDone();
                 statDone++;
                 gearRelaxAccept = false;
+                GearCraftReport.recordComplete(成品词条);
+                GearCraftReport.flush();
                 notify("§a✓ 装备已达成极品目标，存入成品箱 §8▸ " + highlightText(gearProfile.gearName()));
+                playSuccessSound();
                 gearNext();
                 // 达到极品数量立即停机，不再处理剩余装备
                 if (statDone >= 极品附魔数量.get()) {
