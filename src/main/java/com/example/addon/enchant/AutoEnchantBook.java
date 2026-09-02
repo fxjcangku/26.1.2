@@ -1998,15 +1998,10 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     private void setState(State newState) {
-        State oldState = state;
         state = newState;
         guiTick = 0;
         guiPhase = 0;
         if (newState == State.WALK_TO_FARM) hangoutViewRestored = false;
-        // 调试埋点：上报完整状态流转（定位「不去砂轮」原因，用后删除）
-        if (oldState != newState && 目标模式.get() == TargetMode.GEAR) {
-            debugEvent("A-状态流转", "setState", oldState.cn() + "→" + newState.cn());
-        }
         // 发包附魔循环（附魔→检查→砂轮洗练→再附魔）不逐状态播报，避免每轮刷屏；
         // 进入附魔阶段只播一句「发包附魔中（不打开界面）」，且整次运行只播一次。
         if (newState == State.ENCHANTING && !发包附魔提示已播) {
@@ -2084,35 +2079,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
         if (gearTask != null) gearTask.markError(reason);
         statError++;
         notifyError("装备处理失败 → " + reason + "，已跳过该件。");
-        debugGearState("失败-" + reason);
         gearNext();
         setState(State.GEAR_IDLE);
-    }
-
-    /** 调试埋点：上报方案完整目标 + 背包里所有目标装备的实际附魔属性与匹配明细（用后删除） */
-    private void debugGearState(String 阶段) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("目标[");
-        if (gearProfile == null) {
-            sb.append("null");
-        } else {
-            for (TargetProfile.TargetEnchantment t : gearProfile.targets()) {
-                String shortId = t.id().contains(":") ? t.id().substring(t.id().indexOf(':') + 1) : t.id();
-                sb.append(shortId).append("=").append(t.level())
-                  .append(t.required() ? "必" : "选").append(t.excluded() ? "排" : "用").append(",");
-            }
-        }
-        sb.append("] ");
-        for (int i = 0; i < 36; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!stack.is(gearTargetItem)) continue;
-            var ench = EnchantEvaluationService.readEnchantments(stack);
-            TargetMatcher.Result m = TargetMatcher.match(stack, gearProfile);
-            sb.append("槽").append(i).append("=").append(ench.isEmpty() ? "无" : ench.toString())
-              .append("→").append(m.state())
-              .append("(足=").append(m.satisfied().size()).append(",缺=").append(m.missing()).append(")").append(";");
-        }
-        debugEvent("B-背包附魔", 阶段, sb.toString());
     }
 
     /** 是否为 GEAR 容器操作状态（装备在附魔台/砂轮/铁砧/箱子里，不在背包） */
@@ -2122,69 +2090,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
             || s == State.GEAR_TAKE_GEAR || s == State.GEAR_RESTOCK_LAPIS
             || s == State.GEAR_STORE_OUTPUT || s == State.GEAR_PLACE_ANVIL;
     }
-
-    /** 调试埋点：铁砧合并/维护的相位、槽位物品、背包铁砧数量（用后删除） */
-    private void debugAnvil(String 阶段) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("phase=").append(gearAnvilPhase);
-        if (mc.player != null && mc.player.containerMenu instanceof AnvilMenu handler) {
-            sb.append(" 槽0=").append(handler.getSlot(0).getItem().isEmpty() ? "空" : handler.getSlot(0).getItem().getItem());
-            sb.append(" 槽1=").append(handler.getSlot(1).getItem().isEmpty() ? "空" : handler.getSlot(1).getItem().getItem());
-            sb.append(" 槽2=").append(handler.getSlot(2).getItem().isEmpty() ? "空" : handler.getSlot(2).getItem().getItem());
-            sb.append(" 光标=").append(handler.getCarried().isEmpty() ? "空" : handler.getCarried().getItem() + "x" + handler.getCarried().getCount());
-        } else if (mc.player != null && mc.player.containerMenu instanceof ChestMenu handler) {
-            int 箱铁砧 = 0, 箱铁锭 = 0;
-            for (int i = 0; i < handler.getRowCount() * 9; i++) {
-                ItemStack s = handler.getSlot(i).getItem();
-                if (isAnvilItem(s)) 箱铁砧 += s.getCount();
-                if (s.is(Items.IRON_INGOT)) 箱铁锭 += s.getCount();
-            }
-            sb.append(" 箱铁砧=").append(箱铁砧).append(" 箱铁锭=").append(箱铁锭);
-            sb.append(" 光标=").append(handler.getCarried().isEmpty() ? "空" : handler.getCarried().getItem() + "x" + handler.getCarried().getCount());
-        } else {
-            sb.append(" 菜单未开");
-        }
-        int anvilCount = 0, 背包铁锭 = 0;
-        if (mc.player != null) {
-            for (int i = 0; i < 36; i++) {
-                ItemStack s = mc.player.getInventory().getItem(i);
-                if (isAnvilItem(s)) anvilCount += s.getCount();
-                if (s.is(Items.IRON_INGOT)) 背包铁锭 += s.getCount();
-            }
-        }
-        sb.append(" 背包铁砧=").append(anvilCount).append(" 背包铁锭=").append(背包铁锭)
-            .append(" gearSlot=").append(gearEquipSlot)
-            .append(" 主手=").append(mc.player != null && !mc.player.getMainHandItem().isEmpty() ? mc.player.getMainHandItem().getItem() + "x" + mc.player.getMainHandItem().getCount() : "空");
-        debugEvent("E-铁砧", 阶段, sb.toString());
-    }
-
-    // #region debug-point 自动附魔-不去砂轮
-    private static final String 调试地址 = "http://127.0.0.1:7777/event";
-    private static final String 调试会话 = "2026-09-01-自动附魔-不去砂轮";
-    private static final java.net.http.HttpClient 调试客户端 = java.net.http.HttpClient.newHttpClient();
-
-    /** 异步上报调试事件到本地监听服务（127.0.0.1:7777/event），失败吞掉不影响游戏线程 */
-    private void debugEvent(String 假设编号, String 位置, String 数据) {
-        try {
-            String json = "{\"sessionId\":\"" + 调试会话 + "\",\"hypothesisId\":\"" + 转义(假设编号)
-                + "\",\"location\":\"" + 转义(位置) + "\",\"data\":\"" + 转义(数据) + "\"}";
-            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(调试地址))
-                .timeout(java.time.Duration.ofSeconds(2))
-                .header("Content-Type", "application/json")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
-                .build();
-            调试客户端.sendAsync(req, java.net.http.HttpResponse.BodyHandlers.discarding());
-        } catch (Exception ignored) {
-            // 埋点失败静默
-        }
-    }
-
-    private static String 转义(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-    // #endregion
 
     /** 在玩家背包查找已附魔的目标装备（ENCHANTMENTS 非空），返回槽位，无则 -1 */
     private int findEnchantedGear() {
@@ -2676,9 +2581,7 @@ public class AutoEnchantBook extends YiyiaddonModule {
             return;
         }
         // 规划引擎决策：成品 / 铁砧 / 砂轮（只磨垃圾）/ 继续附魔 / 不可达
-        debugGearState("评估前");
         EnchantPlanningEngine.Decision decision = EnchantPlanningEngine.decide(gearProfile, gears);
-        debugEvent("C-决策", "tickGearEvaluate", decision.action() + " | " + decision.detail());
         switch (decision.action()) {
             case COMPLETE -> {
                 gearEquipSlot = slotOfItem(decision.completeItem());
@@ -2894,7 +2797,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 mc.gameMode.handleContainerInput(syncId, gearAnvilChestSlot, 0, ContainerInput.PICKUP, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 1;
-                debugAnvil("取铁砧-拿起");
             }
             case 1 -> {
                 // 右键放 1 个到背包空格
@@ -2910,14 +2812,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, freeSlot), 1, ContainerInput.PICKUP, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 2;
-                debugAnvil("取铁砧-放1个");
             }
             case 2 -> {
                 // 左键把剩下的铁砧放回「case 0 拿起的那个空槽」
                 mc.gameMode.handleContainerInput(syncId, gearAnvilChestSlot, 0, ContainerInput.PICKUP, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 3;
-                debugAnvil("取铁砧-放回");
             }
             case 3 -> {
                 // 放回后再关箱，避免「发包放回 → 立刻 closeContainer」让服务端还没处理放回、光标铁砧掉进背包
@@ -2926,7 +2826,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 guiPhase = 0;
                 gearAnvilChestSlot = -1;
                 setState(State.GEAR_WALK_ANVIL_POS);
-                debugAnvil("取铁砧-完成");
             }
         }
     }
@@ -2971,7 +2870,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
         BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, posAnvil.below(), false);
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
         guiTick = GUI操作延迟.get();
-        debugAnvil("放铁砧");
     }
 
     private void tickGearAnvil() {
@@ -3048,7 +2946,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 mc.gameMode.handleContainerInput(syncId, 0, 0, ContainerInput.PICKUP, mc.player);
                 guiTick = GUI操作延迟.get();
                 gearAnvilPhase = 1;
-                debugAnvil("合并-放主装备");
             }
             case 1 -> {
                 // 右槽：放材料装备（带目标附魔的另一件装备，装备+装备叠加）
@@ -3067,14 +2964,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 mc.gameMode.handleContainerInput(syncId, 1, 0, ContainerInput.PICKUP, mc.player);
                 guiTick = GUI操作延迟.get();
                 gearAnvilPhase = 2;
-                debugAnvil("合并-放材料");
             }
             case 2 -> {
                 if (handler.getSlot(1).getItem().isEmpty()) return;
                 int cost = AnvilPlanner.readCost(handler);
                 step.actualXpCost(cost);
                 合并费用 = cost;
-                debugAnvil("合并-费用=" + cost);
                 if (AnvilPlanner.isTooExpensive(cost)) {
                     step.tooExpensive(true);
                     ItemStack mainGear = handler.getSlot(0).getItem().copy();
@@ -3118,7 +3013,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 statAnvil++;
                 gearEquipSlot = findBestGearSlot();
                 合并播报();
-                debugAnvil("合并-完成");
             }
         }
     }

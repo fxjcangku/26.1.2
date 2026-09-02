@@ -1,0 +1,784 @@
+# 自动农场完整系统数据档案
+
+> 只读逆向审查报告 · 2026-09-02 生成
+> 审查对象：`src/main/java/com/example/addon/modules/AutoFarmMatrix.java` 及其全部关联代码
+> 可信度标注：`VERIFIED`=代码/配置直接证明；`INFERRED`=多路径合理推断；`UNKNOWN`=代码无法确认
+> 本次审查 **未修改任何业务代码**。仅新增本报告文件。
+
+---
+
+## 1. 审查范围
+
+| 范围 | 说明 | 方式 |
+|---|---|---|
+| 模块主类 | `modules/AutoFarmMatrix.java`（1433 行） | 逐行通读 VERIFIED |
+| 农场功能包 | `farm/` 9 个类全部 | 逐行通读 VERIFIED |
+| 专属指令 | `commands/NongChangCommand.java`（384 行） | 逐行通读 VERIFIED |
+| 依赖 Mixin | `mixin/ClientLevelPredictionAccessor.java` | 代理核验 VERIFIED |
+| 注册点 | `core/AddonTemplate.java`、`core/YiyiaddonModule.java` | 直接读取 VERIFIED |
+| 跨模块引用 | mining / autochest / villager / enchant 对 farm 的调用 | Grep 核验 VERIFIED |
+| 资源/lang/点位持久化 | resources、lang、.fumo、PointType | Grep 核验 VERIFIED |
+| 构建验证 | `gradlew buildPersonal` + 强制重编译 | 已执行 VERIFIED |
+| 真机测试 | 游戏内运行 | **未进行** |
+
+## 2. 项目版本
+
+- 项目目录：`d:\mcaddon\26.1.2`（Minecraft 26.1.2 / Fabric，Mojang 官方映射）
+- 相关最近提交（涉及农场文件的 git log 前 15 条中）：`c09172d 重构自动挖矿和自动农场设置分组并优化UI`、`c4e6ca0 优化UI显示和默认配置`、`a1589a1 删除自动挖矿和自动农场底部的旧使用说明文本`（VERIFIED）
+- 农场模块当前类注释自称「商业级全自动农业系统」；原始 PRD 文档未在仓库中找到（UNKNOWN，git 历史深处未全部追溯）
+
+## 3. 自动农场文件清单
+
+| 文件路径 | 类/资源 | 类型 | 是否农场核心 | 被谁调用 | 调用谁 | 作用 |
+|---|---|---|---|---|---|---|
+| `src/main/java/com/example/addon/modules/AutoFarmMatrix.java` | AutoFarmMatrix | Module | ✅ 唯一入口 | AddonTemplate 注册；NongChangCommand | farm.* 全部、YiyiaddonModule、Meteor InvUtils | 模块主类：FSM、设置、渲染事件、GUI |
+| `src/main/java/com/example/addon/farm/FarmState.java` | FarmState(enum) | 状态机 | ✅ | AutoFarmMatrix | 无 | 6 状态 + 中文名 + 看门狗上限 |
+| `src/main/java/com/example/addon/farm/FarmSite.java` | FarmSite(record) | 数据 | ✅ | AutoFarmMatrix、NongChangCommand | Registries.DIMENSION | 锚点(坐标+维度)序列化/反序列化 |
+| `src/main/java/com/example/addon/farm/SiteType.java` | SiteType(enum) | 数据 | ✅ | AutoFarmMatrix、NongChangCommand | 无 | 4 锚点类型 + 是否需容器校验 |
+| `src/main/java/com/example/addon/farm/CropProfile.java` | CropProfile(enum) | 数据表 | ✅ | AutoFarmMatrix、FarmScanner | Blocks/Items | 10 种作物图鉴 + 成熟/可种判定 |
+| `src/main/java/com/example/addon/farm/FarmScanner.java` | FarmScanner | 扫描器 | ✅ | AutoFarmMatrix | CropProfile | 512 格/tick 分帧扫描，双队列快照 |
+| `src/main/java/com/example/addon/farm/FarmPacketOps.java` | FarmPacketOps | 发包层 | ✅ | AutoFarmMatrix、mining/ContainerHelper、autochest/ChestInteractionService、villager/VillagerTradeFSM、enchant/AutoEnchantBook | ClientLevelPredictionAccessor(mixin) | 破坏/播种/开箱 C2S 包 + 预测序列 + 耐久计算 |
+| `src/main/java/com/example/addon/farm/FarmNav.java` | FarmNav | 寻路封装 | ✅ | AutoFarmMatrix | BaritoneAPI | Baritone 隔离层（已变成跨模块公共封装之一） |
+| `src/main/java/com/example/addon/farm/ContainerBroker.java` | ContainerBroker | 容器交互 | ✅ | AutoFarmMatrix、autochest/ChestInteractionService、villager/VillagerTradeFSM、villager/SupplyService | handleContainerInput | 容器同步观测 + shift 搬移 |
+| `src/main/java/com/example/addon/farm/FarmRenderer.java` | FarmRenderer | 渲染 | ✅ | AutoFarmMatrix | Meteor Renderer/TextRenderer | 雷达/边界/水源/字牌渲染 |
+| `src/main/java/com/example/addon/commands/NongChangCommand.java` | NongChangCommand | 指令 | ✅ | AddonTemplate 注册；AutoFarmMatrix GUI 静态调用 | AutoFarmMatrix | `.farm` 锚点管理指令 |
+| `src/main/java/com/example/addon/mixin/ClientLevelPredictionAccessor.java` | ClientLevelPredictionAccessor | Mixin | ⬜ 依赖（非农场专属，被 FarmPacketOps 使用） | FarmPacketOps | ClientLevel.getBlockStatePredictionHandler | 暴露预测处理器（@Invoker） |
+| `src/main/java/com/example/addon/core/AddonTemplate.java` | AddonTemplate | 公共 | ⬜ 注册点 | - | - | L104-108 注册模块、L165-168 注册指令 |
+| `src/main/java/com/example/addon/core/YiyiaddonModule.java` | YiyiaddonModule | 公共基类 | ⬜ | AutoFarmMatrix | - | notify/formatMessage/highlight*/reportSelfCheck |
+| `src/main/java/com/example/addon/ui/HelpScreen.java` | HelpScreen | 公共 UI | ⬜ | AutoFarmMatrix(帮助按钮) | - | 说明弹窗 |
+
+## 4. 模块结构（真实文件对应）
+
+```
+自动农场 AutoFarmMatrix（modules/，1433 行）
+├── Module 层：AutoFarmMatrix（含全部 FSM，无独立 Controller）
+├── FSM：FarmState 枚举（farm/FarmState.java）6 状态
+│   ├── State tick：tickStandby / tickNukeFarming / tickCollecting / tickJudgment / tickUnloading / tickRestocking（模块私有方法）
+│   └── Transition：transitionTo()（模块私有方法）
+├── Service/Manager 层（farm/ 包，全部被 AutoFarmMatrix 持有为实例字段）：
+│   ├── FarmScanner scanner（分帧扫描）
+│   └── ContainerBroker broker（容器同步/搬移）
+├── 静态工具（farm/ 包）：
+│   ├── FarmPacketOps（发包）
+│   ├── FarmNav（Baritone）
+│   ├── FarmRenderer（渲染）
+│   ├── CropProfile / FarmSite / SiteType（数据）
+├── Config：27 个 UI 设置 + 4 个隐藏 StringSetting 锚点（Meteor SettingGroup）
+├── GUI：4 个设置分组 + 自定义 WWidget（帮助按钮 + 卸货箱/补货箱两张点位卡片）
+├── Command：NongChangCommand（.farm / nc / nongchang）
+├── HUD：❌ 无 HudElement（FarmRenderer 为 3D/2D 渲染，非 HUD）
+├── Point：4 锚点，StringSetting 串行化（x,y,z,维度id），**未接入**任何共享点位系统/.fumo
+├── Pathfinding：FarmNav → BaritoneAPI（隔离层，try/catch 降级）
+├── Container/Inventory：ContainerBroker + 直读 mc.player 背包
+├── Resource：CropProfile 枚举内嵌（无外部 JSON 数据文件）
+└── Public 依赖：YiyiaddonModule、Meteor InvUtils、Mixin ClientLevelPredictionAccessor
+```
+
+## 5. 功能完整清单（全部 VERIFIED）
+
+| 功能 | 入口 | 类 | 方法 | 配置 | 输入数据 | 输出数据 | 依赖 | 状态 | 可信度 |
+|---|---|---|---|---|---|---|---|---|---|
+| 开机四重自检（作物/4锚点/维度/范围） | onActivate | AutoFarmMatrix | selfCheck() → reportSelfCheck() | 全部相关设置 | 4 锚点串、作物选择 | 缺项清单+停机 | YiyiaddonModule.reportSelfCheck | 一次性 | VERIFIED |
+| 分帧扫描（512格/tick） | onTick→scanner.tick() | FarmScanner | tick()/classify() | 隐式 BUDGET_PER_TICK=512 | 范围 min/max、enabled 作物 | harvestQueue/plantQueue 快照 | CropProfile | 每 tick | VERIFIED |
+| 爆破收割（瞬间破坏包） | tickNukeFarming | AutoFarmMatrix→FarmPacketOps | breakBlock() | bpt、reachDistance、fortuneLock/threshold | harvestQueue 快照 | C2S 包 + 本地置 AIR | Mixin 预测处理器 | 循环 | VERIFIED |
+| 副手补种 | tickNukeFarming | AutoFarmMatrix→FarmPacketOps | useOnBlock() | bpt、seedSafetyStock | plantQueue + 种子物品 | 播种包 | InvUtils.findInHotbar | 循环 | VERIFIED |
+| 蛇形巡逻（Baritone 航点行走） | tickNukeFarming→advancePatrol | AutoFarmMatrix→FarmNav | goTo() | serpentinePatrol、reachDistance(航点间距) | patrolRoute | 移动 | Baritone | 循环 | VERIFIED |
+| 拾取等待 | tickCollecting | AutoFarmMatrix→FarmNav | goTo(center) | collectWait、serpentinePatrol | 无 | 定时转 JUDGMENT | Baritone | 一次性/状态 | VERIFIED |
+| 状态决策（卸货/补货/待机） | tickJudgment | AutoFarmMatrix | - | unloadThreshold、seedSafetyStock | 背包统计 | 转 UNLOADING/RESTOCKING/STANDBY | countWhitelistStacks 等 | 每循环 | VERIFIED |
+| 自动卸货（白名单 shift 存入） | tickUnloading | AutoFarmMatrix→ContainerBroker | depositOne() | bpt(每 tick 搬移次数)、seedSafetyStock(截留) | whitelist/retain 集合 | 背包→卸货箱 | ContainerBroker | 循环 | VERIFIED |
+| 自动补货（种子 shift 取出） | tickRestocking | AutoFarmMatrix→ContainerBroker | withdrawOne() | seedSafetyStock | 启用作物种子 | 补货箱→背包 | ContainerBroker | 循环 | VERIFIED |
+| 种子耗尽降级「只收不种」+自动恢复 | tickNukeFarming/tickRestocking | AutoFarmMatrix | harvestOnly 标志 | seedSafetyStock | 种子计数 | 行为切换 | countSeeds | 标志 | VERIFIED |
+| 时运防爆锁（低耐久切空手） | tickNukeFarming | AutoFarmMatrix→FarmPacketOps | getRemainingDurability() | fortuneLock/threshold | 主手工具 | 切热键栏空格(0-8) | InvUtils.swap | 循环 | VERIFIED |
+| 防踩踏（农田内拦跳跃） | onTick | AutoFarmMatrix | - | antiTrample | 玩家位置 | 拦 keyJump | scanner.contains | 每 tick | VERIFIED |
+| 静默容器（拦截箱子 Screen） | onOpenScreen | AutoFarmMatrix | - | 无（恒启用） | OpenScreenEvent | 取消 AbstractContainerScreen（排除背包界面） | - | 事件 | VERIFIED |
+| 看门狗（状态超时回退/停机） | onTick | AutoFarmMatrix | - | 硬编码 MAX=3 | stateTick | STANDBY / 自关模块 | FarmState.watchdogTicks | 每 tick | VERIFIED |
+| 退出世界自动停机 | onGameLeft | AutoFarmMatrix | - | 无 | GameLeftEvent | toggle | - | 一次性 | VERIFIED |
+| 农田雷达/边界/水源/字牌渲染 | onRender3D/2D | AutoFarmMatrix→FarmRenderer | renderRadar 等 | renderRadar 等 8 项 | 扫描队列 | 3D 框/2D 标签 | Meteor Renderer | 每帧 | VERIFIED |
+| 启动报告（单条多行） | onActivate | AutoFarmMatrix | reportStartupInfo() | 全部运行配置 | 配置 | 聊天消息块 | YiyiaddonModule.notify | 一次性 | VERIFIED |
+| 锚点管理指令 | 指令系统 | NongChangCommand | set/remove/clear/status | 4 锚点 | 准星命中方块 | 锚点 StringSetting | AutoFarmMatrix.bindSite | 离散 | VERIFIED |
+| GUI 点位卡片（卸货箱/补货箱按钮设置/删除） | getWidget | AutoFarmMatrix | buildLocationCard() | dump/supply | 卡片按钮 | 调 NongChangCommand 静态方法 | - | 交互 | VERIFIED |
+
+## 6. State 完整清单
+
+来源：[FarmState.java](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/FarmState.java#L12-L49)（VERIFIED，无子状态/临时状态/WAIT/RETRY 枚举态，全部共 6 个）
+
+| State 名称 | 中文名 | 类型 | 文件 | 进入条件 | 看门狗上限(tick) | 下一状态 |
+|---|---|---|---|---|---|---|
+| STANDBY | 待机 | Enum | farm/FarmState.java L15 | onActivate 复位；看门狗回退；决策后 | 200（不计时，仅供引用） | NUKE_FARMING |
+| NUKE_FARMING | 收割播种 | Enum | 同上 L18 | STANDBY 且扫描满一轮且队列非空 | 6000 | COLLECTING |
+| COLLECTING | 拾取掉落 | Enum | 同上 L21 | NUKE_FARMING 目标处理完 | 700 | JUDGMENT |
+| JUDGMENT | 状态决策 | Enum | 同上 L24 | COLLECTING 拾取等待结束 | 60 | UNLOADING / RESTOCKING / STANDBY |
+| UNLOADING | 卸货 | Enum | 同上 L27 | JUDGMENT：freeSlots<=2 或白名单组数>=阈值 | 1200 | STANDBY |
+| RESTOCKING | 补种子 | Enum | 同上 L30 | JUDGMENT：缺种子+有补货箱+冷却结束 | 1200 | STANDBY |
+
+注意：STANDBY 状态在 onTick 看门狗中不递增 stateTick（`state != FarmState.STANDBY` 才计数），STANDBY 可以无限停留（[AutoFarmMatrix.java L639](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/modules/AutoFarmMatrix.java#L639)）。无 INIT/IDLE/DEBUG/RECOVER/STOP 状态；停机通过 `toggle()` 关闭模块实现。
+
+## 7. State 字段数据（FSM 相关全部实例字段，位于 AutoFarmMatrix）
+
+来源：[AutoFarmMatrix.java L116-L155](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/modules/AutoFarmMatrix.java#L116-L155)（VERIFIED）
+
+| 字段 | 类型 | 默认值 | 来源 | 修改位置 | 使用位置 | 用途 |
+|---|---|---|---|---|---|---|
+| state | FarmState | STANDBY | onActivate/transitionTo | L408, L736 | tickStateMachine、看门狗 | 当前状态 |
+| stateTick | int | 0 | onActivate 归零 | L410, L640（非 STANDBY 递增）、transitionTo L737 归零 | COLLECTING 等待、tickUnloading 开箱节流、看门狗 | 状态停留时长 |
+| watchdogStrikes | int | 0 | onActivate 归零 | L642 超时递增 | L643 停机判定 | 连续超时计数（**全程不复位**，见 §30-7） |
+| MAX_WATCHDOG_STRIKES | static final int | 3 | 硬编码 L119 | - | L643 | 超时停机阈值 |
+| restockCooldownTicks | int | 0 | 声明 L122 | L633 递减、L1095 置 RESTOCK_COOLDOWN | L1000 决策条件 | 补货冷却倒数 |
+| RESTOCK_COOLDOWN | static final int | 1200（60秒） | 硬编码 L123 | - | L1095 | 补货冷却时长 |
+| lastNotifiedState | String | "" | 声明 L125；onActivate 清空 | L745-L753 | L744 去重 | 物流状态播报去重锁 |
+| workHarvest | List\<BlockPos\> | List.of() | 声明 L128 | L779 快照拷贝 | tickNukeFarming | 本轮收割目标快照 |
+| workPlant | List\<BlockPos\> | List.of() | 声明 L130 | L780 快照拷贝 | tickNukeFarming | 本轮补种底盘快照 |
+| processedHarvest | Set\<BlockPos\> | 空 HashSet | 声明 L133 | L781 清空、L829/838 填充 | L822/873/890 | 本轮已处理收割格 |
+| processedPlant | Set\<BlockPos\> | 空 HashSet | 声明 L134 | L782 清空、L850/866 填充 | L845/874/891 | 本轮已处理补种格 |
+| harvestOnly | boolean | false（声明未显式初始化） | L140 | L857 置 true、L1092 恢复、L1094 置 true | L843/876/891、L999 决策 | 只收不种降级标志 |
+| lastOpenAttempt | int | -100 | 声明 L145 | L740（-10）、L1248 记录 | L1247 节流判定 | 开箱包重试节流 |
+| OPEN_RETRY_INTERVAL | static final int | 10 tick | 硬编码 L147 | - | L1247 | 开箱重试间隔 |
+| patrolRoute | List\<BlockPos\> | List.of() | 声明 L150 | L955 rebuild、L511/606 清空 | advancePatrol | 蛇形航点序列 |
+| patrolIndex | int | 0 | 声明 L152 | L785/915 递增、L956 归零 | advancePatrol | 当前航点下标 |
+| lastIdleNotifySweep | int | 0 | 声明 L155 | L513/608 归零、L772 记录 | L770 节流判定 | 「等待成熟」播报节流 |
+
+扫描器内部字段：[FarmScanner.java L26-L48](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/FarmScanner.java#L26-L48)：`BUDGET_PER_TICK=512`、`min/max/bounded`、`cursorX/Y/Z`、`harvestBuffer/plantBuffer`、`harvestQueue/plantQueue`（对外稳定快照）、`enabled`（EnumSet）、`completedSweeps`。
+
+容器代理字段：[ContainerBroker.java L29-L33](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/ContainerBroker.java#L29-L33)：`STABLE_TICKS_REQUIRED=3`、`lastStateId`、`stableTicks`。
+
+## 8. State 方法数据（VERIFIED，全部来自 AutoFarmMatrix.java）
+
+| 方法 | 参数 | 返回值 | 调用者 | 调用对象 | 作用 |
+|---|---|---|---|---|---|
+| tickStateMachine | - | void | onTick L636 | 6 个 tickXxx | 状态分发 switch |
+| transitionTo | FarmState newState | void | 各 tickXxx、看门狗 | FarmNav.cancel | 状态切换+stateTick 归零+开箱节流归零+物流播报去重 |
+| tickStandby | - | void | tickStateMachine | scanner | 等首轮扫描→拷快照→转 NUKE_FARMING；空田每 10 轮提示一次 |
+| tickNukeFarming | - | void | tickStateMachine | FarmPacketOps/InvUtils/FarmNav | 时运锁→破坏(预算 bpt)→补种(预算 bpt)→推进巡逻→finished 转 COLLECTING |
+| advancePatrol | - | void | tickNukeFarming L881 | FarmNav | 到站(distSqr≤4)换下一航点；未寻路则 goTo(waypoint,1) |
+| rebuildPatrolRoute | - | void | onActivate L420 | scanner | 按 (reachDistance*2-1) 步长生成蛇形航线，y=min.y+1 |
+| tickCollecting | - | void | tickStateMachine | FarmNav | 蛇形模式下每 40 tick 向农田中心 goTo(center,2)；stateTick≥collectWait 转 JUDGMENT |
+| tickJudgment | - | void | tickStateMachine | countWhitelistStacks/countSeeds | freeSlots≤2 或 组数≥阈值→UNLOADING；缺种子→RESTOCKING；否则 STANDBY |
+| tickUnloading | - | void | tickStateMachine | FarmNav/ContainerBroker | 寻路到箱→开箱→broker 就绪→depositOne×bpt→无货可搬转 STANDBY |
+| tickRestocking | - | void | tickStateMachine | FarmNav/ContainerBroker | 寻路→开箱→按作物 withdrawOne→无货可拿后决定 harvestOnly 与冷却 |
+| prepareSeed | Item seed | InteractionHand | tickNukeFarming L854 | InvUtils | 副手→主手→热键栏移副手；都没有返回 null |
+| inReach | BlockPos | boolean | tickNukeFarming/reachableCount | - | 眼位到方块中心直线距离 ≤ reachDistance²（自算，非原版 API） |
+| reachableCount | List,Set | int | tickNukeFarming | - | 未处理且够得着的格数 |
+| lootWhitelist / retainItems | - | Set\<Item\> | tickUnloading | CropProfile | 卸货白名单 / 截留种子集合 |
+| countWhitelistStacks | - | int | tickJudgment | 背包 | 白名单物品总组数（(总数+63)/64，含副手） |
+| countItem / countSeeds | Item / - | int | tickJudgment/tickRestocking | 背包 | 指定物品总数 / 启用作物种子总数 |
+| tryOpenContainer | BlockPos | void | tickUnloading/tickRestocking L1028/1068 | FarmPacketOps | 开箱发包（10 tick 节流） |
+| selfCheck | - | List\<String\> | onActivate | scanner | 四重自检收集缺项 |
+| site / bindSite / clearSite / clearAllSites | SiteType,(FarmSite) | FarmSite / void | NongChangCommand、GUI | 4 个 StringSetting | 锚点读写 |
+| getEnabledCrops | - | Set\<CropProfile\> | 多处 | CropProfile | 四组方块列表→作物图鉴 |
+| plantableAt | BlockPos | CropProfile | tickNukeFarming L848 | CropProfile | 该底盘当前能种的作物 |
+
+## 9. State 转移表（全部 VERIFIED，代码位置精确）
+
+| 当前 State | 判断条件 | 判断变量 | 比较值 | 成功/失败 | 下一 State | 代码位置 |
+|---|---|---|---|---|---|---|
+| STANDBY | completedSweeps == 0 | scanner.completedSweeps() | ==0 | 未扫描完（留在本态） | STANDBY | L764 |
+| STANDBY | harvest 与 plant 双空 | harvestQueue/plantQueue | isEmpty | 空田（留在本态，10轮一提示） | STANDBY | L768-774 |
+| STANDBY | 队列非空 | harvestQueue 或 plantQueue | 非空 | 成功 | NUKE_FARMING | L779-787 |
+| NUKE_FARMING | finished（巡逻模式） | processedHarvest.size() >= workHarvest.size() 且 (harvestOnly 或 processedPlant 满) | >= | 成功 | COLLECTING | L889-891 |
+| NUKE_FARMING | finished（手动模式） | reachableHarvest==0 且 (harvestOnly 或 reachablePlant==0) | ==0 | 成功 | COLLECTING | L892-894 |
+| COLLECTING | stateTick < collectWait | stateTick | < collectWait(默认200) | 未到（留在本态） | COLLECTING | L974 |
+| COLLECTING | stateTick >= collectWait | stateTick | >= collectWait | 成功 | JUDGMENT | L974-977 |
+| JUDGMENT | 空槽 <= 2 | freeSlots（扫 0-35） | <=2 | 强制 | UNLOADING | L983-990 |
+| JUDGMENT | 白名单组数 >= 脱货阈值 | countWhitelistStacks() | >= unloadThreshold(默认20) | 成功 | UNLOADING | L993-996 |
+| JUDGMENT | harvestOnly 或 种子数不足 | countSeeds() | < seedSafetyStock*64 | 成功(且有补货箱且冷却≤0) | RESTOCKING | L999-1004 |
+| JUDGMENT | 均不满足 | - | - | 成功 | STANDBY | L1006 |
+| UNLOADING | dump == null | site(DUMP) | null | 失败 | STANDBY | L1011-1014 |
+| UNLOADING | 不在交互范围内 | isWithinBlockInteractionRange | false | 寻路中（留在本态） | UNLOADING | L1020-1023 |
+| UNLOADING | 容器菜单未开 | ContainerBroker.openMenu() | null | 开箱（留在本态） | UNLOADING | L1027-1030 |
+| UNLOADING | 容器未同步 | broker.isReady() | false | 等待（留在本态） | UNLOADING | L1031 |
+| UNLOADING | depositOne 全部返回 false | moved | false | 「倒完/箱满」 | STANDBY（关箱+broker.reset） | L1047-1051 |
+| RESTOCKING | supply == null | site(SUPPLY) | null | 失败 | STANDBY | L1056-1058 |
+| RESTOCKING | 不在交互范围 | isWithinBlockInteractionRange | false | 寻路中 | RESTOCKING | L1061-1064 |
+| RESTOCKING | withdrawOne 无种子可取 | moved | false 且 countSeeds()>0 | 恢复播种 | STANDBY（harvestOnly=false） | L1085-1097 |
+| RESTOCKING | moved false 且 countSeeds()==0 | countSeeds() | ==0 | 维持只收不种 | STANDBY + 冷却 1200t | L1093-1097 |
+| 任意非 STANDBY | stateTick > watchdogTicks() | stateTick | >200/6000/700/60/1200/1200 | 第3次 | 模块自动停机 toggle() | L639-647 |
+| 任意非 STANDBY | stateTick > watchdogTicks() | watchdogStrikes | <3 | 失败 | STANDBY | L648-649 |
+| 任意 | 模块开关关闭 / GameLeftEvent | isActive | - | 停止 | onDeactivate 复位 | L505-514/L700-704 |
+
+## 10. 完整状态机（正常路径 + 异常路径）
+
+```
+[模块开启] onActivate
+     ├─ selfCheck 缺项 ──→ reportSelfCheck → 自动停机（下一 tick toggle 关）
+     └─ 自检通过 → STANDBY
+STANDBY
+     ├─ 首轮扫描未完成 ──→ STANDBY（原地等）
+     ├─ 农田全空 ──→ STANDBY（每10轮提示「等待作物成熟」）
+     └─ 有目标 ──→ 拷贝快照/清 processed/patrolIndex=0 ──→ NUKE_FARMING
+NUKE_FARMING（6000t watchdog）
+     ├─ 时运锁触发 → 切热键栏空格/第8格（继续收割）
+     ├─ 逐格：够得着→二次确认可收→breakBlock(已处理标记)；播种同理
+     ├─ 手上无种子 → harvestOnly=true（本轮放弃补种）
+     ├─ 蛇形模式：当前站覆盖完 → advancePatrol 下一个航点
+     ├─ finished → COLLECTING
+     └─ 看门狗超时 → STANDBY（strikes+1）
+COLLECTING（700t watchdog）
+     ├─ 蛇形模式：每 40t 向农田中心 goTo(center,2)
+     ├─ stateTick≥collectWait → FarmNav.cancel → JUDGMENT
+     └─ 看门狗超时 → STANDBY
+JUDGMENT（60t watchdog）
+     ├─ 空槽≤2 或 白名单组数≥阈值 → UNLOADING
+     ├─ 缺种子(harvestOnly或countSeeds<安全库存*64) 且有补货箱且冷却结束 → RESTOCKING
+     └─ 否则 → STANDBY
+UNLOADING（1200t watchdog）
+     ├─ 卸货箱未绑定 → 报错 → STANDBY
+     ├─ 太远 → FarmNav.goTo(dump,4)（循环）
+     ├─ 容器没开 → tryOpenContainer（10t 节流）
+     ├─ 容器没同步好(3t稳定) → 等待
+     ├─ depositOne×bpt 搬白名单+非截留物品
+     ├─ 搬不动(moved=false) → 关箱 → STANDBY
+     └─ 看门狗超时 → STANDBY
+RESTOCKING（1200t watchdog）
+     ├─ 补货箱未绑定 → STANDBY
+     ├─ 太远 → FarmNav.goTo(supply,4)
+     ├─ 开箱/等同步 同 UNLOADING
+     ├─ 按启用作物 withdrawOne 种子（每 tick 一个）
+     ├─ 拿不到(moved=false)：有种子→恢复播种 STANDBY；无种子→维持降级+冷却1200t → STANDBY
+     └─ 看门狗超时 → STANDBY
+[模块关闭/退出世界] onDeactivate/GameLeft → FarmNav.cancel + scanner/broker 复位
+[看门狗 3 次] → notifyError → toggle() 自关模块（整个会话内 strikes 不复位）
+```
+
+## 11. 状态机异常路径汇总
+
+| 异常 | 进入路径 | 处理 | 最终态 |
+|---|---|---|---|
+| 卸货箱未绑定 | UNLOADING tick | 报错跳过 | STANDBY |
+| 补货箱未绑定 | RESTOCKING tick | 静默跳过 | STANDBY |
+| 看门狗连续 1-2 次 | 任意非 STANDBY 超时 | 提示+回退 | STANDBY（strikes 累积） |
+| 看门狗第 3 次 | 同上 | 提示+模块自关 | 模块关闭 |
+| Baritone 异常/不可用 | FarmNav 任意调用 catch | disabled=true 永久降级，原地干活 | 视状态：巡逻不推进→靠看门狗（见 §30-1） |
+| 种子耗尽 | NUKE_FARMING prepareSeed 返回 null | harvestOnly=true 只收不种 | 次轮 JUDGMENT 触发 RESTOCKING |
+| 补货箱也空 | RESTOCKING 拿不到且 countSeeds==0 | 冷却 1200t，维持降级 | STANDBY |
+| 退出服务器 | GameLeftEvent | 自动关闭模块 | 关闭 |
+| 箱子被拆/开箱失败 | tryOpenContainer 服务端不回应 | 10t 重试节流至看门狗 | STANDBY |
+| 玩家打开背包界面 | OpenScreenEvent | 放行（排除 InventoryScreen） | 无影响 |
+| 玩家跳跃踩农田 | onTick 防踩踏 | 强制松开跳跃键 | 无影响 |
+
+## 12. Config 完整数据（27 个可见设置 + 4 个隐藏锚点，全部 VERIFIED）
+
+来源：[AutoFarmMatrix.java L161-L393](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/modules/AutoFarmMatrix.java#L161-L393)
+
+| 配置名称 | 类型 | 默认值 | 最小值 | 最大值 | GUI 名称/组 | Command | 实际使用位置 |
+|---|---|---|---|---|---|---|---|
+| cropsDouble | BlockListSetting | 空[] | - | - | 作物选择/双作物（filter: Kind.TWIN） | 无 | getEnabledCrops→扫描/白名单 |
+| cropsSingle | BlockListSetting | 空[] | - | - | 单作物（filter: Kind.SINGLE） | 无 | 同上 |
+| cropsPillar | BlockListSetting | 空[] | - | - | 柱状物（filter: Kind.PILLAR） | 无 | 同上 |
+| cropsVine | BlockListSetting | 空[] | - | - | 蔓生物（filter: Kind.VINE） | 无 | 同上 |
+| unloadThreshold | IntSetting | 20 | 1 | 36 | 卸货阈值(组)·后勤 | 无 | tickJudgment L993 |
+| seedSafetyStock | IntSetting | 3 | 0 | 10 | 种子安全库存(组)·后勤 | 无 | L999/L1077/L1095·启动播报 |
+| bpt | IntSetting | 10 | 1 | 30 | 发包速率(BPT)·后勤 | 无 | 破坏/补种包预算 L816-817；卸货搬移次数 L1037 |
+| reachDistance | IntSetting | 4 | 1 | 8 | 收割距离·后勤 | 无 | inReach L1166；巡逻步长 L941 |
+| collectWait | IntSetting | 200 tick | 20 | 600 | 拾取等待(tick)·后勤 | 无 | tickCollecting L974 |
+| serpentinePatrol | BoolSetting | true | - | - | 蛇形巡逻·后勤 | 无 | onActivate 警告、advancePatrol、finished 判定、COLLECTING、启动播报 |
+| fortuneLock | BoolSetting | true | - | - | 时运防爆锁·安全 | 无 | tickNukeFarming L792 |
+| fortuneLockThreshold | IntSetting | 10 | 1 | 100 | 时运锁阈值·安全（visible=fortuneLock） | 无 | L795 耐久比较 |
+| antiTrample | BoolSetting | true | - | - | 防踩踏·安全 | 无 | onTick L620 |
+| renderRadar | BoolSetting | true | - | - | 农田雷达·显示 | 无 | onRender3D L659 |
+| radarRipeColor | ColorSetting | (0,255,0,75) | - | - | 成熟框颜色 | 无 | L662（同时传为框线与框面） |
+| radarEmptyColor | ColorSetting | (255,255,0,75) | - | - | 空地框颜色 | 无 | L663 |
+| radarShapeMode | EnumSetting\<ShapeMode\> | Both | - | - | 雷达形状 | 无 | L664 |
+| renderBounds | BoolSetting | true | - | - | 边界外框 | 无 | L668 |
+| boundsColor | ColorSetting | (255,255,255,50) | - | - | 边界框颜色 | 无 | L670 |
+| boundsShapeMode | EnumSetting\<ShapeMode\> | Lines | - | - | 边界形状 | 无 | L670 |
+| renderWaterRange | BoolSetting | false | - | - | 水源辐射范围 | 无 | L674 |
+| waterRangeColor | ColorSetting | (0,150,255,40) | - | - | 水源框颜色 | 无 | L678 |
+| waterRangeShapeMode | EnumSetting\<ShapeMode\> | Sides | - | - | 水源形状 | 无 | L678 |
+| waterMaxSources | IntSetting | 50 | 1 | 200 | 水源渲染上限 | 无 | L676 |
+| renderLabels | BoolSetting | true | - | - | 容器字牌 | 无 | onRender2D L684 |
+| siteStart(_anchor_start) | StringSetting | "" | - | - | **隐藏**（defaultGroup，visible=false） | .farm set/remove 起点 | site()/扫描范围/自检 |
+| siteEnd(_anchor_end) | StringSetting | "" | - | - | 隐藏 | 同上 终点 | 同上 |
+| siteDump(_anchor_dump) | StringSetting | "" | - | - | 隐藏 | 同上 卸货箱 | tickUnloading/字牌 |
+| siteSupply(_anchor_supply) | StringSetting | "" | - | - | 隐藏 | 同上 补货箱 | tickRestocking/字牌 |
+
+结论（一致性核查）：
+- GUI 显示与运行使用为**同一字段**：全部 27 项均有读取点，无「配置存在但未使用」✅ VERIFIED。
+- 4 个锚点藏于 defaultGroup 且 visible=false，Meteor 设置界面仍可能以设置项形式可见到（defaultGroup），但业务上由指令/卡片管理。
+- 无「代码使用但没有 GUI」的隐藏运行常量（硬编码常量已在 §20 单列）。
+- `reachDistance` 描述声称原版上限约 4.5 格，超距服务端可能拒绝——模块自算直线距离，与容器交互用的原版 `isWithinBlockInteractionRange`（约4.5格）是**两套距离体系**（VERIFIED，L1165-1169 与 L1020 对比）。
+
+## 13. GUI 完整数据
+
+| GUI 项目 | 显示名称 | 类型 | 对应字段 | 默认值 | 修改方式 | 实际影响 |
+|---|---|---|---|---|---|---|
+| 帮助按钮 | 查看使用说明 | WButton | - | - | 点击→HelpScreen | 打开说明弹窗（内容见 §30-8 与实现不符） |
+| 卸货箱卡片 | 卸货箱/设置/删除 | 卡片 | siteDump | "" | 按钮→NongChangCommand.setBinding("dump") | 绑定准星命中容器 |
+| 补货箱卡片 | 补货箱/设置/删除 | 卡片 | siteSupply | "" | 按钮→setBinding("supply") | 同上 |
+| 4 个设置分组 | 作物选择/后勤设置/安全设置/显示设置 | SettingGroup | - | - | Meteor 标准设置表 | 全部 27 项配置入口 |
+
+要点（VERIFIED）：
+- 卡片「设置」动作在 `setBinding()` 内读取 `mc.hitResult`（准星命中），随后 `mc.setScreen(null)`；玩家须先对准箱子再点按钮（行为 INFERRED：hitResult 在无 Screen 时才更新，打开 GUI 时冻结在最后瞄准位置）。
+- 卡片绑定状态用 `NongChangCommand.hasBinding()` 即时判断，绑定后无自动刷新回调——需重开配置页才更新显示（VERIFIED，无 onChanged 监听）。
+- 起点/终点无 GUI 卡片，只能走 `.farm set 起点/终点` 指令（帮助文案已说明，帮助按钮 L1383「两种方式」）。
+
+## 14. Command 完整数据
+
+来源：[NongChangCommand.java](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/commands/NongChangCommand.java#L44-L89)（VERIFIED）
+
+| 命令 | 参数 | 类型 | 默认值 | 调用方法 | 修改字段 | 实际作用 |
+|---|---|---|---|---|---|---|
+| .farm（裸，别名 nc/nongchang） | - | - | - | 内联打印 | - | 四锚点绑定状态树 |
+| .farm status | - | - | - | showStatus() | - | 同上+服务器 IP（无服务器显示「单人世界」） |
+| .farm set 起点 | 准星目标 | 方块 | - | bind(START) | siteStart | 绑定农田对角起点（不校验容器） |
+| .farm set 终点 | 准星目标 | 方块 | - | bind(END) | siteEnd | 绑定农田对角终点 |
+| .farm set 卸货箱 | 准星目标 | 容器 | - | bind(DUMP) | siteDump | 绑定卸货箱（必须 Container 方块实体） |
+| .farm set 补货箱 | 准星目标 | 容器 | - | bind(SUPPLY) | siteSupply | 绑定补货箱（必须 Container） |
+| .farm remove {四种} | - | - | - | unbind(type) | 对应锚点置 "" | 解绑（未绑定时报错） |
+| .farm clear | - | - | - | clearAllSites() | 四锚点全清+扫描器复位 | 一键清空 |
+
+静态工具供 GUI 调用：`hasBinding(key)` / `setBinding(key)` / `removeBinding(key)`，仅接受 `"dump"`/`"supply"`（L287-373）。
+硬校验（VERIFIED，L149-185）：模块运行中禁止绑定；已绑定禁止覆盖（必须先 remove）；容器类锚点校验 `BlockEntity instanceof Container`。
+生成绑定方式：`FarmSite.here(target)` 用 `mc.level.dimension()` 当前维度。
+
+## 15. Point / .fumo 完整数据
+
+| Point | PointType | 数据结构 | 设置方式 | 使用 State | 必需 | 验证 |
+|---|---|---|---|---|---|---|
+| 起点 | SiteType.START | FarmSite(BlockPos pos, ResourceKey\<Level\> dimension) | .farm set 起点 | 全体（扫描范围） | 是（自检） | 无容器校验；维度一致自检 |
+| 终点 | SiteType.END | 同上 | .farm set 终点 | 全体（扫描范围） | 是（自检） | 同上 |
+| 卸货箱 | SiteType.DUMP | 同上 | .farm set 卸货箱 / GUI 卡片 | UNLOADING、字牌 | 是（自检） | 容器校验：BlockEntity instanceof Container |
+| 补货箱 | SiteType.SUPPLY | 同上 | .farm set 补货箱 / GUI 卡片 | RESTOCKING、字牌 | 是（自检） | 容器校验 |
+
+- 序列化格式：`x,y,z,minecraft:overworld`（逗号分隔 4 段），存 4 个 StringSetting；非法/空串 parse 返回 null（[FarmSite.java L25-L48](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/FarmSite.java#L25-L48)）✅ VERIFIED。
+- 字段清单：`posX/posY/posZ`（BlockPos 内）+ `dimension`（ResourceKey）。**无** direction/yaw/pitch/radius 字段（VERIFIED：record 仅两字段）。
+- 保存位置：Meteor 模块配置系统（modules NBT，随客户端配置目录持久化，由 Meteor 框架自动保存）；指令内 bind 后未显式调用 `Modules.get().save()`（NongChangCommand 无 save 调用，UNKNOWN：依赖 Meteor 自动保存时机——对比附魔模块 FumoCommand 有显式 save，农场缺失）。
+- `.fumo` 与 `PointType`：属**自动附魔模块专属**点位系统（enchant/point/PointType.java），自动农场未接入、也未实现自己的共享点位库（VERIFIED）。
+
+## 16. Item ID 完整数据
+
+全部来自 [CropProfile.java L41-L59](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/CropProfile.java#L41-L59)（VERIFIED）
+
+| ItemID | 使用位置 | 用途 |
+|---|---|---|
+| minecraft:wheat_seeds (Items.WHEAT_SEEDS) | CropProfile.WHEAT.seed | 小麦种子（补种/截留/白名单） |
+| minecraft:wheat (Items.WHEAT) | WHEAT.produce | 小麦产物（白名单） |
+| minecraft:beetroot_seeds (Items.BEETROOT_SEEDS) | BEETROOT.seed | 甜菜种子 |
+| minecraft:beetroot (Items.BEETROOT) | BEETROOT.produce | 甜菜产物 |
+| minecraft:potato (Items.POTATO) | POTATO.seed=produce | 土豆（产物即种子，截留） |
+| minecraft:poisonous_potato (Items.POISONOUS_POTATO) | POTATO.extraLoot | 毒马铃薯（白名单不截留） |
+| minecraft:carrot (Items.CARROT) | CARROT.seed=produce | 胡萝卜 |
+| minecraft:nether_wart (Items.NETHER_WART) | NETHER_WART.seed=produce | 地狱疣 |
+| minecraft:bamboo (Items.BAMBOO) | BAMBOO.produce | 竹子产物 |
+| minecraft:sugar_cane (Items.SUGAR_CANE) | SUGAR_CANE.produce | 甘蔗产物 |
+| minecraft:cactus (Items.CACTUS) | CACTUS.produce | 仙人掌产物 |
+| minecraft:pumpkin (Items.PUMPKIN) | PUMPKIN.produce | 南瓜产物 |
+| minecraft:melon_slice (Items.MELON_SLICE) | MELON.produce | 西瓜片 |
+
+## 17. Block ID 完整数据
+
+| BlockID | 使用位置 | 用途 |
+|---|---|---|
+| minecraft:wheat / beetroots / potatoes / carrots | WHEAT/BEETROOT/POTATO/CARROT.block | 收割目标判定 |
+| minecraft:nether_wart | NETHER_WART.block | 收割目标 |
+| minecraft:bamboo / sugar_cane / cactus | 三柱状物.block | 柱状物切割判定 |
+| minecraft:pumpkin / melon | PUMPKIN/MELON.block | 蔓生物果实判定 |
+| minecraft:farmland | 四种作物.soil | 播种底盘 |
+| minecraft:soul_sand | NETHER_WART.soil | 地狱疣底盘 |
+| minecraft:bamboo_sapling (Blocks.BAMBOO_SAPLING) | CropProfile.isPillarRoot L229 | 竹笋识别为柱状根 |
+| minecraft:air (Blocks.AIR) | FarmPacketOps.breakBlock L74 | 破坏后本地置空气 |
+
+## 18. Entity / Tag 数据
+
+- Entity ID：**0 个**（农场代码不涉及任何实体；拾取阶段不检测 ItemEntity）✅ VERIFIED。
+- Tag：`FluidTags.WATER`（FarmRenderer.collectWaterSources L92 水源识别）+ `getFluidState().isSource()`。共 1 个 tag 使用（VERIFIED）。
+- Registry：`Registries.DIMENSION`（FarmSite.parse L44）；`Registries.ENCHANTMENT`（FarmPacketOps.getFortuneLevel——死代码，见 §32）。
+- Screen / Handler：不强制依赖具体 Screen 类型——静默容器模式下拦截 `AbstractContainerScreen`（排除 `InventoryScreen`）；就绪判定只认 `player.containerMenu`（containerId != 0）+ `getStateId()` 稳定（[ContainerBroker.java L70-L79](file:///d:/mcaddon/26.1.2/src/main/java/com/example/addon/farm/ContainerBroker.java#L70-L79)）。
+
+## 19. Slot 数据（全部 VERIFIED）
+
+| 位置 | Slot 范围/映射 | 判断 | 操作 |
+|---|---|---|---|
+| 背包自由槽统计（JUDGMENT） | 0-35（getItem(i).isEmpty()） | isEmpty | 计数 freeSlots<=2 触发卸货 |
+| 时运锁找空格 | 0-8（热键栏 getItem(i).isEmpty()） | isEmpty | InvUtils.swap(emptySlot,false)；无空格则 setSelectedSlot(8) |
+| 种子准备 | 副手(getOffhandItem) → 主手(getMainHandItem) → 热键栏(InvUtils.findInHotbar) | `is(seed)` | 热键栏找到→`InvUtils.move().from(slot).toOffhand()` |
+| 背包物品统计 | `getInventory().getNonEquipmentItems()`（36格）+ 副手 1 格 | is(item)/contains | countWhitelistStacks/countItem |
+| 容器侧/背包侧区分 | `menu.slots` 遍历，`slot.container != player.getInventory()` 为箱子侧 | container 引用 | depositOne 对背包侧 shift；withdrawOne 对箱子侧 shift |
+| 开箱前背包检查 | `getInventory().getFreeSlot()` | == -1 | withdrawOne 前置拒绝（防幽灵物品） |
+| 发送点击 | `handleContainerInput(containerId, slotIndex, 0, QUICK_MOVE, player)` | - | shift 快速移动 |
+
+**Slot 偏移排查结论：无硬编码魔法槽号、无偏移错误**（农场侧全部通过接口/遍历定位；对比：硬编码固定槽号出现在 enchant/autologin 等其它模块，不在本模块）。
+
+## 20. Delay / Timeout / Retry 数据（硬编码常量全表，全部 VERIFIED）
+
+| 名称 | 类型 | 数值 | 单位 | 使用位置 | 实际意义 |
+|---|---|---|---|---|---|
+| BUDGET_PER_TICK | static final int | 512 | 格/tick | FarmScanner L27 | 每 tick 最大扫描格数 |
+| STANDBY watchdog | int | 200 | tick | FarmState L15 | （不计时，见 §6） |
+| NUKE_FARMING watchdog | int | 6000 | tick (5分钟) | FarmState L18 | 收割播种态超时上限 |
+| COLLECTING watchdog | int | 700 | tick | FarmState L21 | 拾取态超时上限（须>collectWait 上限 600） |
+| JUDGMENT watchdog | int | 60 | tick | FarmState L24 | 决策态超时上限 |
+| UNLOADING watchdog | int | 1200 | tick (60秒) | FarmState L27 | 卸货态超时上限 |
+| RESTOCKING watchdog | int | 1200 | tick (60秒) | FarmState L30 | 补货态超时上限 |
+| MAX_WATCHDOG_STRIKES | static final int | 3 | 次 | AutoFarmMatrix L119 | 连续超时即停机 |
+| RESTOCK_COOLDOWN | static final int | 1200 | tick (60秒) | AutoFarmMatrix L123 | 补货箱空后的冷却 |
+| OPEN_RETRY_INTERVAL | static final int | 10 | tick | AutoFarmMatrix L147 | 开箱包重试节流 |
+| STABLE_TICKS_REQUIRED | static final int | 3 | tick | ContainerBroker L30 | stateId 稳定判定 |
+| collectWait | IntSetting | 200（默认） | tick | AutoFarmMatrix L243 | 拾取等待（20-600 可配） |
+| stateTick % 40 == 0 | 内联 | 40 | tick (2秒) | tickCollecting L968 | 寻路中断重发频率 |
+| distSqr(waypoint) <= 4 | 内联 | 4 | 距离²（2格） | advancePatrol L914 | 航点到站判定 |
+| GoalNear radius | 参数 | 1 / 2 / 4 | rangeSq | FarmNav 调用点 | 巡逻1、拾取中心2、箱子4（含义：距离²阈值，4≈2格） |
+| WATER_RADIUS | static final int | 4 | 格 | FarmRenderer L39 | 水源水平辐射半径 |
+
+Retry 机制汇总：破坏包/播种包**无重试**（发包即标记 processed，成功失败都算已处理）；开箱重试=每 10 tick 一次直到看门狗；寻路重发=COLLECTING 每 40 tick、UNLOADING/RESTOCKING 每次 !pathing；看门狗重试=状态超时先回 STANDBY、连续 3 次停机。
+
+## 21. Resource 数据流（逐作物，VERIFIED）
+
+| 资源 | Item ID | 来源 | 获取方式 | 存储位置 | 消耗位置 | 不足处理 |
+|---|---|---|---|---|---|---|
+| 小麦 | wheat | 破坏成熟小麦（age=7） | START/STOP 破坏包 | → 掉落物（collectWait 等拾取）→ 背包 | 卸货白名单 | 种子部分截留（safety stock 组） |
+| 小麦种子 | wheat_seeds | 同上收获附带 | 同上 | 背包（副手/热键栏优先） | 播种消耗（无消耗验证） | 无→降级只收不种→RESTOCKING |
+| 甜菜/甜菜种子 | beetroot/beetroot_seeds | 破坏成熟甜菜（age=3） | 同上 | 背包 | 同上 | 同上 |
+| 土豆 | potato | 破坏成熟土豆（age=7） | 同上 | 背包 | 产物即种子，卸货截留3组 | 同种子 |
+| 毒马铃薯 | poisonous_potato | 2%概率附带 | 同上 | 背包 | 白名单不截留→倒进卸货箱 | - |
+| 胡萝卜 | carrot | 破坏成熟（age=7） | 同上 | 背包 | 截留 | 同种子 |
+| 地狱疣 | nether_wart | 破坏成熟（底盘灵魂沙） | 同上 | 背包 | 截留 | 同种子 |
+| 竹子/甘蔗/仙人掌 | bamboo/sugar_cane/cactus | Y+1 切割（下方是根/竹笋且根下无同种） | 破坏包 | 背包 | 全卸货无补种 | 无补给需求 |
+| 南瓜/西瓜片 | pumpkin/melon_slice | 破坏果实方块（存在即可收） | 破坏包 | 背包 | 全卸货无补种 | - |
+
+通用流：收割 → 掉落物实体（无主动拾取验证，等 collectWait ticks）→ 背包 → JUDGMENT 阈值 → UNLOADING（白名单 shift 进卸货箱，种子截留）→ 缺种子 → RESTOCKING（补货箱 shift 出种子）。
+
+## 22. Inventory 全量逻辑
+
+- Main Inventory + Hotbar：统一 36 格扫描（getItem(i) / getNonEquipmentItems()）。
+- Offhand：播种 hand 判定、countWhitelistStacks/countItem 额外计 1 格;时运锁只读主手。
+- ItemStack 判断：`isEmpty`、`is(item)`、`getItem()`、`getCount()`、`isDamageableItem`、`has(DataComponents.UNBREAKABLE)`、`getMaxDamage()-getDamageValue()`。
+- NBT/Data Component 判断：仅耐力相关（UNBREAKABLE、ENCHANTMENTS 在死代码 getFortuneLevel 中）。
+- 取出/放入：全部走 `handleContainerInput(...,QUICK_MOVE,...)`，无逐格数字键点击；背包剩余空间用 getFreeSlot 检查。
+- 数量判断：组数向上取整 `(total+63)/64`（countWhitelistStacks）；种子阈值 `seedSafetyStock*64` 个。
+- 潜在点：`countSeeds < seedSafetyStock*64` 按「个」比较，卸货截留却按「组」概念提示（3组=192个），两者一致（VERIFIED，L999 与 L1077 同一换算）。
+
+## 23. Container 全量逻辑
+
+| 步骤 | 移动 | 交互 | GUI 打开 | 确认 | 操作 | 等待 | 同步 | 验证 | 关闭 |
+|---|---|---|---|---|---|---|---|---|---|
+| UNLOADING/RESTOCKING | Baritone goTo(pos,4)→isWithinBlockInteractionRange 判断 | FarmPacketOps.interactBlock(MAIN_HAND,pos,UP)（10t 节流） | 静默模式：OpenScreenEvent 取消容器 Screen | openMenu()!=null（containerId≠0） | broker.isReady()（stateId 连续 3 tick 稳定）→ depositOne/withdrawOne | 每 tick 重判 | broker.tick() 每 tick 观测 stateId | moved 标志（动作发生，非结果验证） | closeContainer()（containerMenu≠inventoryMenu 才关） |
+
+**缺少的步骤（明确指出）**：
+1. 打开后**不验证**所开容器是否就是绑定锚点位置的容器（只查 containerId!=0；开错箱会继续操作）。
+2. **不验证**每次 QUICK_MOVE 是否真的生效（moved 只代表「发出了包」）。
+3. 卸货结束条件「moved==false」无法区分「倒完了」与「箱子满了」，两者走同一路径回 STANDBY。
+
+## 24. Block Interaction
+
+| 操作 | Block | Item | 条件 | 方法 | 成功判断 |
+|---|---|---|---|---|---|
+| 破坏（瞬间） | 10 种作物方块 | 任意（不校验） | 在 reachDistance 内且二次确认 isHarvestable | FarmPacketOps.breakBlock(pos, UP) | 返回 true（仅发包成功，不验证方块消失） |
+| 播种（右键） | 底盘上方空气 | 副手/主手/热键栏种子 | plantableAt 非空且 prepareSeed 非 null | FarmPacketOps.useOnBlock(hand, soilPos) | 返回 true（同上） |
+| 开箱（右键） | 卸货箱/补货箱 | 主手任意物品 | 在交互范围内，10t 节流 | FarmPacketOps.interactBlock(MAIN_HAND, pos, UP) | openMenu()!=null（下几 tick 后检查） |
+| 手持切换 | - | 工具耐久低时切热键栏空格 | fortuneLock 开启且耐久<threshold | InvUtils.swap / setSelectedSlot(8) | 直接执行无验证 |
+| 方块放置 | ❌ 不存在 | - | - | - | - |
+| 左键持续挖掘 | ❌ 不存在（START+STOP 同 tick） | - | - | - | - |
+
+## 25. Pathfinding 调用链
+
+```
+State.tickUnloading/tickRestocking/advancePatrol/tickCollecting
+  ↓
+FarmNav.goTo(BlockPos, radius) / FarmNav.pathing() / FarmNav.cancel()   [farm/FarmNav.java]
+  ↓
+baritone.api.BaritoneAPI.getProvider().getPrimaryBaritone()             [FarmNav L79-81]
+  ↓
+getCustomGoalProcess().setGoalAndPath(new GoalNear(pos, radius))
+getPathingBehavior().isPathing() / cancelEverything()
+  ↓
+Baritone（26.1.2 jar，META-INF/jars 打包）
+```
+
+- 使用系统：Baritone（项目 `libs/baritone-fabric-26.1.2.jar`）；**不接入**任何项目公共寻路服务（项目里为各模块各写一套：FarmNav / autochest-PathingService / villager-VillagerNavigationService / enchant 内直调）。
+- 是否使用 .fumo：否。
+- 自实现移动：无（仅 Baritone + 原地操作降级）。
+- 到达距离：巡逻航点 `player.blockPosition().distSqr(waypoint) <= 4`（约2格）；箱子用原版 `isWithinBlockInteractionRange`（约4.5格），GoalNear radius=4（语义为 rangeSq，代码注释明示 2 格停靠）。
+- Timeout：无寻路专属超时，靠状态看门狗（UNLOADING/RESTOCKING 1200t、NUKE_FARMING 6000t）。
+- 失败处理：任何 Throwable → `disabled=true` 永久降级「原地干活」；`isPathing()` 为 false 时重发目标（COLLECTING 每 40t，物流态每 tick）。
+
+## 26. Module 启动调用链（完整追踪，VERIFIED）
+
+```
+用户开启模块 / 按键绑定
+  ↓ Module.toggle()                       [YiyiaddonModule L55-66]
+  ↓ super.toggle() → onActivate           [AutoFarmMatrix L399-427]
+  ↓ selfCheck()                           [L522-556]
+  │   ├─ getEnabledCrops().isEmpty() → 缺项
+  │   ├─ 四锚点 null → 缺项
+  │   ├─ FarmSite.inCurrentDimension() false → 缺项
+  │   └─ scanner.volume()==0 → 缺项
+  ↓ reportSelfCheck(missing)              [YiyiaddonModule L147-161]
+  │   └─ 缺项 → mc.execute(toggle 关) → 中止（返回 false → return）
+  ↓ state=STANDBY; stateTick=0; watchdogStrikes=0; lastNotifiedState=""
+  ↓ scanner.setEnabledCrops(getEnabledCrops())
+  ↓ FarmSite.parse(起点/终点) 非空 → scanner.setBounds(两点)
+  ↓ rebuildPatrolRoute()                  [L932-957]
+  ↓ serpentinePatrol && !FarmNav.available() → 播报降级
+  ↓ reportStartupInfo()                   [L438-503] 单条多行启动报告
+每 tick（TickEvent.Post）[L615-652]
+  ↓ 防踩踏检查 → scanner.tick() → broker.tick() → restockCooldownTicks--
+  ↓ tickStateMachine() → switch(state) → 六个 tickXxx 之一
+  ↓ 看门狗：state≠STANDBY 时 stateTick++，超限 → strikes 判定
+```
+
+## 27. 数据生命周期
+
+| 数据 | 创建 | 初始化 | 修改 | 读取 | 缓存 | 清理 | 销毁 |
+|---|---|---|---|---|---|---|---|
+| state | 字段声明=STANDBY | onActivate | transitionTo/看门狗 | 每 tick | 无 | - | GC |
+| stateTick | 字段声明 | onActivate=0 | 每 tick ++ / transitionTo=0 | COLLECTING/看门狗/开箱节流 | - | - | - |
+| workHarvest/workPlant | 声明 List.of() | STANDBY 拷贝 List.copyOf | 每轮替换 | NUKE_FARMING 遍历 | 轮内快照 | 下轮整体替换（不逐项删） | - |
+| processedHarvest/Plant | 声明 HashSet | STANDBY clear | 每格处理 add | 遍历/contains | 轮内 | STANDBY clear | - |
+| harvestQueue/plantQueue | 声明 List.of() | Scanner.restart 后整轮替换 | 每整轮 List.copyOf | STANDBY/渲染 | 上一轮稳定快照 | reset()=List.of() | - |
+| patrolRoute/patrolIndex | 声明 | rebuildPatrolRoute / onDeactivate=List.of() | 绑定变更/关闭 | advancePatrol | 全程 | clearAllSites/onDeactivate | - |
+| harvestOnly | 声明 false | - | tickNuke/tickRestock | 多处 | 全程 | 无（onActivate 未复位！仅靠 RESTOCKING 逻辑置回，若上次退出时是 true，重开仍是 true——UNKNOWN 影响：onActivate 未列 harvestOnly 复位） | - |
+| restockCooldownTicks | 声明 0 | - | 每 tick--；置 1200 | JUDGMENT | 全程 | onDeactivate 未显式复位（依靠自减归零） | - |
+| watchdogStrikes | 声明 0 | onActivate=0 | 每次超时++ | 停机判定 | 全程 | - | - |
+| broker.lastStateId/stableTicks | 声明 | broker.reset | broker.tick | isReady | - | reset() | - |
+| 锚点字符串 | 默认 "" | bindSite | set/clear | site() | Meteor 设置系统持久化 | clearAllSites | - |
+| Scanner cursor/buffers | 声明 | setBounds→restart | 每 tick 推进 | 无外部读 | 缓冲 | restart | - |
+| 容器状态 | - | openMenu | 服务器同步 | isReady | containerMenu 实时 | closeContainer | - |
+
+## 28. Tick 生命周期（每 tick 执行顺序，VERIFIED L616-651）
+
+```
+onTick(TickEvent.Post)
+ 1. mc.player/mc.level 判空
+ 2. 防踩踏：antiTrample && scanner.contains(玩家格) → 松开跳跃
+ 3. scanner.tick()：本 tick 最多 512 格 classify（破坏/播种队列缓冲）
+ 4. broker.tick()：观测容器 stateId 稳定性
+ 5. restockCooldownTicks > 0 → 递减
+ 6. tickStateMachine()：当前状态的 tickXxx（最多一个状态执行）
+ 7. 看门狗：state ≠ STANDBY → stateTick++ → 超限判定
+```
+
+重复执行排查结论：
+- 同一 tick 内状态逻辑只执行一次（switch 分发，无重入）✅。
+- 状态切换在 tick 内发生（transitionTo），**切换后旧 tick 逻辑不再执行**（每个 tickXxx 在转移前后都有 return/独立分支）✅；唯一注意：tickCollection 转移后 FarmNav.cancel 已在转移前调用（L976 先 cancel 后 transitionTo，transitionTo 对非物流态也会 cancel——重复但幂等）。
+- 多任务并行：无（单状态机）。
+- 重复点击危险点：tryOpenContainer 10t 节流 ✅；depositOne 每 tick 最多 bpt 次（10 次）⚠ 高频但受控；VillagerTradeFSM 等其它模块另有自己的点击节流（不在本模块）。
+
+## 29. 异常与恢复
+
+| 异常 | 检测方式 | 当前 State | 处理 | Retry | 最终 State |
+|---|---|---|---|---|---|
+| 点位未绑定 | 自检 site()==null | onActivate | 停机+缺项列表 | 无 | 模块关闭 |
+| 锚点跨维度 | 自检 inCurrentDimension | onActivate | 停机+缺项 | 无 | 模块关闭 |
+| 范围重合 | scanner.volume()==0 | onActivate | 停机+缺项 | 无 | 模块关闭 |
+| 卸货箱运行中丢失 | tickUnloading dump==null | UNLOADING | 报错跳过 | 无 | STANDBY |
+| 补货箱运行中丢失 | tickRestocking supply==null | RESTOCKING | 静默跳过 | 无 | STANDBY |
+| 找不到作物（收完） | harvest+plant 双空 | STANDBY | 每 10 轮提示 | 持续扫描 | STANDBY |
+| 找不到种子（背包） | prepareSeed==null | NUKE_FARMING | 降级只收不种 | JUDGMENT→RESTOCKING | STANDBY→RESTOCKING |
+| 补货箱无种子 | withdrawOne 失败+countSeeds==0 | RESTOCKING | 冷却 1200t 维持降级 | 冷却后 | STANDBY |
+| 容器打不开 | openMenu()==null | UNLOADING/RESTOCKING | tryOpenContainer 10t 节流 | 至看门狗 | STANDBY |
+| 容器同步不上 | isReady()==false | 同上 | 等待 | - | 看门狗 STANDBY |
+| 寻路失败 | FarmNav catch Throwable | 任意 | disabled 永久降级原地干 | 不重试 Baritone | 各状态继续/看门狗 |
+| 寻路中断 | !pathing() | COLLECTING/物流态 | 重发 goTo | COLLECTING 每40t；物流每tick | 到达/看门狗 |
+| 超时 | stateTick>watchdog | 非 STANDBY | 回 STANDBY，3 次停机 | 状态级重试 | STANDBY/停机 |
+| 玩家死亡 | ❌ 无检测 | 任意 | 无专用处理（死亡重生后继续按世界状态跑） | - | UNKNOWN |
+| 世界/维度切换 | GameLeftEvent | 任意 | 自动关模块 | 需手动重开 | 关闭 |
+| 断线 | GameLeftEvent（断开即触发） | 任意 | 自动关模块 | 手动 | 关闭 |
+| 玩家移动干扰 | ❌ 无检测（手动模式下靠 reachable 判定自适配） | NUKE_FARMING | 无提示 | - | - |
+| 模块关闭 | onDeactivate | 任意 | cancel 导航+reset | - | 关闭 |
+| Client 异常 | 基类无全局钩子专属农场逻辑 | - | - | - | UNKNOWN |
+
+## 30. 「傻逻辑」审查（全部附代码证据）
+
+1. **[P0] Baritone 不可用时，蛇形模式 finished 条件永远不满足 → 每轮硬耗到看门狗。**
+   证据：onActivate L422-424 检测到 Baritone 不可用只播报「蛇形巡逻已跳过」；但 NUKE_FARMING finished 判定只看 `serpentinePatrol.get()`（L889-891），advancePatrol 推进条件是 `serpentinePatrol.get() && FarmNav.available()`（L880）。降级后不推进会卡 6000t 看门狗 → STANDBY → 再进入 → 再卡，3 次 strikes 后模块自停。
+
+2. **[P1] 卸货「搬不动」不区分"倒完"与"箱子满"，箱子满时无限空跑。**
+   证据：L1045-1051 注释自述「箱子不会满，所以不停机」——若箱子真满（无漏斗/打包机），每轮 JUDGMENT 仍满足阈值 → 再进 UNLOADING → moved=false → STANDBY，无限循环且每次都要跑路开箱。
+
+3. **[P1] 补货后只要有 1 个种子就判定"补齐"，不验证是否达到安全库存。**
+   证据：L1090 `if (countSeeds() > 0)` 即恢复收割播种——低于安全库存时下轮 JUDGMENT 又会触发 RESTOCKING 折返（L999 `countSeeds() < seedSafetyStock*64`）。
+
+4. **[P1] prepareSeed 只搜热键栏，背包区(9-35)有种子也判定"没种子"。**
+   证据：L1151 `InvUtils.findInHotbar(seed)`，无扩展背包搜索；返回 null 即降级只收不种（L855-859）。`Inventory.getNonEquipmentItems` 明明可搜全包却未用。
+
+5. **[P2] 破坏/播种只验证"包发出去了"，不验证"方块真的变了"。**
+   证据：L835-838「发包成功与否都标记已处理」；服务器拒绝时（超距 reachDistance>4.5）本地预测 AIR 会被回滚，该格本轮漏收，等下一轮扫描重新进队。
+
+6. **[P2] COLLECTING 只等固定 tick，不验证掉落物已进背包。**
+   证据：L974 `if (stateTick < collectWait.get()) return;` 无背包增量对比、无 ItemEntity 检查。
+
+7. **[P2] watchdogStrikes 全程累计、永不复位（只有开关模块归零）。**
+   证据：L410 onActivate 归零；transitionTo（L733-760）不含 strikes 复位。运行数小时后任意 3 次（不相邻）超时即停机。
+
+8. **[P3] 使用说明与实现不符。**
+   证据：helpContent L1414-1423「前往起点 → 传送到农田起点坐标」「自动扩展 = 自动向上下左右延伸寻找同类作物」——代码中无任何传送、无边界扩展（scanner 严格限于矩形）。「Z字路径」与实际「蛇形逐行」描述不一致。
+
+9. **[P3] 时运锁只在主手生效，且无空格时 setSelectedSlot(8) 不检查第 8 格内容。**
+   证据：L793 `getMainHandItem()`；L808 无条件切第 8 格（可能是另一把低耐久工具，下 tick 又触发切回，形成抖动）。
+
+10. **[P3] 防呆字牌文案含 emoji，违反个人代码规范。**
+    证据：L690 `"[📥 卸货总仓]"`。
+
+11. **[P3] renderRadar/renderBounds 传参把同一颜色重复传两次（框线色与框面色相同）。**
+    证据：L660-670，`radarRipeColor.get()` 连传两次等——配置中只有一种颜色可选时属合理降级，但配置项命名暗示线/面分离（Meteor 习惯 line/side 两色），当前线面同色。算实现选择而非 Bug。
+
+12. **[P3] onActivate 不复位 harvestOnly/restockCooldownTicks**（L407-411 复位列表无这两项）：上次退出时若处于降级/冷却态，重开模块沿用旧标志（冷却最多 60s 自消，harvestOnly 会被首轮无种子判定重新置位或由补货恢复，实际影响小）。
+
+## 31. 重复实现清单
+
+| 重复能力 | 农场实现 | 项目已有实现 | 差异 | 备注 |
+|---|---|---|---|---|
+| Baritone 封装 | farm/FarmNav | autochest/service/PathingService；villager/navigation/VillagerNavigationService；enchant/AutoEnchantBook 内直调；modules/AutoVillagerTradeModule 直调 | 至少 4 套独立封装/直调 | 建议统一（仅分析，不修改） |
+| 容器点击 | farm/ContainerBroker.quickMove | mining/ContainerHelper L298；autochest/ChestInteractionService L289+；enchant/AutoEnchantBook 约 20 处；autologin/AutoLoginModule 3 处 | 各写各的 handleContainerInput | 农场版带 stateId 稳定判定，最完整 |
+| 开箱发包 | farm/FarmPacketOps.interactBlock | 无独立重复——mining/autochest/villager/enchant **反向复用** FarmPacketOps | 农场实现成为事实公共底座 | 放在 farm 包名下有分类问题 |
+| 预测序列发包 | farm/FarmPacketOps | 全项目唯一完整实现（retainKnownServerState+sequence+close） | 无重复 | - |
+| 指令状态打印 | NongChangCommand 三份近似代码（内联/status/handleDefault） | - | 自身内部重复 | handleDefault 是死代码 |
+
+## 32. 死代码与废弃逻辑（全部经调用点核验 VERIFIED）
+
+| 对象 | 文件 | 类型 | 是否实际使用 | 判断依据 |
+|---|---|---|---|---|
+| NongChangCommand.handleDefault() | commands/NongChangCommand.java L231-263 | 方法 | ❌ 无调用 | Grep 全项目仅定义行 |
+| FarmPacketOps.getFortuneLevel() | farm/FarmPacketOps.java L157-176 | 方法 | ❌ 无调用 | Grep 仅定义行；时运锁实际用 getRemainingDurability |
+| FarmRenderer.countMoistenedFarmland() | farm/FarmRenderer.java L120-138 | 方法 | ❌ 无调用 | Grep 仅定义行 |
+| FarmRenderer.waterCapacity() | farm/FarmRenderer.java L141-144 | 方法 | ❌ 无调用 | Grep 仅定义行 |
+| ContainerBroker.chestSlotCount() | farm/ContainerBroker.java L85-95 | 方法 | ❌ 无调用 | Grep 仅定义行 |
+| CropProfile.all() | farm/CropProfile.java L233-235 | 方法 | ❌ 无调用 | Grep 仅定义行（UI 勾选实际走 BlockListSetting filter） |
+| import BuiltInRegistries | AutoFarmMatrix.java L29 | 无用 import | ❌ | 文件内无使用 |
+| import Items | AutoFarmMatrix.java L17 | 无用 import | ❌ | 文件内无 `Items.` 引用 |
+| import Item / ItemStack（重复） | AutoFarmMatrix.java L15/L31、L16/L32 | 重复 import | ⚠ 编译通过但重复 | javac 容忍；属规范问题 |
+| harvestOnly 复位缺失 | onActivate L407-411 | 字段未初始化 | ⚠ 影响小 | 见 §30-12 |
+
+无 TODO/FIXME/注释掉的旧代码块（Grep 无匹配）。
+
+## 33. 公共系统依赖（当前实现 vs 项目公共系统）
+
+| 功能 | 当前实现（农场） | 公共系统 | 调用类 | 是否重复 |
+|---|---|---|---|---|
+| FSM 状态机 | 农场自持（switch+tick 方法） | 无公共 FSM 框架（各模块自写：MinerFSM/VillagerTradeFSM/TacticalFSM 同样自持） | - | 无统一框架 |
+| 寻路 | FarmNav 自封装 | 无统一封装（4 套并存） | FarmNav→BaritoneAPI | 是（多套封装） |
+| 点位 | 4 个 StringSetting | .fumo/PointType 属附魔专属，无通用点位库 | - | 否（各模块各存） |
+| 容器交互 | ContainerBroker | 被 autochest/villager 反向复用 | ContainerBroker | 农场=事实公共层 |
+| 发包 | FarmPacketOps | 被 mining/autochest/villager/enchant 复用 | FarmPacketOps | 农场=事实公共层 |
+| Inventory | 直读 mc.player 背包 + Meteor InvUtils | Meteor InvUtils | - | 否 |
+| Delay | 看门狗+collectWait 自实现 | 无公共 DelayService 被农场使用（DelayService 在附魔模块） | - | 否（相差不大） |
+| Logger/播报 | YiyiaddonModule.notify/notifyError + formatMessage | 基类公共 | 正确复用 | 否 |
+| 自检 | 基类 reportSelfCheck + 模块 selfCheck() | 基类公共 | 正确复用 | 否 |
+| GUI | 基类 buildInfoWidget + 自定义卡片 | 基类公共 | 正确复用 | 否 |
+| 渲染 | FarmRenderer | Meteor Renderer | - | 否 |
+| 防踩踏 | 自实现 | 无类似公共 | - | 否 |
+
+## 34. VERIFIED / INFERRED / UNKNOWN 汇总
+
+- 本报告核心数据（State/转移/配置/阈值/物品/方块/槽位/命令/点位格式）全部 VERIFIED（直接读码+行号）。
+- INFERRED 项：GUI 卡片设置依赖「先瞄准再点按钮」交互时序（§13）；降级模式下看门狗循环路径的最终玩家体验（§30-1）；箱子满空跑的实际发生条件依赖玩家是否装自动化物流。
+- UNKNOWN 项：锚点改动后 `Modules.get().save()` 未被调用时的实际持久化时机（依赖 Meteor 框架保存时机）；玩家死亡后农场无检测的行为；原版 PRD 文档是否曾存在。
+
+## 35. P0/P1/P2/P3 问题
+
+| 级别 | 问题 | 位置 |
+|---|---|---|
+| P0 | Baritone 不可用时蛇形模式 finished 永不可达，每轮耗到看门狗，3 次后模块自停 | AutoFarmMatrix L880-895 与 L422-424 |
+| P1 | 卸货「搬不动」不区分箱满/倒完，箱满时 JUDGMENT↔UNLOADING 无限空跑 | L1045-1051 |
+| P1 | 补货成功后仅凭 countSeeds()>0 判定恢复，不核对安全库存达标，低于阈值每轮折返 | L1090-1092 与 L999 |
+| P1 | prepareSeed 只搜热键栏，背包区种子被无视 → 误降级只收不种 | L1151 |
+| P2 | 破坏/播种/卸货均「发包即算完成」，不验证服务器结果 | L835-838、L862-866 |
+| P2 | COLLECTING 固定等 tick，不验证掉落物入包 | L974 |
+| P2 | watchdogStrikes 全程不复位，3 次跨时段超时即停机 | L642-647 |
+| P3 | 帮助文档撒谎：传送/自动扩展/Z字路径均不存在 | L1414-1423 |
+| P3 | 时运锁仅主手；无空格时切第 8 格无内容检查 | L793-809 |
+| P3 | 字牌含 emoji；重复/无用 import（BuiltInRegistries、Items） | L690、L15-32 |
+| P3 | 雷达/边界渲染线面共用一个颜色配置（线面分离潜力未用） | L660-670 |
+
+## 36. 应保留
+
+- `CropProfile` 数据表结构（10 作物属性集中、扩展只需加枚举）。
+- `FarmScanner` 分帧快照思想（512格/tick + 整轮替换，状态机读到稳定数据）。
+- `FarmPacketOps` 预测序列发包（retainKnownServerState + sequence + close），已是全项目唯一正确实现且被 4 个模块复用。
+- `FarmNav` 隔离层模式（try/catch 全包 + 永久降级）——理念保留，后续可提升为公共类。
+- `ContainerBroker` stateId 稳定 3 tick 判定 + 静默容器思路。
+- 看门狗（每状态独立超时）理念。
+- 自检全量收集缺项、启动报告单条多行、物流播报去重（符合项目规范 5.8/5.9）。
+
+## 37. 应重构
+
+- 蛇形巡逻与手动模式的 finished 判定应合并考虑 Baritone 可用性（当前 L880/L889 条件不一致）。
+- 卸货/补货的完成判定应区分「目标达成/资源耗尽/容器异常」三种结果，各自单独路径。
+- watchdogStrikes 应在正常完成一轮作业后复位（或按「连续超时」语义重定义）。
+- 时运锁应覆盖副手并校验切换目标格内容。
+
+## 38. 应重做
+
+- 帮助文档（与真实行为对齐，删除传送/自动扩展等不存在的能力描述）。
+- 拾取阶段：从「固定等 tick」升级为「验证掉落物入包/背包增量」。
+- 结果验证体系：破坏/播种/搬移后加入服务端结果确认（而非发包即完成）。
+
+## 39. 应删除
+
+- `NongChangCommand.handleDefault()`（死代码）。
+- `FarmPacketOps.getFortuneLevel()`（死代码）。
+- `FarmRenderer.countMoistenedFarmland()`、`waterCapacity()`（死代码）。
+- `ContainerBroker.chestSlotCount()`（死代码）。
+- `CropProfile.all()`（死代码）。
+- 无用/重复 import：BuiltInRegistries、Items、重复 Item/ItemStack。
+- 字牌 emoji。
+
+## 40. 应复用
+
+- 后续重设计时，寻路/容器/发包应提升为真正公共层（当前 4 套 Baritone 封装、6 处 handleContainerInput 分散），农场现行实现（FarmNav/FarmPacketOps/ContainerBroker）是最完整的候选底座。
+- 可配置数值全部采用 `.noSlider()`、卡片式 GUI、基类高亮方法——继续沿用既有规范。
+
+## 41. 构建验证（实际执行记录）
+
+| 命令 | 结果 | 耗时 | 错误 | 警告 |
+|---|---|---|---|---|
+| `.\gradlew.bat buildPersonal --console=plain`（JAVA_HOME 自动设置） | BUILD SUCCESSFUL（4 actionable tasks: 4 up-to-date） | 851ms | 0 | 0 |
+| `.\gradlew.bat compileJava --rerun-tasks --console=plain`（强制重编译） | BUILD SUCCESSFUL（1 actionable task: 1 executed） | 3s | 0 | 0 |
+
+结论：当前自动农场相关源码可正常编译，构建通过。全程未修改任何源码。
+
+## 42. 真机测试状态
+
+**未进行**。本次为只读逆向审查，未进入游戏验证运行时行为；所有运行时描述均来自静态代码路径分析，涉及服务器交互的部分（如序列预测回滚、箱子满空跑）建议在设计新农场前做一次真机验证。
+
+## 43. 自动农场完整数据字典
+
+| 数据名称 | 类型 | 默认值 | 来源 | 写入 | 读取 | 用途 |
+|---|---|---|---|---|---|---|
+| state | FarmState | STANDBY | 声明 | onActivate/transitionTo/看门狗 | tickStateMachine | 当前状态 |
+| stateTick | int | 0 | 声明 | onTick/transitionTo | 各态 tick | 状态时长/节流/看门狗 |
+| watchdogStrikes | int | 0 | 声明 | 看门狗 | 看门狗 | 超时停机计数 |
+| restockCooldownTicks | int | 0 | 声明 | onTick/restock | tickJudgment | 补货冷却 |
+| workHarvest / workPlant | List\<BlockPos\> | List.of() | 声明 | tickStandby | tickNukeFarming | 轮内快照 |
+| processedHarvest / processedPlant | Set\<BlockPos\> | 空集 | 声明 | tickNukeFarming | 同 | 防重复发包 |
+| harvestOnly | boolean | false | 声明 | tickNuke/tickRestock | 多处 | 降级标志 |
+| lastOpenAttempt | int | -100 | 声明 | transitionTo/tryOpenContainer | tryOpenContainer | 开箱节流 |
+| patrolRoute / patrolIndex | List\<BlockPos\> / int | 空表/0 | 声明 | rebuildPatrolRoute | advancePatrol | 蛇形航线 |
+| lastNotifiedState | String | "" | 声明 | transitionTo | 同 | 播报去重锁 |
+| lastIdleNotifySweep | int | 0 | 声明 | tickStandby | 同 | 空田提示节流 |
+| scanner.min/max/bounded | BlockPos/boolean | ZERO/false | 声明 | setBounds/reset | 全模块 | 扫描范围 |
+| scanner.cursorX/Y/Z | int | min | restart | tick/advance | tick | 扫描游标 |
+| scanner.harvestBuffer/plantBuffer | List | 空 | restart | classify | tick 提交 | 缓冲 |
+| scanner.harvestQueue/plantQueue | List | List.of() | 声明 | 整轮提交 | STANDBY/渲染 | 稳定快照 |
+| scanner.enabled | EnumSet | 空 | 声明 | setEnabledCrops | classify | 启用作物 |
+| scanner.completedSweeps | int | 0 | 声明 | 整轮结束 | STANDBY | 扫描轮数 |
+| broker.lastStateId / stableTicks | int | MIN_VALUE/0 | 声明 | tick/reset | isReady | 同步判定 |
+| FarmNav.disabled | static boolean | false | 声明 | catch 置 true | available | Baritone 降级 |
+| 27 项可见设置 | 见 §12 | 见 §12 | 构造器 | GUI | 见 §12 | 运行参数 |
+| 4 个锚点 StringSetting | String | "" | 构造器 | 指令/GUI | site() | 点位持久化 |
+| FarmSite.pos | BlockPos | - | parse/here | bindSite | 扫描/寻路 | 坐标 |
+| FarmSite.dimension | ResourceKey\<Level\> | - | parse/here | bindSite | 自检/字牌 | 维度 |
+| CropProfile 六元组 | enum 常量 | 10 种 | 构造 | - | 各处 | 作物图鉴 |
+
+## 44. 自动农场完整状态机数据字典
+
+| State | 输入 | 内部数据 | 动作 | 输出 | 成功 | 失败 | Timeout | Retry | 下一状态 |
+|---|---|---|---|---|---|---|---|---|---|
+| STANDBY | harvestQueue/plantQueue、completedSweeps | lastIdleNotifySweep | 等待首轮扫描/拷快照/清 processed | workHarvest/workPlant | 队列非空 | - | 不计时 | 每10轮提示 | NUKE_FARMING |
+| NUKE_FARMING | workHarvest/workPlant | processed 集/breakBudget/plantBudget | 时运锁→破坏→补种→advancePatrol | C2S 包 | finished 判定 | 无种子→harvestOnly | 6000t | 无（发包即标记） | COLLECTING |
+| COLLECTING | 玩家位置 | stateTick | 去农田中心/原地等 | 移动 | stateTick≥collectWait | - | 700t（≥600+容差） | 寻路每40t重发 | JUDGMENT |
+| JUDGMENT | 背包内容 | freeSlots/组数/种子数 | 阈值比较 | - | 触发物流 | - | 60t | - | UNLOADING/RESTOCKING/STANDBY |
+| UNLOADING | dump 锚点/背包/容器 | moved | 寻路→开箱→等同步→depositOne×bpt | 物品移动包 | 无白名单可搬 | dump 丢失 | 1200t | 开箱10t节流 | STANDBY |
+| RESTOCKING | supply 锚点/种子 | moved/harvestOnly | 寻路→开箱→withdrawOne | 物品移动包 | 种子到位/恢复降级 | 无种子→冷却+降级 | 1200t | 开箱10t节流 | STANDBY |
+
+## 45. 最终总结
+
+本次审查以只读方式解剖了自动农场（AutoFarmMatrix）全部代码资产：1 个模块主类（1433 行）、9 个 farm 包辅助类、1 个专属指令、1 个依赖 Mixin，6 状态 FSM、31 项配置、10 种作物、13 类物品、11 类方块、4 锚点点位、18 项阈值常量。未修改任何代码，构建两次验证通过。
+
+核心观察：
+- 架构上无独立 Controller/Service 分层，FSM 与配置/渲染/事件全部集中在模块类（单类超千行）；
+- 数据层面 CropProfile 表驱动与 FarmScanner 快照机制设计良好，是后续设计的优质保留资产；
+- 运行层面最大的风险是「动作与结果分离」：发包即完成、定时即完成，缺乏服务端结果验证，叠加降级判定漏洞（P0）、物流循环漏洞（P1）与状态复检缺失（P2）；
+- 依赖层面 farm 包事实上已成为全项目的公共发包/容器底座（被 4 个模块反向依赖），Baritone 封装四套并存（farm/autochest/villager/enchant）。
+
+本档案供下一阶段重新设计自动农场使用，不包含新架构建议。真机运行时验证尚未进行，建议设计前补充。
