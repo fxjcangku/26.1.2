@@ -2,6 +2,7 @@ package com.example.addon.enchant.vanilla;
 
 import com.example.addon.enchant.gear.AnvilPlan;
 import com.example.addon.enchant.gear.AnvilPlanner;
+import com.example.addon.enchant.gear.EnchantEvaluationService;
 import com.example.addon.enchant.gear.TargetProfile;
 import net.minecraft.world.item.ItemStack;
 
@@ -70,13 +71,11 @@ public final class EnchantPlanningEngine {
             TargetMatcher.Result m = TargetMatcher.match(gear, profile);
             if (m.complete()) {
                 complete = gear;
-            } else if (m.junk()) {
+            } else if (TargetMatcher.shouldGrind(m, profile, EnchantEvaluationService.readEnchantments(gear))) {
+                // 统一判定：禁止/互斥/零命中/低密度（离满级远）送砂轮，与执行层 findJunkGear 保持一致
                 junk++;
-            } else if (m.worthKeeping()) {
-                valuable.add(gear);
             } else {
-                // 零命中（无价值且非禁止/互斥，如时运方案下随机附出精准采集）也应送砂轮磨掉
-                junk++;
+                valuable.add(gear);
             }
             if (m.state() == TargetMatcher.State.UNREACHABLE) {
                 unreachable = true;

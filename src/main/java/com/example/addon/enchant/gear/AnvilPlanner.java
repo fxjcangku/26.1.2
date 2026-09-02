@@ -48,11 +48,11 @@ public final class AnvilPlanner {
      * 三套策略只改变「主装备选择」与「材料排序」权重，不改互补/互斥合并判定。
      */
     public enum Strategy {
-        /** 简单逻辑：贡献优先、其次低惩罚，适合附魔少/无互斥/成本低的普通装备 */
+        /** 简单逻辑：纯贡献 / 提升价值优先，最简单直接 */
         SIMPLE("简单"),
-        /** 节能逻辑：低惩罚 + 低铁砧成本优先，适合满级合金剑/荆棘三胸甲等高消耗困难装备 */
+        /** 节能逻辑：提升价值优先（减少合并步数）+ 低惩罚，从根源降低 PWP 累积避免太昂贵 */
         SAVE_XP("节能"),
-        /** 快速逻辑：提升价值优先、其次低成本，减少铁砧合并次数 */
+        /** 快速逻辑：提升价值优先 + 低成本，减少铁砧合并次数与单次费用 */
         FAST("快速");
 
         private final String title;
@@ -83,17 +83,21 @@ public final class AnvilPlanner {
         }
         Strategy s = strategy == null ? Strategy.SIMPLE : strategy;
 
-        // 按策略选主装备（基础件）：节能优先低惩罚+低成本，简单/快速优先贡献
+        // 按策略选主装备（基础件）
         ItemStack base = selectBase(profile, gears, s);
         Map<String, Integer> baseEnch = new HashMap<>(EnchantEvaluationService.readEnchantments(base));
 
         List<AnvilStep> steps = new ArrayList<>();
         int order = 1;
-        // 材料按策略排序：节能先低惩罚低成本，简单/快速先补最高提升
+        // 材料按策略排序
         for (ItemStack material : sortedMaterials(profile, base, baseEnch, gears, s)) {
             Map<String, Integer> matEnch = EnchantEvaluationService.readEnchantments(material);
-            if (!isComplementary(baseEnch, matEnch, profile)) continue;
-            if (hasConflict(baseEnch, matEnch)) continue;
+            if (!isComplementary(baseEnch, matEnch, profile)) {
+                continue;
+            }
+            if (hasConflict(baseEnch, matEnch)) {
+                continue;
+            }
             String contrib = primaryContribution(material, profile);
             steps.add(new AnvilStep(order++, base.copy(), material.copy(), contrib, targetLevelOf(profile, contrib)));
             // 模拟合并后的附魔集合，供后续材料判定使用（仅逻辑模拟，不算 XP）
@@ -129,15 +133,11 @@ public final class AnvilPlanner {
                                       int bestScore, int bestRepair, int bestWeight, Strategy strategy) {
         Strategy s = strategy == null ? Strategy.SIMPLE : strategy;
         return switch (s) {
-            case SIMPLE -> score > bestScore
-                || (score == bestScore && rep < bestRepair)
-                || (score == bestScore && rep == bestRepair && weight < bestWeight);
-            case SAVE_XP -> rep < bestRepair
-                || (rep == bestRepair && weight < bestWeight)
-                || (rep == bestRepair && weight == bestWeight && score > bestScore);
+            case SIMPLE -> score > bestScore;                       // 纯贡献优先
+            case SAVE_XP -> score > bestScore
+                || (score == bestScore && rep < bestRepair);        // 贡献优先 + 低惩罚
             case FAST -> score > bestScore
-                || (score == bestScore && weight < bestWeight)
-                || (score == bestScore && weight == bestWeight && rep < bestRepair);
+                || (score == bestScore && weight < bestWeight);     // 贡献优先 + 低成本
         };
     }
 
@@ -266,24 +266,16 @@ public final class AnvilPlanner {
         int wA = anvilCostWeight(a);
         int wB = anvilCostWeight(b);
         return switch (strategy) {
-            case SIMPLE -> {
-                int c = Integer.compare(impB, impA); // 提升价值降序
-                if (c != 0) yield c;
-                yield Integer.compare(repA, repB);   // 低惩罚升序
-            }
+            case SIMPLE -> Integer.compare(impB, impA);                 // 纯提升价值降序
             case SAVE_XP -> {
-                int c = Integer.compare(repA, repB); // 低惩罚升序
+                int c = Integer.compare(impB, impA);                    // 提升价值降序（减少合并步数=省XP，避免PWP累积触发太昂贵）
                 if (c != 0) yield c;
-                c = Integer.compare(wA, wB);         // 低成本升序
-                if (c != 0) yield c;
-                yield Integer.compare(impB, impA);   // 提升价值降序
+                yield Integer.compare(repA, repB);                      // 低惩罚升序
             }
             case FAST -> {
-                int c = Integer.compare(impB, impA); // 提升价值降序
+                int c = Integer.compare(impB, impA);                    // 提升价值降序
                 if (c != 0) yield c;
-                c = Integer.compare(wA, wB);         // 低成本升序
-                if (c != 0) yield c;
-                yield Integer.compare(repA, repB);   // 低惩罚升序
+                yield Integer.compare(wA, wB);                          // 低成本升序
             }
         };
     }

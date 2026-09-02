@@ -424,7 +424,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
     private int gearEnchantIndex = 0;                   // 已附魔装备数（4 件批次附魔进度）
     private int 卸货重试次数 = 0;                       // 成品箱卸货失败重试计数
     private boolean gearGrindFromAnvil = false;         // 铁砧「太昂贵」送砂轮清零的标志（此时磨主装备而非找垃圾）
-    private boolean gearRelaxAccept = false;            // 太昂贵降级验收标志：必需满级即可成品（放弃剩余可选附魔）
     private int gearAnvilChestSlot = -1;                // 铁砧箱里被拿起的那个铁砧槽位（跨 phase 记住，放回时用）
     private boolean gearAnvil原视角已存 = false;          // 放置铁砧前是否已保存原视角（放置后恢复用）
     private float gearAnvil原Yaw = 0;                    // 放置铁砧前的原 yaw（放置后恢复，避免视角被转走）
@@ -2132,12 +2131,14 @@ public class AutoEnchantBook extends YiyiaddonModule {
         return -1;
     }
 
-    /** 在玩家背包查找需砂轮的垃圾装备（已附魔且禁止/互斥/零命中目标），返回槽位，无则 -1 */
+    /** 在玩家背包查找需砂轮的垃圾装备（禁止/互斥/零命中/低密度），返回槽位，无则 -1 */
     private int findJunkGear() {
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.is(gearTargetItem) && !EnchantEvaluationService.readEnchantments(stack).isEmpty()
-                && TargetMatcher.isJunk(stack, gearProfile)) return i;
+                && TargetMatcher.shouldGrind(stack, gearProfile)) {
+                return i;
+            }
         }
         return -1;
     }
@@ -2183,6 +2184,16 @@ public class AutoEnchantBook extends YiyiaddonModule {
             }
         }
         return bestSlot;
+    }
+
+    /** 在背包找第一件已达标的成品装备槽位（严格 6/6 满级），无则 -1 */
+    private int findCompleteGearSlot() {
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(gearTargetItem)) continue;
+            if (TargetMatcher.isComplete(stack, gearProfile)) return i;
+        }
+        return -1;
     }
 
     /** 找带目标附魔的另一件装备槽位（作为铁砧合并材料，排除主装备槽位），无则 -1 */
@@ -2895,7 +2906,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
         // 能摸到铁砧位就直接进入放置，放置前会程序化转对 yaw（铁砧朝向只由 yaw 决定，
         // 与站位无关），不需要走到朝向侧；距离远时才寻路靠近
         double range = mc.player.blockInteractionRange() + 0.5;
-        if (mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(posAnvil)) <= range) {
+        double dist = mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(posAnvil));
+        if (dist <= range) {
             stopBaritone();
             setState(State.GEAR_PLACE_ANVIL);
         } else {
@@ -3075,18 +3087,12 @@ public class AutoEnchantBook extends YiyiaddonModule {
                     ItemStack mainGear = handler.getSlot(0).getItem().copy();
                     mc.player.closeContainer();
                     // 太昂贵：prior work penalty 已到上限，无法继续合并。
-                    // 聪明策略：必需附魔已满级 → 放弃可选附魔直接成品（绝不磨好装备）；
-                    // 否则核心未达标，该装备已废，送砂轮清零重来
-                    if (!mainGear.isEmpty() && TargetMatcher.isRequiredComplete(mainGear, gearProfile)) {
-                        notify("§e⚠ 铁砧费用过高 §8▸ 保留必需附魔成品，放弃剩余可选附魔");
-                        GearCraftReport.recordTooExpensive(附魔摘要(mainGear), true);
-                        gearRelaxAccept = true;
-                        setState(State.GEAR_WALK_OUTPUT);
-                    } else {
-                        GearCraftReport.recordTooExpensive(附魔摘要(mainGear), false);
-                        gearGrindFromAnvil = true;
-                        setState(State.GEAR_WALK_GRIND);
-                    }
+                    // 绝不降级入箱（非 6/6 极品不入成品箱），送砂轮清零重来重新培养，
+                    // 配合高密度筛选避免频繁触发太昂贵
+                    notify("§e⚠ 铁砧费用过高 §8▸ 无法继续合并，送砂轮清零重新培养");
+                    GearCraftReport.recordTooExpensive(附魔摘要(mainGear), false);
+                    gearGrindFromAnvil = true;
+                    setState(State.GEAR_WALK_GRIND);
                     return;
                 }
                 if (mc.player.experienceLevel < cost) {
@@ -3120,20 +3126,23 @@ public class AutoEnchantBook extends YiyiaddonModule {
     }
 
     private void tickGearWalkOutput() {
-        // 卸货前重新验收：确保 100% 达标才允许进成品箱（未验证不放箱）
-        gearEquipSlot = findBestGearSlot();
+        // 卸货前验收：沿用评估/铁砧阶段已精确定位的 gearEquipSlot，不得用贡献分重新挑装备，
+        // 否则会误选贡献更高但未达标的中间态，造成「判成品→验收不过→回评估→再判成品」每 tick 死循环
+        if (gearEquipSlot < 0 || mc.player.getInventory().getItem(gearEquipSlot).isEmpty()) {
+            gearEquipSlot = findCompleteGearSlot();
+        }
         if (gearEquipSlot < 0) {
-            gearFail(TaskErrorReason.GEAR_IDENTITY_INVALID);
-            
+            // 定位失效（成品被移动/消耗）：回评估重新决策，不判死
+            gearAnvilPlan = null;
+            gearAnvilPhase = 0;
+            setState(State.GEAR_EVALUATE);
             return;
         }
         ItemStack finalGear = mc.player.getInventory().getItem(gearEquipSlot);
-        // 太昂贵降级验收时只要求必需满级；正常流程仍要求全部活动目标满级
-        boolean 验收通过 = gearRelaxAccept ? TargetMatcher.isRequiredComplete(finalGear, gearProfile)
-                                           : TargetMatcher.isComplete(finalGear, gearProfile);
+        // 严格验收：只有全部活动目标满级（COMPLETE）才算极品，非 6/6 一律回评估继续培养
+        boolean 验收通过 = TargetMatcher.isComplete(finalGear, gearProfile);
         if (!验收通过) {
             // 卸货前验收不达标：回到评估继续培养，不直接判死
-            gearRelaxAccept = false;
             gearAnvilPlan = null;
             gearAnvilPhase = 0;
             setState(State.GEAR_EVALUATE);
@@ -3180,7 +3189,8 @@ public class AutoEnchantBook extends YiyiaddonModule {
                     return;
                 }
                 // 入箱前记录最终成品附魔摘要（合成报告用，重试时幂等覆盖）
-                成品词条 = 附魔摘要(mc.player.getInventory().getItem(gearEquipSlot));
+                ItemStack 入箱装备 = mc.player.getInventory().getItem(gearEquipSlot);
+                成品词条 = 附魔摘要(入箱装备);
                 mc.gameMode.handleContainerInput(syncId, containerSlotOf(handler, gearEquipSlot), 0, ContainerInput.QUICK_MOVE, mc.player);
                 guiTick = GUI操作延迟.get();
                 guiPhase = 1;
@@ -3202,7 +3212,6 @@ public class AutoEnchantBook extends YiyiaddonModule {
                 guiTick = GUI操作延迟.get();
                 if (gearTask != null) gearTask.markDone();
                 statDone++;
-                gearRelaxAccept = false;
                 GearCraftReport.recordComplete(成品词条);
                 GearCraftReport.flush();
                 notify("§a✓ 装备已达成极品目标，存入成品箱 §8▸ " + highlightText(gearProfile.gearName()));

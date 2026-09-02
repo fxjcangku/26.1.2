@@ -160,19 +160,46 @@ public final class TargetMatcher {
         return r.junk() || !r.worthKeeping();
     }
 
+    /**
+     * 是否需要砂轮磨掉（统一判定：规划引擎决策与执行层共用）。
+     * <p>磨除条件：禁止/互斥/零命中，或「低密度且离满级远」。低密度单命中装备若其附魔
+     * 等级已接近目标（差 1 级），保留作为凑满级的关键中间态；否则合并次数多、PWP 累积快，
+     * 易触发「太昂贵」，磨掉重附。</p>
+     *
+     * @param r       匹配结果
+     * @param profile 目标方案
+     * @param actual  装备实际附魔（等级来源）
+     */
+    public static boolean shouldGrind(Result r, TargetProfile profile, Map<String, Integer> actual) {
+        if (r.complete()) return false;
+        if (r.junk()) return true;
+        if (!r.worthKeeping()) return true;
+        // 低密度单命中：命中附魔离目标差 1 级以内保留，差超过 1 级磨掉重附
+        if (r.satisfied().isEmpty() && r.underleveled().size() == 1) {
+            String id = r.underleveled().iterator().next();
+            Integer lv = actual.get(id);
+            Integer target = 目标等级(profile, id);
+            return target == null || lv == null || target - lv > 1;
+        }
+        return false;
+    }
+
+    /** 基于实际装备判定是否需要砂轮磨掉（自动推导匹配结果与实际附魔） */
+    public static boolean shouldGrind(ItemStack stack, TargetProfile profile) {
+        return shouldGrind(match(stack, profile), profile, EnchantEvaluationService.readEnchantments(stack));
+    }
+
+    /** 查目标方案里某附魔的目标等级，未命中返回 null */
+    private static Integer 目标等级(TargetProfile profile, String id) {
+        for (TargetProfile.TargetEnchantment t : profile.activeTargets()) {
+            if (t.id().equals(id)) return t.level();
+        }
+        return null;
+    }
+
     /** 是否最终达标（COMPLETE）：全部活动目标满级且无禁止/互斥/不可达残留，最终验收专用 */
     public static boolean isComplete(ItemStack stack, TargetProfile profile) {
         return match(stack, profile).complete();
-    }
-
-    /** 是否必需附魔全部满级（太昂贵降级验收：放弃可选附魔、只保必需核心），仍拒绝禁止/互斥/不可达 */
-    public static boolean isRequiredComplete(ItemStack stack, TargetProfile profile) {
-        Result r = match(stack, profile);
-        if (r.junk() || r.state() == State.UNREACHABLE) return false;
-        for (TargetProfile.TargetEnchantment t : profile.requiredTargets()) {
-            if (!r.satisfied().contains(t.id())) return false;
-        }
-        return !profile.requiredTargets().isEmpty();
     }
 
     /** 生成中文明细（状态播报与报告用） */
