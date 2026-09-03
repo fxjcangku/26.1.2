@@ -1,8 +1,6 @@
-import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
@@ -321,7 +319,12 @@ tasks {
         options.compilerArgs.addAll(
             listOf(
                 "-Xlint:deprecation",
-                "-Xlint:unchecked"
+                "-Xlint:unchecked",
+                // 关键：禁用 invokedynamic 字符串拼接（Java 9+ 默认 indyWithConstants）。
+                // 默认会把 "前缀" + 变量 + "后缀" 的拼接字面量内联进 StringConcatFactory 的
+                // recipe（BootstrapMethods 表），不走 LDC 指令，导致字符串加密漏掉这些中文。
+                // 改为 inline 后退化为 StringBuilder.append，字面量重新走 LDC，加密全覆盖。
+                "-XDstringConcat=inline"
             )
         )
     }
@@ -329,9 +332,9 @@ tasks {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 字符串加密任务：遍历 jar 中的 class，用 ASM 把 LDC 字符串常量替换为
-// StringCrypto.d(密文) 调用。跳过 Mixin 类（@Mixin 注解，其方法名/字段名等
-// 字符串是 Mixin 运行时绑定必需，不能加密）与含 switch 的方法（switch 的 case
-// 字符串必须是编译期常量）。
+// StringCrypto.d(密文) 调用。仅跳过加密工具类自身（StringCrypto/ResourceCrypto）。
+// Mixin 类不跳过：@Mixin 的绑定串（method/target/at/constant 等）写在注解里，
+// 不走方法体 LDC；方法体内的中文文案是普通字面量，加密后 d() 透明还原，不影响注入绑定。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 abstract class EncryptStringsTask : DefaultTask() {
     // 密钥长度（字节）。真实密钥 K[i] = P[i] ^ Q[i]，P 为随机源、Q 为随机掩码。
@@ -461,7 +464,6 @@ abstract class EncryptStringsTask : DefaultTask() {
         // 不解析类型层次（避免因 Minecraft 类不在 classpath 而失败）。
         val cw = ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
         val cv = object : ClassVisitor(Opcodes.ASM9, cw) {
-            private var isMixin = false
             private var isCrypto = false
             private var cryptoName = ""
 
@@ -472,13 +474,6 @@ abstract class EncryptStringsTask : DefaultTask() {
                     || name == "com/example/addon/utils/ResourceCrypto"
                 if (name != null) cryptoName = name
                 return super.visit(version, access, name, signature, superName, interfaces)
-            }
-
-            override fun visitAnnotation(descriptor: String, visible: Boolean): AnnotationVisitor {
-                if (descriptor == "Lorg/spongepowered/asm/mixin/Mixin;") {
-                    isMixin = true
-                }
-                return super.visitAnnotation(descriptor, visible)
             }
 
             override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
@@ -509,25 +504,20 @@ abstract class EncryptStringsTask : DefaultTask() {
                 }
 
                 val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
-                // Mixin 类或 StringCrypto 自身跳过：Mixin 字符串是注入绑定必需；
+                // 仅加密工具类自身（StringCrypto/ResourceCrypto）跳过，避免 d() 内部自引用递归；
                 // 枚举已在 encryptClass 入口分流到 Tree API，不会走到这里。
-                if (isMixin || isCrypto) return mv
+                // Mixin 类不再跳过：@Mixin 的绑定串（method/target/at/constant 等）写在注解里，
+                // 不走方法体 LDC；方法体内的中文文案是普通字面量，加密后 d() 透明还原，不影响注入绑定。
+                if (isCrypto) return mv
                 return object : MethodVisitor(Opcodes.ASM9, mv) {
-                    // switch 的 case 字符串必须是编译期常量，一旦加密会导致 hash/equals 匹配不上
-                    private var hasSwitch = false
-
-                    override fun visitLookupSwitchInsn(dflt: Label, keys: IntArray, labels: Array<out Label>) {
-                        hasSwitch = true
-                        super.visitLookupSwitchInsn(dflt, keys, labels)
-                    }
-
-                    override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label, vararg labels: Label) {
-                        hasSwitch = true
-                        super.visitTableSwitchInsn(min, max, dflt, *labels)
-                    }
-
+                    // 加密所有 LDC 字符串，不做 switch 跳过：
+                    // Java 25 下字符串 switch 编译为 invokedynamic(SwitchBootstraps)，case 匹配串
+                    // 存在 BootstrapMethods 表（不走 LDC）；int/enum switch 的 case 值是数值（iconst/
+                    // bipush/sipush 或 BSM 枚举常量），同样不走 LDC。因此方法体里的 LDC 字符串
+                    // 都是普通字面量（如 switch 分支返回的中文文案），加密后 d() 透明还原，
+                    // 不影响 switch 分发。旧版「含 switch 整方法跳过」反而漏掉了这些文案。
                     override fun visitLdcInsn(value: Any) {
-                        if (value is String && !hasSwitch) {
+                        if (value is String) {
                             // 明文 LDC 替换为「密文 LDC + StringCrypto.d()」调用
                             super.visitLdcInsn(encrypt(value, P, Q))
                             super.visitMethodInsn(
@@ -657,9 +647,10 @@ abstract class EncryptStringsTask : DefaultTask() {
     private fun encryptNumbers(bytes: ByteArray, P: IntArray, Q: IntArray): ByteArray {
         val cn = ClassNode()
         ClassReader(bytes).accept(cn, 0)
-        // Mixin 与 StringCrypto 自身跳过：Mixin 常量可能是注入绑定所需，Crypto 的 di 自身不能加密
+        // 仅 StringCrypto 自身跳过：di/dl/df/dd 定义在此，不能自我加密。
+        // Mixin 不再跳过：@ModifyConstant 的 intValue/ordinal 写在注解里，不走 LDC；
+        // 方法体内数值常量（如节流间隔 50L）是普通数值，加密后 di() 透明还原，安全。
         if (cn.name == "com/example/addon/utils/StringCrypto") return bytes
-        if (cn.visibleAnnotations?.any { it.desc == "Lorg/spongepowered/asm/mixin/Mixin;" } == true) return bytes
         for (method in cn.methods) {
             encryptMethodInts(method, P, Q)
         }
