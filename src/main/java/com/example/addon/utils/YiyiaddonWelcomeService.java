@@ -2,7 +2,7 @@ package com.example.addon.utils;
 
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
-import com.example.addon.tactical.TacticalFSM;
+import com.example.addon.tactical.core.TacticalCoordinator;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -62,10 +62,9 @@ public final class YiyiaddonWelcomeService {
     @EventHandler
     private static void onGameLeft(GameLeftEvent event) {
         YiyiaddonHeartbeatService.reportOffline();
-        // 全局重置战术状态：TacticalFSM.reset 原本只在 ServerDetector 模块离服时调用，
-        // 若 ServerDetector 没开，反作弊/卡顿/拉回冷却状态会跨服残留。本服务常驻注册，
-        // 无论开没开 ServerDetector 都能兜底清空，避免状态污染下一个服务器
-        TacticalFSM.reset();
+        // 全局重置战术状态：TacticalCoordinator 常驻事件总线，离服时无条件清零
+        // 会话级状态（检测结果/冷却/降级档），跨服残留会污染下一个服务器
+        TacticalCoordinator.reset();
     }
 
     @EventHandler

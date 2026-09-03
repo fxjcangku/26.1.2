@@ -3,7 +3,6 @@
   "package": "com.example.addon.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "ExampleMixin",
     "ModulesScreenTranslationMixin",
     "ModuleScreenTranslationMixin",
     "ModuleScreenContextTranslationMixin",
@@ -33,8 +32,6 @@
     "MeteorCommandRegistrationMixin",
     "MeteorComponentMessageMixin",
     "ClientLevelPredictionAccessor",
-    "ServerboundMovePlayerPacketAccessor",
-    "LocalPlayerAccessor",
     "KeyboardInvoker",
     "ResourcePackPushMixin",
     "ClientCommandSourceMixin",

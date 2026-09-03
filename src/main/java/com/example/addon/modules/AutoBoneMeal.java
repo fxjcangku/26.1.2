@@ -2,7 +2,7 @@ package com.example.addon.modules;
 
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
-import com.example.addon.tactical.TacticalFSM;
+import com.example.addon.tactical.core.TacticalCoordinator;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -391,7 +391,7 @@ public class AutoBoneMeal extends YiyiaddonModule {
                 || mc.getConnection() == null) return;
 
         // 服务器卡顿 / 拉回冷却时暂停催熟，避免顶风作案被踢
-        if (respectLag.get() && (TacticalFSM.isServerLagging() || TacticalFSM.isRubberBandCooldown())) {
+        if (respectLag.get() && (TacticalCoordinator.isServerLagging() || TacticalCoordinator.isRubberBandCooldown())) {
             return;
         }
 
@@ -617,7 +617,7 @@ public class AutoBoneMeal extends YiyiaddonModule {
      * 规避高频右键连点被服务端判定为自动化交互而踢出。
      */
     @EventHandler
-    private void onAntiCheatDetected(TacticalFSM.AntiCheatDetectedEvent event) {
+    private void onAntiCheatDetected(TacticalCoordinator.AntiCheatDetectedEvent event) {
         if (!isActive() || !autoThrottle.get()) return;
         if (!event.antiCheatName.contains("Grim") && !event.antiCheatName.contains("Matrix")) return;
 

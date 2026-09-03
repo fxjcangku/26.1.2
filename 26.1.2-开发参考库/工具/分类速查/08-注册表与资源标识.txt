@@ -1,0 +1,35 @@
+# 注册表与资源标识
+#
+# 用途：Identifier（旧名 ResourceLocation，已改名）、注册表、ResourceKey、Holder。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：24 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.core.Holder
+net.minecraft.core.HolderGetter
+net.minecraft.core.HolderLookup
+net.minecraft.core.HolderOwner
+net.minecraft.core.HolderSet
+net.minecraft.core.Registry
+net.minecraft.core.RegistryAccess
+net.minecraft.core.RegistryCodecs
+net.minecraft.core.RegistrySetBuilder
+net.minecraft.core.RegistrySynchronization
+net.minecraft.core.registries.BuiltInRegistries
+net.minecraft.core.registries.Registries
+net.minecraft.core.registries.package-info
+net.minecraft.resources.DelegatingOps
+net.minecraft.resources.DependantName
+net.minecraft.resources.FileToIdConverter
+net.minecraft.resources.HolderSetCodec
+net.minecraft.resources.Identifier
+net.minecraft.resources.RegistryDataLoader
+net.minecraft.resources.RegistryFileCodec
+net.minecraft.resources.RegistryFixedCodec
+net.minecraft.resources.RegistryOps
+net.minecraft.resources.ResourceKey
+net.minecraft.resources.package-info

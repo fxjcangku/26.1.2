@@ -2,6 +2,7 @@ package com.example.addon.tactical;
 
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.ClientLevelPredictionAccessor;
+import com.example.addon.tactical.core.TacticalCoordinator;
 import com.example.addon.modules.AutoMinerModule;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
@@ -442,7 +443,7 @@ public class PacketInstantBreak extends YiyiaddonModule {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @EventHandler
-    private void onAntiCheatDetected(TacticalFSM.AntiCheatDetectedEvent event) {
+    private void onAntiCheatDetected(TacticalCoordinator.AntiCheatDetectedEvent event) {
         if (!isActive()) return;
 
         // 检测到 Matrix/Grim 时，秒破模式降级为原版速度，规避 fastbreak 检测
@@ -493,7 +494,7 @@ public class PacketInstantBreak extends YiyiaddonModule {
         }
 
         // 服务器卡顿 / 拉回冷却时暂停发包，避免顶风作案
-        if (respectLag.get() && (TacticalFSM.isServerLagging() || TacticalFSM.isRubberBandCooldown())) {
+        if (respectLag.get() && (TacticalCoordinator.isServerLagging() || TacticalCoordinator.isRubberBandCooldown())) {
             return;
         }
 

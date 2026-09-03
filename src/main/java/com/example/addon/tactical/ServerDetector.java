@@ -1,17 +1,17 @@
 package com.example.addon.tactical;
 
 import com.example.addon.core.YiyiaddonModule;
+import com.example.addon.tactical.core.ServerFingerprints;
+import com.example.addon.tactical.core.TacticalCoordinator;
 import com.mojang.brigadier.tree.CommandNode;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
-import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -20,7 +20,6 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.ServerboundResourcePackPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 
 import java.awt.Desktop;
 import java.io.File;
@@ -42,7 +41,14 @@ import java.util.function.Consumer;
 import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
 
 /**
- * 服务器检测模块。
+ * 服务器检测模块（L0 观测层，被动只读）。
+ *
+ * 职责边界（2026-09-03 重构后）：
+ * - 只采集「观测事实」：服务器核心 / 反作弊指纹 / 插件频道 / 资源包；
+ * - 检测结果通过 {@link TacticalCoordinator#reportDetection} 上报，
+ *   带会话代次校验，跨服迟到的结果直接丢弃（审计 P2-1）；
+ * - 不写任何执行状态（冷却/模式/抑制一律归 L1 协调器），
+ *   TPS 采样与拉回统计已移交协调器常驻处理（审计 P0-5、P2-8）。
  *
  * 识别思路是多层指纹叠加，可信度由低到高：
  * 1. brand / version 字符串 —— 最容易被服务端改掉，只作为线索
@@ -51,6 +57,7 @@ import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
  * 4. 拉回频率 —— 只能说明反作弊存在且激进，无法定型号
  *
  * 资源包处理走独立线程池，NIO 分块写入，支持断点续传与 SHA-1 校验。
+ * （与绕过主线解耦的独立功能，保留原实现迁入）
  *
  * @author yiyijia
  */
@@ -127,23 +134,11 @@ public class ServerDetector extends YiyiaddonModule {
         .build()
     );
 
-
-
     private static final File RESOURCE_PACK_DIR =
         new File(Minecraft.getInstance().gameDirectory, "yiyiaddon_resourcepacks");
 
     /** 本次连接收到的插件消息频道，用于反作弊频道指纹。 */
     private final Set<String> seenChannels = new LinkedHashSet<>();
-
-    /** 拉回包时间戳环形统计，用于判断反作弊激进程度。 */
-    private final long[] rubberBandTimes = new long[10];
-    private int rubberBandIndex = 0;
-    private int rubberBandTotal = 0;
-
-    private boolean detectionDone = false;
-
-    // TPS 采样计数：每 20 tick 采样一次服务器 TPS，发布卡顿状态给其余模块
-    private int tpsCheckTick = 0;
 
     public ServerDetector() {
         super(CATEGORY_TACTICAL, "服务器检测", "多层指纹识别核心与反作弊，自动白嫖资源包。点击按钮查看说明。");
@@ -175,32 +170,31 @@ public class ServerDetector extends YiyiaddonModule {
                 "§8    §7自动下载到本地（支持断点续传）",
                 "§8    §7暴力绕过：自动拒绝或接受"
             ),
-            
+
             new com.example.addon.ui.HelpScreen.HelpSection("使用方式",
                 "§a[1] §f加入服务器时自动启动检测",
                 "§a[2] §f等待 §e3-5秒 §f让服务器发送完整信息",
                 "§a[3] §f检测完成后在聊天栏显示结果",
-                "§a[4] §f结果会保存到TacticalFSM供其他模块使用"
+                "§a[4] §f结果上报协调器供飞行/发包策略统一决策"
             ),
-            
+
             new com.example.addon.ui.HelpScreen.HelpSection("资源包模式",
-                "§6▸ §f暴力拒绝 §8- §7自动拒绝所有资源包",
-                "§6▸ §f暴力接受 §8- §7自动接受所有资源包",
-                "§6▸ §f下载到本地 §8- §7保存到 §e.minecraft/resourcepacks/",
-                "§6▸ §f询问玩家 §8- §7弹窗让你手动选择"
+                "§6▸ §f暴力绕过 §8- §7自动回应并拦截所有资源包",
+                "§6▸ §f自动白嫖 §8- §7下载到本地（支持断点续传）",
+                "§6▸ §f原版处理 §8- §7不干预，走原版弹窗"
             ),
-            
+
             new com.example.addon.ui.HelpScreen.HelpSection("检测原理",
                 "§8├─ §7Brand字符串 §8- §7最容易被改，只作线索",
                 "§8├─ §7插件消息频道 §8- §7反作弊开的校验频道",
                 "§8├─ §7指令树命名空间 §8- §7插件注册的实际结果（主要依据）",
                 "§8└─ §7拉回频率 §8- §7说明反作弊存在且激进"
             ),
-            
+
             new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
                 "§c⚠ §f检测结果不是100%准确，仅供参考",
                 "§c⚠ §f资源包下载需要网络连接，国外服务器可能较慢",
-                "§c⚠ §f暴力拒绝可能被服务器踢出（部分服务器强制资源包）",
+                "§c⚠ §f暴力绕过可能被强制资源包的服务器踢出",
                 "§c⚠ §f单人世界自动禁用，仅在多人服务器生效"
             )
         );
@@ -216,17 +210,15 @@ public class ServerDetector extends YiyiaddonModule {
             warning("§c单人世界无需检测");
             return;
         }
-        
+
         if (!RESOURCE_PACK_DIR.exists()) RESOURCE_PACK_DIR.mkdirs();
-        
+
         // 如果是进服后才开启模块，手动触发检测（GameJoinedEvent 已经错过了）
         if (mc.player != null && mc.level != null && !mc.hasSingleplayerServer()) {
-            detectionDone = false;
             seenChannels.clear();
-            rubberBandIndex = 0;
-            rubberBandTotal = 0;
-            
+
             long delayMs = detectDelay.get() * 1000L;
+            long token = TacticalCoordinator.currentSession();
             Thread waiter = new Thread(() -> {
                 try {
                     Thread.sleep(delayMs);
@@ -234,11 +226,11 @@ public class ServerDetector extends YiyiaddonModule {
                     Thread.currentThread().interrupt();
                     return;
                 }
-                mc.execute(this::performDetection);
+                mc.execute(() -> performDetection(token));
             }, "yiyiaddon-ServerDetector-LateStart");
             waiter.setDaemon(true);
             waiter.start();
-            
+
             notify("已在服务器中，将在 " + detectDelay.get() + " 秒后开始侦测");
         }
     }
@@ -251,13 +243,12 @@ public class ServerDetector extends YiyiaddonModule {
     private void onGameJoined(GameJoinedEvent event) {
         if (!isActive()) return;
 
-        detectionDone = false;
         seenChannels.clear();
-        rubberBandIndex = 0;
-        rubberBandTotal = 0;
 
-        // 指令树与插件频道都是进服后陆续下发的，等一会儿再判，否则漏判率很高
+        // 指令树与插件频道都是进服后陆续下发的，等一会儿再判，否则漏判率很高。
+        // 调度时冻结会话代次，防止等待期间换服后把结果写到新服务器会话上
         long delayMs = detectDelay.get() * 1000L;
+        long token = TacticalCoordinator.currentSession();
         Thread waiter = new Thread(() -> {
             try {
                 Thread.sleep(delayMs);
@@ -266,7 +257,7 @@ public class ServerDetector extends YiyiaddonModule {
                 return;
             }
             // 侦测要读客户端世界与连接状态，必须回主线程
-            mc.execute(this::performDetection);
+            mc.execute(() -> performDetection(token));
         }, "yiyiaddon-ServerDetector");
         waiter.setDaemon(true);
         waiter.start();
@@ -274,46 +265,26 @@ public class ServerDetector extends YiyiaddonModule {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
-        TacticalFSM.reset();
         seenChannels.clear();
-        detectionDone = false;
-        tpsCheckTick = 0;
+        // 全局状态由 TacticalCoordinator 常驻自清（审计 P0-5），这里只清本模块私有状态
     }
 
     /**
-     * 服务器 TPS 采样：每 20 tick（约 1 秒）读一次 Meteor 的 TickRate 工具，
-     * 把卡顿状态发布到 TacticalFSM。此前 publishServerLagging 无人调用，
-     * serverLagging 永远为 false，导致各模块「服务器卡顿自停」形同虚设。
+     * 执行侦测并上报协调器。
+     *
+     * 三个开关全关时也要上报一次「未检测」结论——协调器的会话状态
+     * 需要与真实世界对齐，而不是永远停留在上一服务器的旧值。
+     *
+     * @param token 调度时冻结的会话代次
      */
-    @EventHandler
-    private void onTick(TickEvent.Pre event) {
-        if (!isActive() || mc.level == null) return;
-
-        tpsCheckTick++;
-        if (tpsCheckTick < 20) return;
-        tpsCheckTick = 0;
-
-        float tps = TickRate.INSTANCE.getTickRate();
-        // tps <= 0 表示未进服或数据未就绪，不能据此判卡顿，跳过
-        if (tps <= 0) return;
-        TacticalFSM.publishServerLagging(tps);
-    }
-
-    private void performDetection() {
+    private void performDetection(long token) {
         if (mc.player == null || mc.getConnection() == null) return;
 
         String core = detectCore.get() ? detectServerCore() : "未检测";
-        TacticalFSM.setDetectedServerCore(core);
-
         String antiCheat = detectAntiCheat.get() ? detectAntiCheatPlugin() : "未检测";
-        detectionDone = true;
 
-        if (!"未检测".equals(antiCheat) && !"未发现".equals(antiCheat)) {
-            // 发布事件，飞行绕过模块会据此降级到安全模式
-            TacticalFSM.publishAntiCheatDetected(antiCheat);
-        } else {
-            TacticalFSM.setDetectedAntiCheat(antiCheat);
-        }
+        // 唯一合法上报通道：带会话代次校验，跨服迟到的结果在协调器内直接丢弃
+        TacticalCoordinator.reportDetection(token, core, antiCheat);
 
         // 侦测完成：合并成单条多行报告，只带一次模块前缀，避免逐条刷屏
         if (announceDetection.get()) {
@@ -348,7 +319,7 @@ public class ServerDetector extends YiyiaddonModule {
         if (!"未检测".equals(antiCheat) && !"未发现".equals(antiCheat)) {
             sb.append("\n§7风险等级 §8▸ ");
             if (ServerFingerprints.isHighRisk(antiCheat)) {
-                sb.append("§c§l✗ 高风险 §8（已自动降级飞行）");
+                sb.append("§c§l✗ 高风险 §8（协调器已收紧绕过策略）");
             } else {
                 sb.append("§e§l⚠ 中低风险");
             }
@@ -397,7 +368,7 @@ public class ServerDetector extends YiyiaddonModule {
      * 识别反作弊。
      *
      * 插件频道命中优先级最高（反作弊主动开的校验通道），其次是指令树。
-     * 两者都没有时看拉回频率，只能给出「存在且激进」这种程度的结论。
+     * 两者都没有时看协调器的会话累计拉回次数，只能给出「存在且激进」程度的结论。
      */
     private String detectAntiCheatPlugin() {
         // 第一层：插件消息频道
@@ -411,8 +382,8 @@ public class ServerDetector extends YiyiaddonModule {
         String fromCommands = matchCommandNamespaces(ServerFingerprints.ANTICHEAT_COMMANDS);
         if (fromCommands != null && !fromCommands.isEmpty()) return fromCommands + "（指令树）";
 
-        // 第三层：拉回频率。只说明有东西在校验移动，认不出型号
-        if (rubberBandTotal >= 3) {
+        // 第三层：拉回频率（协调器常驻统计，不依赖本模块开关）。只说明有东西在校验移动，认不出型号
+        if (TacticalCoordinator.getRubberBandTotal() >= 3) {
             return "未知反作弊（拉回频繁，已确认存在移动校验）";
         }
 
@@ -458,7 +429,7 @@ public class ServerDetector extends YiyiaddonModule {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  收包监听：频道指纹 + 拉回统计 + 资源包劫持
+    //  收包监听：频道指纹 + 资源包劫持
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @EventHandler
@@ -477,14 +448,11 @@ public class ServerDetector extends YiyiaddonModule {
                 return;
             }
             if (seenChannels.size() < 64) seenChannels.add(id);
+            return;
         }
 
-        // 拉回统计：环形缓冲，只关心最近 10 次
-        if (event.packet instanceof ClientboundPlayerPositionPacket) {
-            rubberBandTimes[rubberBandIndex] = System.currentTimeMillis();
-            rubberBandIndex = (rubberBandIndex + 1) % rubberBandTimes.length;
-            if (rubberBandTotal < rubberBandTimes.length) rubberBandTotal++;
-        }
+        // 拉回统计已移交 TacticalCoordinator 常驻处理（onReceivePacket 优先级 -1000），
+        // 本模块需要结论时直接读 getRubberBandTotal()，不再维护第二份计数器
 
         if (event.packet instanceof ClientboundResourcePackPushPacket packet) {
             ResourcePackMode mode = resourcePackMode.get();
@@ -526,9 +494,6 @@ public class ServerDetector extends YiyiaddonModule {
     /**
      * 异步下载资源包，支持重试、超时、断点续传与 SHA-1 校验。
      *
-     * 此前 downloadRetries / downloadTimeout / resumeDownload 三个设置项
-     * 都是死开关——方法里硬编码 30 秒超时、不重试、不续传、也不校验哈希。
-     * 现在全部接上：重试次数取设置值，超时取设置值，续传开关生效，
      * 下载过程中边写边算 SHA-1，完成后与服务器给的 hash 比对，不一致则丢弃重下。
      */
     private void downloadResourcePackAsync(UUID packId, String url, String hash) {
