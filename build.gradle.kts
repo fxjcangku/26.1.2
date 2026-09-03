@@ -92,6 +92,10 @@ tasks {
         filesMatching("fabric.mod.json") {
             expand(propertyMap)
         }
+        // README.txt（jar 内反编译说明）也需要跟随版本号展开，避免改造版本号后说明仍写旧版本
+        filesMatching("README.txt") {
+            expand(propertyMap)
+        }
     }
 
     jar {
