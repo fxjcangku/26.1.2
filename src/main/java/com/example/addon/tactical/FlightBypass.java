@@ -76,14 +76,14 @@ public class FlightBypass extends YiyiaddonModule {
     //  参数调整
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private final Setting<Double> packetFlySpeed = sgTweaks.add(new DoubleSetting.Builder()
-        .name("发包飞行速度")
-        .description("发包飞行模式：上升/下降的 Y 轴速度（需服务端授予飞行能力才生效）")
-        .defaultValue(0.3)
-        .min(0.1)
-        .max(1.0)
+    private final Setting<Integer> glideSpeed = sgTweaks.add(new IntSetting.Builder()
+        .name("滑翔速度（0.01格/tick）")
+        .description("安全滑翔模式：Y 轴速度档位，1 = 0.01格/tick。整数档位保证加减按钮可用（Meteor 双精度控件步长硬编码 1）")
+        .defaultValue(3)
+        .min(1)
+        .max(30)
         .noSlider()
-        .visible(() -> mode.get() == FlightPolicy.FlightMode.PACKET_FLY)
+        .visible(() -> mode.get() == FlightPolicy.FlightMode.SAFE_GLIDE)
         .build()
     );
 
@@ -95,17 +95,6 @@ public class FlightBypass extends YiyiaddonModule {
         .max(10)
         .noSlider()
         .visible(() -> mode.get() == FlightPolicy.FlightMode.VANILLA_MIMIC)
-        .build()
-    );
-
-    private final Setting<Double> glideSpeed = sgTweaks.add(new DoubleSetting.Builder()
-        .name("滑翔速度")
-        .description("安全滑翔模式：滑翔中的 Y 轴速度（fallFlying 豁免浮空判定，服务端速度容忍 300 m/t）")
-        .defaultValue(0.03)
-        .min(0.01)
-        .max(0.1)
-        .noSlider()
-        .visible(() -> mode.get() == FlightPolicy.FlightMode.SAFE_GLIDE)
         .build()
     );
 
@@ -189,6 +178,7 @@ public class FlightBypass extends YiyiaddonModule {
             new com.example.addon.ui.HelpScreen.HelpSection("飞行模式（26.1.2 官方机制依据）",
                 "§8├─ §e发包飞行 §8- §7需服务端授予飞行能力（/fly/创造/旁观）",
                 "§8│   §7协调器校验 abilities 后放行，未授权自动拒绝",
+                "§8│   §7零注入原版飞行：速度由服务端权威计算，无法客户端加速",
                 "§8│",
                 "§8├─ §e原版模拟 §8- §7落地即真实起跳",
                 "§8│   §7地面接触由原版物理重置浮空计时，全服合法",
@@ -213,6 +203,7 @@ public class FlightBypass extends YiyiaddonModule {
 
             new com.example.addon.ui.HelpScreen.HelpSection("注意事项",
                 "§c⚠ §f发包飞行需要服务器开 /fly 或创造/旁观权限",
+                "§c⚠ §f发包飞行水平速度由服务端规则决定，想更快请用烟花火箭模式",
                 "§c⚠ §f安全滑翔与烟花火箭需要背包里有鞘翅",
                 "§c⚠ §f序列垫脚需要主手持有可放置方块",
                 "§c⚠ §f报警恢复全程由协调器裁决，模块不自行切换模式"
@@ -338,20 +329,20 @@ public class FlightBypass extends YiyiaddonModule {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  模式 1：发包飞行 —— 仅服务端授予飞行能力时执行（决策层已校验）
+    //  模式 1：发包飞行 —— 零注入，纯原版飞行（服务端速度权威）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 26.1.2 官方机制（LivingEntity.travelInAir + Player.travel 飞行分支）：
+     * 玩家 abilities.flying 时，服务端以移动包的输入轴（xa/za）为唯一依据，
+     * 乘服务端 getFlyingSpeed() 属性权威计算水平速度，客户端 setDeltaMovement
+     * 的水平分量完全不参与；垂直方向服务端也只对自己内部的 Y 速度做 0.6 衰减。
+     * 因此客户端注入任何速度都只改本地预测、与服务端轨迹漂移（触发距离校验），
+     * 还无法加速。本模式不注入任何移动：悬停/上升/下降/水平全由原版飞行输入完成，
+     * 这就是服务端规则内发包飞行的最高合法速度。
+     */
     private void handlePacketFly() {
-        // 服务端已授予飞行（abilities），悬停/上升/下降都是合法飞行状态，
-        // 不再需要改移动包字段（26.1.2 浮空判定无法用发包伪造豁免）
-        Vec3 vel = mc.player.getDeltaMovement();
-        double vy = 0;
-        if (mc.options.keyJump.isDown()) {
-            vy = packetFlySpeed.get();
-        } else if (mc.options.keyShift.isDown()) {
-            vy = -packetFlySpeed.get();
-        }
-        mc.player.setDeltaMovement(vel.x, vy, vel.z);
+        // 零注入：原版飞行本身即最快合法形态，速度由服务端规则决定
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -372,7 +363,8 @@ public class FlightBypass extends YiyiaddonModule {
     private void handleSafeGlide() {
         if (!prepareGlide()) return;
 
-        double speed = glideSpeed.get();
+        // 档位换算：1 档 = 0.01 格/tick
+        double speed = glideSpeed.get() / 100.0;
         double vy;
         if (mc.options.keyJump.isDown()) {
             vy = speed;                       // 上升：缓爬升

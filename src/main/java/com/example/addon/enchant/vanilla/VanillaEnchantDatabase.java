@@ -1,12 +1,11 @@
 package com.example.addon.enchant.vanilla;
 
-import com.example.addon.utils.ResourceCrypto;
+import com.example.addon.utils.DataPack;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -376,14 +375,10 @@ public final class VanillaEnchantDatabase {
     }
 
     private static <T> T readJson(String path, Class<T> type) {
-        try (InputStream in = VanillaEnchantDatabase.class.getResourceAsStream(path)) {
-            if (in == null) return null;
-            // 资源透明解密：官方混淆版资源为 AES-GCM 密文，个人测试版为明文 JSON
-            byte[] raw = in.readAllBytes();
-            String json = new String(ResourceCrypto.d(raw), StandardCharsets.UTF_8);
-            return new Gson().fromJson(json, type);
-        } catch (Exception e) {
-            throw new RuntimeException(path + " 读取失败", e);
-        }
+        // 统一资源包读取：发布版从 rulepack.bin 内读（透明 AES 解密），开发环境自动回退散文件
+        byte[] raw = DataPack.get(path);
+        if (raw == null) return null;
+        String json = new String(raw, StandardCharsets.UTF_8);
+        return new Gson().fromJson(json, type);
     }
 }

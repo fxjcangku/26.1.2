@@ -14,12 +14,18 @@ import org.objectweb.asm.tree.LookupSwitchInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.tree.TableSwitchInsnNode
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.LinkedHashMap
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -116,9 +122,32 @@ tasks {
         }
     }
 
+    // 资源打包：把附魔规则等散文件打成单一 rulepack.bin（去除文件名语义），
+    // 个人版与官方版共用此步骤——个人版 bin 为明文 zip 容器，官方版再整体 AES 加密。
+    val packedJar = layout.buildDirectory.file("libs/yiyiaddon${libs.versions.mod.version.get()}-packed.jar")
+    val packResources by register<EncryptStringsTask>("packResources") {
+        dependsOn(jar)
+        packOnly.set(true)
+        inputJar.set(jar.get().archiveFile.get().asFile)
+        outputJar.set(packedJar)
+    }
+
+    // 覆盖 jar 输出为打包版（doLast 复制不注册任务输出，避免与 encryptStrings 的
+    // packed.jar 输入产生 Gradle 9 隐式依赖校验冲突）
+    register("finalizePersonalJar") {
+        dependsOn(packResources)
+        doLast {
+            Files.copy(
+                packedJar.get().asFile.toPath(),
+                jar.get().archiveFile.get().asFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        }
+    }
+
     register("buildPersonal") {
         group = "build"
-        dependsOn(jar)
+        dependsOn("finalizePersonalJar")
     }
 
     register<Exec>("scanMeteorUiText") {
@@ -129,8 +158,9 @@ tasks {
     // 字符串加密：在 ProGuard 混淆之前，把源码字符串常量替换为运行时解密调用。
     // 放在 jar 之后、obfuscateOfficial 之前，ProGuard 会自动追踪并同步解密调用的类/方法名。
     val encryptStrings by register<EncryptStringsTask>("encryptStrings") {
-        dependsOn(jar)
-        inputJar.set(jar.get().archiveFile.get().asFile)
+        dependsOn(packResources)
+        packOnly.set(false)
+        inputJar.set(packedJar.get().asFile)
         outputJar.set(layout.buildDirectory.file("libs/yiyiaddon${libs.versions.mod.version.get()}-encrypted.jar").get().asFile)
     }
 
@@ -306,6 +336,11 @@ abstract class EncryptStringsTask : DefaultTask() {
     @get:OutputFile
     abstract val outputJar: RegularFileProperty
 
+    /** 仅打包模式：资源打成一个明文 zip 容器（个人测试版），class 不动、资源不加密 */
+    @get:Input
+    @get:Optional
+    abstract val packOnly: Property<Boolean>
+
     @TaskAction
     fun run() {
         val inFile = inputJar.get().asFile
@@ -318,20 +353,35 @@ abstract class EncryptStringsTask : DefaultTask() {
         val P = IntArray(keyLength) { random.nextInt(256) }
         val Q = IntArray(keyLength) { random.nextInt(256) }
 
+        // 待打包资源：原 jar 路径 → 内容（收集后统一压缩进 rulepack.bin，散文件不再落盘）
+        val packEntries = LinkedHashMap<String, ByteArray>()
+
         JarFile(inFile).use { jin ->
             JarOutputStream(FileOutputStream(outFile)).use { jout ->
                 val entries = jin.entries()
                 while (entries.hasMoreElements()) {
                     val entry = entries.nextElement()
                     val bytes = jin.getInputStream(entry).readBytes()
-                    // 只处理主 jar 里的 class（嵌套的 baritone 等第三方 jar 是独立文件，不加密）；
-                    // 附魔规则等关键数据资源走 AES-GCM 分支，其余资源原样写入
+                    // 附魔规则等关键数据：收集进资源包（不按原路径写入）
+                    if (isPackableResource(entry.name)) {
+                        packEntries[entry.name] = bytes
+                        continue
+                    }
+                    // class：官方版做字符串加密，个人打包版原样透传
                     val outBytes = when {
-                        entry.name.endsWith(".class") -> encryptClass(bytes, P, Q)
-                        isProtectedResource(entry.name) -> encryptResource(bytes, P, Q)
+                        entry.name == RULE_PACK && !packOnly.get() -> encryptResource(bytes, P, Q)
+                        entry.name.endsWith(".class") && !packOnly.get() -> encryptClass(bytes, P, Q)
                         else -> bytes
                     }
                     jout.putNextEntry(JarEntry(entry.name))
+                    jout.write(outBytes)
+                    jout.closeEntry()
+                }
+                // 统一写入资源包：个人版明文 zip 容器；官方版容器整体 AES-GCM 加密
+                if (packEntries.isNotEmpty()) {
+                    val packed = zipPack(packEntries)
+                    val outBytes = if (packOnly.get()) packed else encryptResource(packed, P, Q)
+                    jout.putNextEntry(JarEntry(RULE_PACK))
                     jout.write(outBytes)
                     jout.closeEntry()
                 }
@@ -339,11 +389,28 @@ abstract class EncryptStringsTask : DefaultTask() {
         }
     }
 
-    // ── 资源加密（附魔规则 JSON 等关键数据） ──────────────────────────────
-    // 白名单：enchantment/ 全部规则数据 + assets/yiyiaddon/gear-enchants.json 装备数据。
-    // 语言文件/图标等非核心资源保持明文（无反编译价值，加密徒增运行开销）。
-    private fun isProtectedResource(name: String): Boolean =
+    /** 统一资源包路径：唯一无意义文件名，替代 80+ 个语义化散文件 */
+    private val RULE_PACK = "assets/yiyiaddon/rulepack.bin"
+
+    // ── 资源打包（附魔规则 JSON 等关键数据） ──────────────────────────────
+    // 收集范围：enchantment/ 全部规则数据 + assets/yiyiaddon/gear-enchants.json。
+    // 语言文件/图标等非核心资源保持散文件（无反编译价值，打包徒增运行开销）。
+    private fun isPackableResource(name: String): Boolean =
         name.startsWith("enchantment/") || name == "assets/yiyiaddon/gear-enchants.json"
+
+    // 把散资源打成内存 zip 容器：entry 名保留原 jar 路径，运行时 DataPack 按原路径查询。
+    // zip 自带 DEFLATE 压缩，80+ 个 JSON 打包后体积进一步缩小。
+    private fun zipPack(entries: LinkedHashMap<String, ByteArray>): ByteArray {
+        val bos = ByteArrayOutputStream()
+        ZipOutputStream(bos).use { zout ->
+            for ((name, bytes) in entries) {
+                zout.putNextEntry(ZipEntry(name))
+                zout.write(bytes)
+                zout.closeEntry()
+            }
+        }
+        return bos.toByteArray()
+    }
 
     // AES-256-GCM 加密资源：格式 [魔数 "YENC" 4B][随机 IV 12B][密文 + GCM 认证标签 16B]。
     // 每文件独立随机 IV，防止多文件同密钥下的 IV 复用攻击；GCM 认证标签防密文篡改。
