@@ -716,15 +716,23 @@ public class AntiKickBypass extends YiyiaddonModule {
             if (r.speed > 0.3) speedCount++;
         }
 
-        notify("§e§l拉回分析报告（" + total + " 次）");
-        notify("§f飞行时被拉：§c" + flyingCount + "§f 次（" + percent(flyingCount, total) + "%）");
-        notify("§f挖掘时被拉：§c" + diggingCount + "§f 次（" + percent(diggingCount, total) + "%）");
-        notify("§f放置时被拉：§c" + placingCount + "§f 次（" + percent(placingCount, total) + "%）");
-        notify("§f高速时被拉：§c" + speedCount + "§f 次（" + percent(speedCount, total) + "%）");
+        // 报告合并为单条多行块，正文「标签 §8▸ 值」对齐，禁止逐条刷屏
+        StringBuilder sb = new StringBuilder("§e§l拉回分析报告 §8（").append(total).append(" 次）§r\n");
+        sb.append("§8├─ §f飞行时被拉 §8▸ ").append(highlightNumber(String.valueOf(flyingCount)))
+            .append(" 次 §8（").append(percent(flyingCount, total)).append("%）\n");
+        sb.append("§8├─ §f挖掘时被拉 §8▸ ").append(highlightNumber(String.valueOf(diggingCount)))
+            .append(" 次 §8（").append(percent(diggingCount, total)).append("%）\n");
+        sb.append("§8├─ §f放置时被拉 §8▸ ").append(highlightNumber(String.valueOf(placingCount)))
+            .append(" 次 §8（").append(percent(placingCount, total)).append("%）\n");
+        sb.append("§8└─ §f高速时被拉 §8▸ ").append(highlightNumber(String.valueOf(speedCount)))
+            .append(" 次 §8（").append(percent(speedCount, total)).append("%）");
 
-        if (flyingCount > total * 0.5) notify("§a建议：把「飞行绕过」切换到安全滑翔或原版模拟");
-        if (diggingCount > total * 0.4) notify("§a建议：降低「每秒最多挖几个」的值");
-        if (placingCount > total * 0.4) notify("§a建议：降低「每秒最多放几个」的值");
+        // 建议行独立于统计树之外（用 ▸ 而非 └─），避免出现双 └─ 破坏树形结构
+        if (flyingCount > total * 0.5) sb.append("\n§8▸ §a建议 §8▸ 把「飞行绕过」切换到安全滑翔或原版模拟");
+        else if (diggingCount > total * 0.4) sb.append("\n§8▸ §a建议 §8▸ 降低「每秒最多挖几个」的值");
+        else if (placingCount > total * 0.4) sb.append("\n§8▸ §a建议 §8▸ 降低「每秒最多放几个」的值");
+
+        notify(sb.toString());
     }
 
     private int percent(int part, int total) {
