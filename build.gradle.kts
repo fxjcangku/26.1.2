@@ -17,8 +17,12 @@ import org.objectweb.asm.tree.TableSwitchInsnNode
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
@@ -320,11 +324,12 @@ abstract class EncryptStringsTask : DefaultTask() {
                 while (entries.hasMoreElements()) {
                     val entry = entries.nextElement()
                     val bytes = jin.getInputStream(entry).readBytes()
-                    // 只处理主 jar 里的 class（嵌套的 baritone 等第三方 jar 是独立文件，不加密）
-                    val outBytes = if (entry.name.endsWith(".class")) {
-                        encryptClass(bytes, P, Q)
-                    } else {
-                        bytes
+                    // 只处理主 jar 里的 class（嵌套的 baritone 等第三方 jar 是独立文件，不加密）；
+                    // 附魔规则等关键数据资源走 AES-GCM 分支，其余资源原样写入
+                    val outBytes = when {
+                        entry.name.endsWith(".class") -> encryptClass(bytes, P, Q)
+                        isProtectedResource(entry.name) -> encryptResource(bytes, P, Q)
+                        else -> bytes
                     }
                     jout.putNextEntry(JarEntry(entry.name))
                     jout.write(outBytes)
@@ -332,6 +337,32 @@ abstract class EncryptStringsTask : DefaultTask() {
                 }
             }
         }
+    }
+
+    // ── 资源加密（附魔规则 JSON 等关键数据） ──────────────────────────────
+    // 白名单：enchantment/ 全部规则数据 + assets/yiyiaddon/gear-enchants.json 装备数据。
+    // 语言文件/图标等非核心资源保持明文（无反编译价值，加密徒增运行开销）。
+    private fun isProtectedResource(name: String): Boolean =
+        name.startsWith("enchantment/") || name == "assets/yiyiaddon/gear-enchants.json"
+
+    // AES-256-GCM 加密资源：格式 [魔数 "YENC" 4B][随机 IV 12B][密文 + GCM 认证标签 16B]。
+    // 每文件独立随机 IV，防止多文件同密钥下的 IV 复用攻击；GCM 认证标签防密文篡改。
+    // 不用 XOR 流密钥：JSON 头部（如 {"gear"）高度可预测，多文件共用流密钥
+    // 会构成 known-plaintext 攻击，可恢复整个密钥流。
+    private fun encryptResource(bytes: ByteArray, P: IntArray, Q: IntArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(deriveAesKey(P, Q), "AES"), GCMParameterSpec(128, iv))
+        val ct = cipher.doFinal(bytes)
+        return byteArrayOf('Y'.code.toByte(), 'E'.code.toByte(), 'N'.code.toByte(), 'C'.code.toByte()) + iv + ct
+    }
+
+    // AES 密钥 = SHA-256(K)，K[i] = P[i] ^ Q[i]——与 StringCrypto 共用同一随机密钥源，
+    // ResourceCrypto 运行期的 K 字段由下方 ASM 注入同一份 K 值。
+    private fun deriveAesKey(P: IntArray, Q: IntArray): ByteArray {
+        val k = ByteArray(P.size)
+        for (i in k.indices) k[i] = (P[i] xor Q[i]).toByte()
+        return MessageDigest.getInstance("SHA-256").digest(k)
     }
 
     // XOR + Base64 加密，与 StringCrypto.d 解密逻辑对应（K[i] = P[i] ^ Q[i]）
@@ -357,11 +388,14 @@ abstract class EncryptStringsTask : DefaultTask() {
         val cv = object : ClassVisitor(Opcodes.ASM9, cw) {
             private var isMixin = false
             private var isCrypto = false
+            private var cryptoName = ""
 
             override fun visit(version: Int, access: Int, name: String?, signature: String?, superName: String?, interfaces: Array<out String>?) {
-                // StringCrypto 自身：跳过字符串加密（避免 d() 内部自引用递归），
-                // 改由 <clinit> 注入随机密钥 P、Q。
+                // 加密工具类自身（StringCrypto / ResourceCrypto）：跳过字符串加密
+                // （避免 d() 内部自引用递归），改由 <clinit> 注入随机密钥。
                 isCrypto = name == "com/example/addon/utils/StringCrypto"
+                    || name == "com/example/addon/utils/ResourceCrypto"
+                if (name != null) cryptoName = name
                 return super.visit(version, access, name, signature, superName, interfaces)
             }
 
@@ -373,15 +407,25 @@ abstract class EncryptStringsTask : DefaultTask() {
             }
 
             override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
-                // StringCrypto 的 <clinit>：重写为注入随机密钥 P、Q 的字节码，
+                // 加密工具类的 <clinit>：重写为注入随机密钥的字节码，
                 // 覆盖源码里的默认占位值，实现「构建期随机密钥 + 运行时重组」。
                 if (isCrypto && name == "<clinit>") {
                     val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
                     mv.visitCode()
-                    emitIntArray(mv, P)
-                    mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "P", "[I")
-                    emitIntArray(mv, Q)
-                    mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "Q", "[I")
+                    // 按类分派注入：StringCrypto 注入 P、Q；ResourceCrypto 注入 K = P ^ Q
+                    when (cryptoName) {
+                        "com/example/addon/utils/StringCrypto" -> {
+                            emitIntArray(mv, P)
+                            mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "P", "[I")
+                            emitIntArray(mv, Q)
+                            mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/StringCrypto", "Q", "[I")
+                        }
+                        "com/example/addon/utils/ResourceCrypto" -> {
+                            val K = IntArray(keyLength) { i -> P[i] xor Q[i] }
+                            emitIntArray(mv, K)
+                            mv.visitFieldInsn(Opcodes.PUTSTATIC, "com/example/addon/utils/ResourceCrypto", "K", "[I")
+                        }
+                    }
                     mv.visitInsn(Opcodes.RETURN)
                     mv.visitMaxs(0, 0)
                     mv.visitEnd()

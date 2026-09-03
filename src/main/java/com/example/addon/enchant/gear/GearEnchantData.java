@@ -1,5 +1,6 @@
 package com.example.addon.enchant.gear;
 
+import com.example.addon.utils.ResourceCrypto;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import com.mojang.logging.LogUtils;
@@ -13,8 +14,6 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import org.slf4j.Logger;
 
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -109,11 +108,12 @@ public final class GearEnchantData {
                 LOG.error("[gear-enchants] 资源文件缺失：assets/yiyiaddon/gear-enchants.json");
                 return new GearEnchantData(List.of());
             }
-            try (Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-                Root root = new Gson().fromJson(reader, Root.class);
-                List<GearDefinition> raw = root.gears == null ? List.of() : root.gears;
-                return new GearEnchantData(validate(raw));
-            }
+            // 资源透明解密：官方混淆版资源为 AES-GCM 密文，个人测试版为明文 JSON
+            byte[] raw = in.readAllBytes();
+            String json = new String(ResourceCrypto.d(raw), StandardCharsets.UTF_8);
+            Root root = new Gson().fromJson(json, Root.class);
+            List<GearDefinition> rawGears = root.gears == null ? List.of() : root.gears;
+            return new GearEnchantData(validate(rawGears));
         } catch (Exception e) {
             // 解析失败时明确报错并降级为空数据，不阻断游戏启动
             LOG.error("[gear-enchants] JSON 解析失败", e);
