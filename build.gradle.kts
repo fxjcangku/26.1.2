@@ -171,6 +171,14 @@ tasks {
         // 同样跟随版本号，与映射文件 obfuscation-mapping-v{版本}.txt 保持一一对应
         val outputJar = layout.buildDirectory.file("libs/yiyiaddon${libs.versions.mod.version.get()}.jar").get().asFile
 
+        // 铁律：ProGuard outjars 是合并式写入，不会删除输出 jar 里已存在的旧条目。
+        // 上一版构建的类名（如 A/aA/aB）会残留在新 jar 里，与本次字典类名（l/I/O0）并存：
+        // 业务类双命名重复、jar 膨胀、且旧残留类不在本次映射里导致崩溃日志无法还原。
+        // 必须每次构建前清空旧输出。
+        doFirst {
+            if (outputJar.exists()) outputJar.delete()
+        }
+
         injars(inputJar)
         outjars(outputJar)
         libraryjars(configurations.runtimeClasspath.get())
