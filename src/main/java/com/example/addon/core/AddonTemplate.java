@@ -23,9 +23,11 @@ import com.example.addon.modules.AutoVillagerTradeModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
 import com.example.addon.modules.CometDisconnectModule;
 import com.example.addon.modules.MeteorCommandGuideModule;
+import com.example.addon.modules.TeleportModule;
 import com.example.addon.modules.ThemeModule;
 import com.example.addon.modules.UserStatsModule;
 import com.example.addon.modules.YiyiaddonTranslationModule;
+import com.example.addon.teleport.command.TpCommand;
 import com.example.addon.tactical.FlightBypass;
 import com.example.addon.tactical.AntiKickBypass;
 import com.example.addon.tactical.ServerDetector;
@@ -161,6 +163,10 @@ public class AddonTemplate extends MeteorAddon {
         Modules.get().add(new ServerDetector());
         Modules.get().add(new AdminDetectorModule());
         Modules.get().add(new PacketInstantBreak());
+
+        // 传送：TP地面 / TP穿墙 / TP坐标 三模式独立按键，带服务端回弹验证
+        Modules.get().add(new TeleportModule());
+        Commands.add(new TpCommand());             // 传送指令：.tp X Y Z
 
         // ── 自定义指令 ──
         Commands.add(new CommandExample());
