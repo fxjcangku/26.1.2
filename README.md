@@ -8,10 +8,11 @@
 ![Fabric](https://img.shields.io/badge/Fabric_Loader-0.19.3-orange?style=for-the-badge)
 ![Meteor](https://img.shields.io/badge/Meteor_Client-26.1.2-blue?style=for-the-badge)
 ![Java](https://img.shields.io/badge/Java-25-red?style=for-the-badge&logo=openjdk&logoColor=white)
-![Version](https://img.shields.io/badge/Version-v1.2-9cf?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.3-9cf?style=for-the-badge)
 
-**我是一个专注自动化脚本研究的扩展**  
-**自动挖矿 · 完整汉化 · 智能自动化，让重复操作交给脚本**
+**面向 Minecraft 26.1.2 的 Meteor Client 专业自动化扩展**
+
+**状态机驱动的全流程自动化 · 全量中文本地化 · 移动传送一体化**
 
 [![下载](https://img.shields.io/github/downloads/fxjcangku/26.1.2/total?style=for-the-badge&logo=github&label=Downloads&color=2ea44f)](https://github.com/fxjcangku/26.1.2/releases)
 [![Stars](https://img.shields.io/github/stars/fxjcangku/26.1.2?style=for-the-badge&logo=github&label=Stars)](https://github.com/fxjcangku/26.1.2/stargazers)
@@ -22,24 +23,25 @@
 
 ---
 
-## 🧭 这是什么
+## 🧭 项目定位
 
-**yiyiaddon** 是一个运行在 [Meteor Client](https://meteorclient.com) 之上的**客户端脚本扩展**。
+**yiyiaddon** 是一个运行在 [Meteor Client](https://meteorclient.com) 之上的**专业自动化扩展**。
 
-> 我是一个专注**自动化脚本研究**的扩展 —— 把挖矿、种植、交易、整理背包这些重复又枯燥的操作，全部交给脚本自动完成，让你把时间花在真正有趣的事情上。
+我们把重复性的游戏操作——挖矿、耕种、交易、附魔、移动与传送——工程化为**可配置、可观测、可复用**的自动化流程：
 
+- ✅ **状态机架构**：每个流程由独立状态机驱动，支持断点恢复、异常自愈与看门狗保护，稳定挂机不卡死
+- ✅ **完整执行反馈**：每个环节都有进度播报与结果播报，随时知道「正在做什么、做成了没有」
+- ✅ **三层安全校验**：碰撞容纳、危险排除、服务端验证三级判据，落点永远真实可站立
 - ✅ **纯客户端运行**：不需要任何服务端插件，单人 / 多人通用
-- ✅ **开箱即用**：所有界面、提示、指令全部中文化
-- ✅ **专注自动化**：状态机驱动，稳定挂机不卡顿
-- ✅ **随时反馈**：有 Bug 请反馈，我会持续迭代
+- ✅ **持续迭代**：跟随 26.1.2 版本持续更新，有 Bug 必修复
 
 ---
 
-## ⭐ 两大核心亮点
+## ⭐ 三大核心体系
 
-### ⛏️ 自动挖矿
+### ⛏️ 自动化生产线
 
-最核心的自动化脚本，全流程无需手动干预。
+覆盖资源采集到加工的全链路，全流程无需手动干预。
 
 <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=minecraft%20automated%20tunnel%20mining%2C%20glowing%20diamond%20ore%20vein%2C%20baritone%20navigation%20path%20hologram%20overlay%2C%20cyberpunk%20neon%20cyan%20highlights%2C%20professional%20game%20hud&image_size=landscape_16_9" alt="自动挖矿" width="760" />
 
@@ -50,6 +52,18 @@
 | 🎒 背包管理 | 自动丢弃无用方块、切换工具、保护时运装备 |
 | 🛡️ 耐久预警 | 工具耐久不足自动切换副手经验修补，提示具体工具名 |
 | 📦 潜影盒打包 | 背包满自动装盒换盒，长时间挂机不中断 |
+
+### 🌀 移动与传送
+
+三模式安全传送 + 多模式飞行，跨地形移动一体化解决方案。
+
+| 模式 | 说明 |
+| --- | --- |
+| 🏔️ **TP地面** | 一键回到头顶真正的露天地表，洞穴脱身必备 |
+| 🧱 **TP穿墙** | 捕获真实三维准星方向，智能搜索落点：穿墙、穿建筑、穿山体，前方无墙也能方向赶路，落点被占自动就近修正 |
+| 🎯 **TP坐标** | 定点传送或 `.tp X Y Z` 指令直达配置坐标 |
+| 🛡️ **回弹验证** | 每次位移都经服务端权威包验证，被修正立即播报偏差 |
+| ✈️ **多模式飞行** | 多套移动方案自适应服务器环境 |
 
 ### 🌐 完整汉化
 
@@ -69,8 +83,6 @@
 
 ## 🧩 功能模块一览
 
-> 以下按分类依次介绍全部自动化脚本模块。
-
 ### 🚜 自动化模块
 
 | 模块 | 功能 |
@@ -83,6 +95,15 @@
 | ✨ **扩展附魔** | 经验获取 → 定向附魔 → 洗练仓储全闭环 |
 | 🔑 **自动登录** | 自动注册、登录、断线重连、进服执行指令 |
 | ⚡ **自动断线** | 应急断线，配合自动化流程使用 |
+
+### 🌀 移动与传送
+
+| 模块 | 功能 |
+| --- | --- |
+| 🏔️ **TP地面** | 一键回地表，洞穴脱身 |
+| 🧱 **TP穿墙** | 三维准星智能落点，穿墙穿山 + 方向赶路 |
+| 🎯 **TP坐标** | 定点传送，支持 `.tp X Y Z` 指令 |
+| ✈️ **飞行** | 多模式移动方案，自动适应服务器环境 |
 
 ### 🧰 辅助模块
 
@@ -106,7 +127,6 @@
 
 | 模块 | 功能 |
 | --- | --- |
-| ✈️ **飞行** | 多模式移动适配 |
 | 🧱 **防踢** | 智能发包与通信管理 |
 | 🔍 **服务器检测** | 识别服务器类型并自动调整策略 |
 | 👁️ **管理员检测** | 识别旁观 / 隐身管理员 |
@@ -127,16 +147,16 @@
 
 ### 安装步骤
 
-1. **下载**：前往 [Release 页面](https://github.com/fxjcangku/26.1.2/releases/latest) 下载 `yiyiaddon1.2.jar`
+1. **下载**：前往 [Release 页面](https://github.com/fxjcangku/26.1.2/releases/latest) 下载 `yiyiaddon1.3.jar`
 2. **放入 mods**：复制到 `.minecraft/mods/` 目录
 3. **启动游戏**：选择 Fabric 实例，确认 Meteor 已加载（Baritone 已内置）
-4. **打开菜单**：按 `Right Shift`，即可在分类中看到「自动化 / 辅助 / 工具 / 服务器适配」模块
+4. **打开菜单**：按 `Right Shift`，即可在分类中看到「自动化 / 移动传送 / 辅助 / 工具 / 服务器适配」模块
 
 ---
 
 ## 💬 加入社区
 
-有任何问题、建议或想交流自动化脚本玩法，欢迎加入 Discord：
+有任何问题、建议或想交流自动化玩法，欢迎加入 Discord：
 
 [![Discord](https://img.shields.io/badge/Discord-%E7%AB%8B%E5%8D%B3%E5%8A%A0%E5%85%A5-7289da?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/vwrRCtET)
 
@@ -155,6 +175,14 @@
 ---
 
 ## 📝 更新日志
+
+### v1.3
+
+- 🌀 **全新「传送」模块**：TP地面 / TP穿墙 / TP坐标 三模式，独立快捷键一键触发
+- 🧱 TP穿墙基于真实三维准星射线智能搜索落点：穿墙穿山、方向赶路一体，落点被占自动就近修正
+- 🛡️ 每次位移均经服务端权威包验证，被修正立即播报实际偏差
+- ⌨️ 快捷键在模块未开启时智能提醒；数值配置统一为加减按钮 + 输入框
+- 🐛 修复事件双重订阅等潜在稳定性问题
 
 ### v1.2
 
@@ -176,6 +204,6 @@
 
 **让 Minecraft 更智能，让游戏更轻松**
 
-⭐ 如果觉得好用，请点个 Star 支持我继续研究自动化脚本
+⭐ 如果觉得好用，请点个 Star 支持我继续迭代
 
 </div>
