@@ -107,8 +107,7 @@ public final class FarmPacketOps {
             player.connection.send(new ServerboundUseItemOnPacket(hand, hitResult, sequence));
         }
 
-        // 摆手动画，让服务端与旁观者看到正常的交互表现
-        player.swing(hand);
+        // 播种静默：不摆手，避免连续补种时频繁挥手动画，同时加快补种节奏
         return true;
     }
 

@@ -22,7 +22,7 @@ import net.minecraft.world.phys.HitResult;
  * .farm                               查看六个锚点的绑定情况
  * .farm set 农场点位1/农场点位2       绑定农田范围对角
  * .farm set 单作物箱/种子补货箱/多作物箱  绑定对应作物箱（必须是容器）
- * .farm set 毒马铃薯箱                绑定毒马铃薯独立处理箱（必须是容器）
+ * .farm set 杂物箱                绑定杂物独立处理箱（必须是容器）
  * .farm remove 任意锚点               解绑
  * .farm status                        显示详细信息
  * .farm clear                         清空全部锚点

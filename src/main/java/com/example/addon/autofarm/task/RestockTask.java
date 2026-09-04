@@ -31,6 +31,11 @@ public final class RestockTask extends ContainerTask {
         this.crop = crop;
     }
 
+    /** 当前补货的作物，供 Controller 在箱子无货时抑制补货 */
+    public CropProfile crop() {
+        return crop;
+    }
+
     @Override
     protected TaskResult transfer() {
         Item plantItem = crop.plantItem();

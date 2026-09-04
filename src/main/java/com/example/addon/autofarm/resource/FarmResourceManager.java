@@ -60,6 +60,18 @@ public final class FarmResourceManager {
         return unloadGroups(crop) * 64;
     }
 
+    /**
+     * 某作物在补货判定时需要保留的数量（个）。
+     * 单物品作物（种子==收获物）的保留数量取补货种子数量与卸货数量中的较小者，
+     * 避免「卸货数量」小于「补货种子数量」时补货阈值反超卸货阈值，导致卸货永远不触发。
+     */
+    private int reserve(CropProfile crop) {
+        if (crop.plantItem() == crop.harvestItem()) {
+            return Math.min(safetyStock(crop), unloadStock(crop));
+        }
+        return safetyStock(crop);
+    }
+
     /** 背包里指定物品的总数量（主背包 36 格 + 副手） */
     public int countItem(Item item) {
         if (item == null) return 0;
@@ -74,9 +86,9 @@ public final class FarmResourceManager {
         return total;
     }
 
-    /** 某作物是否需要补货（种植材料低于补货种子数量） */
+    /** 某作物是否需要补货（种植材料低于保留数量） */
     public boolean needsRestock(CropProfile crop) {
-        return crop.needsReplant() && countItem(crop.plantItem()) < safetyStock(crop);
+        return crop.needsReplant() && countItem(crop.plantItem()) < reserve(crop);
     }
 
     /** 是否存在任一启用作物需要补货 */
@@ -95,9 +107,27 @@ public final class FarmResourceManager {
         return null;
     }
 
-    /** 毒马铃薯当前数量（毒马铃薯必须独立处理，不进普通作物箱） */
-    public int countPoisonousPotato() {
-        return countItem(Items.POISONOUS_POTATO);
+    /** 判断物品是否属于杂物（毒马铃薯 + 仙人掌花这类不进常规作物箱的副产物） */
+    public boolean isJunkItem(Item item) {
+        if (item == Items.POISONOUS_POTATO) return true;
+        for (CropProfile crop : enabled) {
+            if (crop.junk() && item == crop.harvestItem()) return true;
+        }
+        return false;
+    }
+
+    /** 背包里杂物（毒马铃薯 + 仙人掌花）的总数量，用于杂物卸货阈值判断 */
+    public int countJunk() {
+        int total = countItem(Items.POISONOUS_POTATO);
+        for (CropProfile crop : enabled) {
+            if (crop.junk()) total += countItem(crop.harvestItem());
+        }
+        return total;
+    }
+
+    /** 判断物品是否应卸入杂物箱（触发后全卸，不做库存保护） */
+    public boolean shouldDepositJunk(ItemStack stack) {
+        return isJunkItem(stack.getItem());
     }
 
     /**
@@ -120,17 +150,17 @@ public final class FarmResourceManager {
     /**
      * 判断物品是否应卸入单作物箱（单物品作物与柱状物/果实的收获物）。
      * 不补种的柱状物/果实（甘蔗/竹子/仙人掌/南瓜/西瓜）产物单一，超过独立卸货数量即卸；
-     * 单物品作物（马铃薯/胡萝卜/下界疣，种子==收获物）卸货时必须同时保护补货库存，
-     * 超过「补货数量与卸货数量中的较大者」才卸，避免把补种材料卸光。
+     * 单物品作物（马铃薯/胡萝卜/下界疣，种子==收获物）超过独立卸货数量即卸，卸货数量即保留数量。
      */
     public boolean shouldDepositSingle(ItemStack stack) {
         Item item = stack.getItem();
         if (item == Items.POISONOUS_POTATO) return false;
         for (CropProfile crop : enabled) {
+            if (crop.junk()) continue;
             if (item != crop.harvestItem()) continue;
             if (!crop.needsReplant()) return countItem(item) > unloadStock(crop);
             if (crop.plantItem() == crop.harvestItem()) {
-                return countItem(item) > Math.max(safetyStock(crop), unloadStock(crop));
+                return countItem(item) > unloadStock(crop);
             }
         }
         return false;
@@ -145,11 +175,60 @@ public final class FarmResourceManager {
         Item item = stack.getItem();
         if (item == Items.POISONOUS_POTATO) return false;
         for (CropProfile crop : enabled) {
+            if (crop.junk()) continue;
             if (crop.needsReplant()
                 && item == crop.harvestItem()
                 && crop.plantItem() != crop.harvestItem()
                 && countItem(item) > unloadStock(crop)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 卸入种子补货箱的实际筛选（触发后不再看卸货数量阈值，只保留补货库存）。
+     * 双物品作物的种子卸到安全库存为止，避免种子被卸光。
+     */
+    public boolean shouldUnloadSeed(ItemStack stack) {
+        Item item = stack.getItem();
+        for (CropProfile crop : enabled) {
+            if (crop.needsReplant()
+                && item == crop.plantItem()
+                && crop.plantItem() != crop.harvestItem()
+                && countItem(item) > safetyStock(crop)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 卸入单作物箱的实际筛选（触发后不再看卸货数量阈值，避免只卸一组）。
+     * 不补种作物（柱状物/果实）全卸；单物品作物（种子==收获物）只保留卸货数量为止。
+     */
+    public boolean shouldUnloadSingle(ItemStack stack) {
+        Item item = stack.getItem();
+        if (item == Items.POISONOUS_POTATO) return false;
+        for (CropProfile crop : enabled) {
+            if (crop.junk()) continue;
+            if (item != crop.harvestItem()) continue;
+            if (!crop.needsReplant()) return countItem(item) > 0;
+            if (crop.plantItem() == crop.harvestItem()) return countItem(item) > unloadStock(crop);
+        }
+        return false;
+    }
+
+    /** 卸入多作物箱的实际筛选：双物品作物的成熟掉落物全卸（种子由种子补货箱单独处理） */
+    public boolean shouldUnloadDual(ItemStack stack) {
+        Item item = stack.getItem();
+        if (item == Items.POISONOUS_POTATO) return false;
+        for (CropProfile crop : enabled) {
+            if (crop.junk()) continue;
+            if (crop.needsReplant()
+                && item == crop.harvestItem()
+                && crop.plantItem() != crop.harvestItem()) {
+                return countItem(item) > 0;
             }
         }
         return false;

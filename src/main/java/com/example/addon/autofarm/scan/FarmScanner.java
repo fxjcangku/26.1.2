@@ -59,9 +59,10 @@ public final class FarmScanner {
             Math.max(a.getY(), b.getY()),
             Math.max(a.getZ(), b.getZ()));
         // 补种检测需要识别作物下方的耕地层（作物在耕地正上方），
-        // 而锚点通常对准作物或地面本身，上下各扩一格确保底盘层与作物层都在扫描范围内。
+        // 而锚点通常对准地面本身；柱状物（仙人掌/甘蔗/竹子）的收割段在底盘上方第二格，
+        // 因此向上多扩 3 格确保覆盖生长高度，避免「Y 轴没往上走」导致柱状物收不到。
         min = new BlockPos(min.getX(), min.getY() - 1, min.getZ());
-        max = new BlockPos(max.getX(), max.getY() + 1, max.getZ());
+        max = new BlockPos(max.getX(), max.getY() + 3, max.getZ());
         bounded = true;
         restart();
     }
@@ -206,6 +207,30 @@ public final class FarmScanner {
             classify(level, cursor);
             advance();
         }
+    }
+
+    /**
+     * 一次性全量扫描整个范围（不设预算，超大农田上可能造成单帧卡顿）。
+     * 用于模块刚开启时立即拿到全部成熟/可补种/待锄地目标，让补种「一瞬间补满」；
+     * 之后仍由分帧扫描持续刷新缓存。
+     */
+    public void fullScan() {
+        if (!bounded || enabled.isEmpty()) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null) return;
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int x = min.getX(); x <= max.getX(); x++) {
+            for (int z = min.getZ(); z <= max.getZ(); z++) {
+                for (int y = min.getY(); y <= max.getY(); y++) {
+                    cursor.set(x, y, z);
+                    classify(level, cursor);
+                }
+            }
+        }
+        restart();
     }
 
     /** 游标前进一格，越过边界就回卷到起点，循环推进 */

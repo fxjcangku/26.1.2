@@ -35,6 +35,9 @@ public enum CropProfile {
     SUGAR_CANE("甘蔗", Kind.PILLAR, Blocks.SUGAR_CANE, null, Items.SUGAR_CANE, null),
     CACTUS("仙人掌", Kind.PILLAR, Blocks.CACTUS, null, Items.CACTUS, null),
 
+    // ── 杂物：仙人掌花是仙人掌自然长出的副产物，与毒马铃薯一样独立进杂物箱，不计入常规作物箱 ──
+    CACTUS_FLOWER("仙人掌花", Kind.FRUIT, Blocks.CACTUS_FLOWER, null, Items.CACTUS_FLOWER, null),
+
     // ── 果实：只砍果实方块，不补种，由茎再生 ──
     PUMPKIN("南瓜", Kind.FRUIT, Blocks.PUMPKIN, null, Items.PUMPKIN, null),
     MELON("西瓜", Kind.FRUIT, Blocks.MELON, null, Items.MELON_SLICE, null);
@@ -104,6 +107,11 @@ public enum CropProfile {
     /** 附带掉落物（毒马铃薯之类），需进入独立毒马铃薯箱 */
     public Set<Item> extraLoot() {
         return extraLoot;
+    }
+
+    /** 该作物的主产物是否为杂物（进杂物箱，不进单/多作物箱），仙人掌花属于此类 */
+    public boolean junk() {
+        return this == CACTUS_FLOWER;
     }
 
     /** 中文显示名，供配置界面选择器与 EnumSetting 序列化使用 */

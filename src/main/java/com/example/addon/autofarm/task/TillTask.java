@@ -31,6 +31,10 @@ public final class TillTask implements FarmTask {
     private boolean swapped;
     private int waitTicks;
     private int retries;
+    /** 已发起背包锄头移动、等待主手同步 */
+    private boolean preparing;
+    /** 等待主手同步的 tick 计数，超时重发移动防卡死 */
+    private int preparingTicks;
 
     public TillTask(FarmTarget target, FarmVerifier verifier, double reachDistance) {
         this.target = target;
@@ -62,7 +66,10 @@ public final class TillTask implements FarmTask {
         // 准备锄头（必须主手）
         if (hand == null) {
             hand = prepareHoe();
-            if (hand == null) return TaskResult.RESOURCE_INSUFFICIENT;
+            if (hand == null) {
+                // 背包锄头正在移动到主手：等待同步，本 tick 不发包
+                return preparing ? TaskResult.IN_PROGRESS : TaskResult.RESOURCE_INSUFFICIENT;
+            }
         }
 
         // 发锄地包
@@ -102,29 +109,44 @@ public final class TillTask implements FarmTask {
         if (swapped) InvUtils.swapBack();
     }
 
-    /** 锄头准备：主手已是锄头直接用，否则从快捷栏切换或从背包移到主手 */
+    /** 锄头准备：主手已是锄头直接用，否则从快捷栏切换或从背包移到主手并等待同步 */
     private InteractionHand prepareHoe() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return null;
 
         // 主手已是锄头
-        if (mc.player.getMainHandItem().getItem() instanceof HoeItem) return InteractionHand.MAIN_HAND;
+        if (mc.player.getMainHandItem().getItem() instanceof HoeItem) {
+            preparing = false;
+            preparingTicks = 0;
+            return InteractionHand.MAIN_HAND;
+        }
 
-        // 快捷栏有锄头：直接切换到主手，锄完恢复原选中槽
+        // 快捷栏有锄头：直接切换到主手（客户端即时生效），锄完恢复原选中槽
         FindItemResult hotbar = InvUtils.findInHotbar(stack -> stack.getItem() instanceof HoeItem);
         if (hotbar.found() && hotbar.isHotbar()) {
             InvUtils.swap(hotbar.slot(), true);
             swapped = true;
+            preparing = false;
+            preparingTicks = 0;
             return InteractionHand.MAIN_HAND;
         }
 
-        // 全背包找锄头（含主背包/副手），移到主手
+        // 全背包找锄头（含主背包/副手），移到主手；move 是异步移动，需等待主手同步再锄
         FindItemResult inventory = InvUtils.find(stack -> stack.getItem() instanceof HoeItem);
         if (inventory.found()) {
-            InvUtils.move().from(inventory.slot()).to(mc.player.getInventory().getSelectedSlot());
-            return InteractionHand.MAIN_HAND;
+            preparingTicks++;
+            // 首次发起，或等待超时后重新发起移动（防移动失败后无限等待）
+            if (!preparing || preparingTicks > 8) {
+                InvUtils.move().from(inventory.slot()).to(mc.player.getInventory().getSelectedSlot());
+                preparing = true;
+                preparingTicks = 0;
+            }
+            return null; // 等待主手同步
         }
-        return null;
+
+        preparing = false;
+        preparingTicks = 0;
+        return null; // 背包确实没有锄头
     }
 
     private boolean inReach() {

@@ -9,7 +9,7 @@ package com.example.addon.autofarm.model;
  * 箱子按「物品去向」智能分类：
  * 单作物箱装单物品作物（种子==收获物，如马铃薯/胡萝卜/下界疣，以及甘蔗/竹子/仙人掌这类无种子作物），补货与卸货共用；
  * 种子补货箱只放双物品作物（小麦/甜菜根）的种子，多作物箱装双物品作物的成熟掉落物；
- * 毒马铃薯箱独立处理马铃薯附带的毒马铃薯，绝不与普通作物箱混用。
+ * 杂物箱独立处理马铃薯附带的毒马铃薯与仙人掌自然长出的仙人掌花，绝不与普通作物箱混用。
  */
 public enum SiteType {
 
@@ -18,7 +18,7 @@ public enum SiteType {
     SINGLE_STORAGE("单作物箱", "single", true),
     MULTI_STORAGE("多作物箱", "multi", true),
     SEED_STORAGE("种子补货箱", "seed", true),
-    POISON_STORAGE("毒马铃薯箱", "poison", true);
+    POISON_STORAGE("杂物箱", "junk", true);
 
     private final String cn;
     private final String en;

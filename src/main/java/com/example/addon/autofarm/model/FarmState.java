@@ -32,8 +32,8 @@ public enum FarmState {
     /** 补货：RestockTask 执行中（独占） */
     RESTOCK("补货"),
 
-    /** 毒马铃薯处理：PoisonDumpTask 执行中（独占） */
-    POISON_DUMP("毒马铃薯处理");
+    /** 杂物处理：PoisonDumpTask 执行中（独占） */
+    POISON_DUMP("杂物处理");
 
     private final String cn;
 

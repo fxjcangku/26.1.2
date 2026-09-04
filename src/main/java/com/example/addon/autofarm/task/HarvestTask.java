@@ -8,9 +8,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
 
 /**
- * 收割任务：前往单个成熟目标 → 发破坏包 → 等待世界更新 → 验证结果。
+ * 收割任务：前往单个成熟目标 → 优先装备时运工具 → 发破坏包 → 等待世界更新 → 验证结果。
  *
  * 不再以「breakBlock() 返回 true」作为成功依据，必须读到世界状态真正变化才算成功。
+ * 破坏前会优先把最高时运附魔的工具换到主手，让胡萝卜/马铃薯/下界疣等作物吃满时运加成。
  */
 public final class HarvestTask implements FarmTask {
 
@@ -26,6 +27,11 @@ public final class HarvestTask implements FarmTask {
     private boolean acted;
     private int waitTicks;
     private int retries;
+
+    /** 时运工具准备器，负责把最高时运工具换到主手 */
+    private final FortuneTool fortune = new FortuneTool();
+    /** 时运工具是否已就绪（主手已有时运或确认无时运工具） */
+    private boolean toolPrepared;
 
     public HarvestTask(FarmTarget target, FarmVerifier verifier, double reachDistance) {
         this.target = target;
@@ -52,6 +58,12 @@ public final class HarvestTask implements FarmTask {
             return TaskResult.IN_PROGRESS;
         }
         FarmNav.cancel();
+
+        // 优先装备时运工具，未就绪则等待
+        if (!acted && !toolPrepared) {
+            toolPrepared = fortune.ensure();
+            if (!toolPrepared) return TaskResult.IN_PROGRESS;
+        }
 
         // 发破坏包
         if (!acted) {
@@ -88,6 +100,7 @@ public final class HarvestTask implements FarmTask {
     @Override
     public void cancel() {
         FarmNav.cancel();
+        fortune.restore();
     }
 
     private boolean inReach() {

@@ -16,11 +16,14 @@ import com.example.addon.farm.ContainerBroker;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.HoeItem;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,6 +65,8 @@ public final class FarmDecision {
     private boolean tillEnabled = true;
     /** 批量锄地数量，一次锄地决策最多锁定的草方块/泥土数 */
     private int tillBatchCount = 8;
+    /** 作物箱被漏斗吸空等场景下暂时跳过补货的作物，等种子重新补足后自动解除 */
+    private final Set<CropProfile> restockSuppressed = EnumSet.noneOf(CropProfile.class);
 
     public FarmDecision(FarmScanner scanner, FarmResourceManager resources, FarmObserver observer,
                         FarmVerifier verifier, ContainerBroker broker,
@@ -117,23 +122,28 @@ public final class FarmDecision {
      * 返回非 null 表示需要执行物流任务，Controller 应丢弃当前批量计划。
      */
     public FarmTask decideLogistics(Map<SiteType, FarmSite> sites) {
-        // 1. 毒马铃薯处理（独立，最高优先级）：攒够阈值才卸，避免捡一个就跑一次
-        if (resources.countPoisonousPotato() >= poisonUnloadThreshold) {
-            FarmSite poison = validSite(sites, SiteType.POISON_STORAGE);
-            if (poison != null) {
-                return new PoisonDumpTask(poison.pos(), broker, reachDistance, bpt);
+        // 1. 杂物处理（毒马铃薯 + 仙人掌花，独立，最高优先级）：攒够阈值才卸，避免捡一个就跑一次
+        if (resources.countJunk() >= poisonUnloadThreshold) {
+            FarmSite junk = validSite(sites, SiteType.POISON_STORAGE);
+            if (junk != null) {
+                return new PoisonDumpTask(junk.pos(), broker, reachDistance, bpt, resources::shouldDepositJunk);
             }
         }
 
-        // 2. 补货：某作物种植材料不足安全库存，按作物类型智能选箱
-        CropProfile restockCrop = resources.firstNeedsRestock();
-        if (restockCrop != null) {
+        // 2. 补货：某作物种植材料不足安全库存，按作物类型智能选箱。
+        // 作物箱被漏斗吸空（补货返回 CONTAINER_EMPTY）会抑制该作物，先收菜等种子回升再补。
+        for (CropProfile crop : scanner.enabledCrops()) {
+            if (!resources.needsRestock(crop)) {
+                restockSuppressed.remove(crop); // 种子已补足，解除抑制
+                continue;
+            }
+            if (restockSuppressed.contains(crop)) continue; // 箱子空，先跳过补货去收菜
             // 单物品作物（种子==收获物，如马铃薯/胡萝卜/下界疣）补货去单作物箱；双物品作物（小麦/甜菜根）去种子补货箱
-            SiteType boxType = restockCrop.plantItem() != restockCrop.harvestItem()
+            SiteType boxType = crop.plantItem() != crop.harvestItem()
                 ? SiteType.SEED_STORAGE : SiteType.SINGLE_STORAGE;
             FarmSite box = validSite(sites, boxType);
             if (box != null) {
-                return new RestockTask(box.pos(), broker, reachDistance, resources, restockCrop);
+                return new RestockTask(box.pos(), broker, reachDistance, resources, crop);
             }
         }
 
@@ -143,26 +153,31 @@ public final class FarmDecision {
             if (resources.hasDepositableSeed()) {
                 FarmSite seedBox = validSite(sites, SiteType.SEED_STORAGE);
                 if (seedBox != null) {
-                    return new UnloadTask(seedBox.pos(), broker, reachDistance, bpt, resources::shouldDepositSeed);
+                    return new UnloadTask(seedBox.pos(), broker, reachDistance, bpt, resources::shouldUnloadSeed);
                 }
             }
             // 单物品作物收获物 → 单作物箱
             if (resources.hasDepositableSingle()) {
                 FarmSite singleBox = validSite(sites, SiteType.SINGLE_STORAGE);
                 if (singleBox != null) {
-                    return new UnloadTask(singleBox.pos(), broker, reachDistance, bpt, resources::shouldDepositSingle);
+                    return new UnloadTask(singleBox.pos(), broker, reachDistance, bpt, resources::shouldUnloadSingle);
                 }
             }
             // 双物品/无种子作物收获物 → 多作物箱
             if (resources.hasDepositableDual()) {
                 FarmSite dualBox = validSite(sites, SiteType.MULTI_STORAGE);
                 if (dualBox != null) {
-                    return new UnloadTask(dualBox.pos(), broker, reachDistance, bpt, resources::shouldDepositDual);
+                    return new UnloadTask(dualBox.pos(), broker, reachDistance, bpt, resources::shouldUnloadDual);
                 }
             }
         }
 
         return null;
+    }
+
+    /** 作物箱无货时抑制该作物补货，避免每 tick 反复补货卡死；种子回升后自动解除 */
+    public void suppressRestock(CropProfile crop) {
+        restockSuppressed.add(crop);
     }
 
     /**
@@ -186,19 +201,19 @@ public final class FarmDecision {
         return result;
     }
 
-    /** 批量锄地目标选择：自动锄地开启且背包有锄头时，取最近的至多 tillBatchCount 个草方块/泥土 */
+    /** 批量锄地目标选择：自动锄地开启、存在需要耕地的作物且背包有锄头时，取最近的至多 tillBatchCount 个草方块/泥土 */
     public List<FarmTarget> selectTillTargets() {
         List<FarmTarget> result = new ArrayList<>();
-        if (!tillEnabled || !hasHoe()) return result;
+        if (!tillEnabled || !needsTill() || !hasHoe()) return result;
         for (BlockPos pos : scanner.nearestTillablePositions(tillBatchCount)) {
             result.add(FarmTarget.till(pos));
         }
         return result;
     }
 
-    /** 当前是否存在可锄地工作（开启且有草方块/泥土目标） */
+    /** 当前是否存在可锄地工作（开启、有需要耕地的作物且有草方块/泥土目标） */
     public boolean tillWorkAvailable() {
-        return tillEnabled && scanner.hasTillable();
+        return tillEnabled && needsTill() && scanner.hasTillable();
     }
 
     /** 背包里是否有任意锄头（任意品质的锄头都能开垦耕地） */
@@ -286,11 +301,27 @@ public final class FarmDecision {
         return selectSequential(soil);
     }
 
-    /** 取已绑定且位于当前维度的站点，否则返回 null */
+    /** 取已绑定且位于当前维度、箱子方块仍存在的站点，否则返回 null */
     private FarmSite validSite(Map<SiteType, FarmSite> sites, SiteType type) {
         if (type == null) return null;
         FarmSite site = sites.get(type);
         if (site == null || !site.inCurrentDimension()) return null;
+        // 容器类站点：箱子被摧毁（不再是 Container 方块实体）时视为失效，
+        // 避免每 tick 都触发物流任务原地寻路失败刷屏
+        if (type.requiresContainer()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || !(mc.level.getBlockEntity(site.pos()) instanceof Container)) {
+                return null;
+            }
+        }
         return site;
+    }
+
+    /** 是否存在需要耕地底盘的启用作物，没有则锄地无意义（果实/柱状物/下界疣都不需要耕地） */
+    private boolean needsTill() {
+        for (CropProfile crop : scanner.enabledCrops()) {
+            if (crop.soil() == Blocks.FARMLAND) return true;
+        }
+        return false;
     }
 }

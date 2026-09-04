@@ -2,21 +2,26 @@ package com.example.addon.autofarm.task;
 
 import com.example.addon.farm.ContainerBroker;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.function.Predicate;
 
 /**
- * 毒马铃薯处理任务：把背包里的毒马铃薯全部卸入独立的毒马铃薯箱。
+ * 杂物卸货任务：把背包里的杂物（毒马铃薯 + 仙人掌花）全部卸入独立的杂物箱。
  *
- * 毒马铃薯绝不进入单/双/三作物箱；毒马铃薯箱满时返回 POISON_CONTAINER_FULL，
+ * 杂物绝不进入单/双/多作物箱；杂物箱满时返回 POISON_CONTAINER_FULL，
  * 由 Controller 明确记录，不无限循环、也不塞进普通箱。
  */
 public final class PoisonDumpTask extends ContainerTask {
 
     private final int bpt;
+    private final Predicate<ItemStack> depositFilter;
 
-    public PoisonDumpTask(BlockPos boxPos, ContainerBroker broker, double reachDistance, int bpt) {
+    public PoisonDumpTask(BlockPos boxPos, ContainerBroker broker, double reachDistance,
+                          int bpt, Predicate<ItemStack> depositFilter) {
         super(boxPos, broker, reachDistance);
         this.bpt = bpt;
+        this.depositFilter = depositFilter;
     }
 
     @Override
@@ -26,7 +31,7 @@ public final class PoisonDumpTask extends ContainerTask {
         boolean moved = false;
         ContainerBroker.DepositResult last = ContainerBroker.DepositResult.NONE;
         for (int i = 0; i < bpt; i++) {
-            last = broker.depositOne(stack -> stack.is(Items.POISONOUS_POTATO));
+            last = broker.depositOne(depositFilter);
             if (last == ContainerBroker.DepositResult.MOVED) {
                 moved = true;
                 continue;

@@ -30,9 +30,25 @@ public final class FarmNav {
      * @return 是否成功下发寻路任务
      */
     public static boolean goTo(BlockPos pos, int radius) {
+        return goTo(pos, radius, false);
+    }
+
+    /**
+     * 前往目标坐标附近。
+     *
+     * @param radius       停靠半径（GoalNear 语义为距离平方）
+     * @param modifyBlocks 是否允许 Baritone 破坏/放置方块（回中心点等场景需要，拾取等场景禁止）
+     * @return 是否成功下发寻路任务
+     */
+    public static boolean goTo(BlockPos pos, int radius, boolean modifyBlocks) {
         try {
             var b = baritone();
             if (b == null) return false;
+            // 拾取/收割/补种等寻路禁止破坏与放置方块，避免把竹子/仙人掌等作物挖掉；
+            // 回中心点寻路则需要允许，否则被栅栏/障碍挡住会半路停下。
+            var settings = baritone.api.BaritoneAPI.getSettings();
+            settings.allowBreak.value = modifyBlocks;
+            settings.allowPlace.value = modifyBlocks;
             b.getCustomGoalProcess().setGoalAndPath(
                 new baritone.api.pathing.goals.GoalNear(pos, radius));
             return true;

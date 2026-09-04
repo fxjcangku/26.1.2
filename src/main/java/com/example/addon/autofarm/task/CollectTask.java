@@ -7,27 +7,36 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 
 /**
- * 拾取任务：在收割点附近拾取掉落物。
+ * 拾取任务：以玩家为中心拾取附近掉落物。
  *
- * 成功标准是「收割点附近不再有掉落物」这一实际观察结果，而非固定等待若干 tick。
- * 掉落物在磁吸范围外时主动导航过去，让磁吸生效；Baritone 不可用则兜底等待后结束。
- * 前几个 tick 是掉落物生成宽限期，避免物品实体还没刷出来就误判「拾取完成」。
+ * 成功标准是「玩家附近连续若干 tick 不再有掉落物」，而非固定等待，保证掉落物捡完整；
+ * 掉落物落水（甘蔗/竹子水渠）时导航到附近干燥方块，避免玩家跳进水里卡住起不来；
+ * 掉落物卡在竹子/仙人掌等实心方块内时原地等自然吸入，超时放弃；总时长兜底确保绝不卡死。
  */
 public final class CollectTask implements FarmTask {
 
-    /** 掉落物生成宽限期（tick）：给服务端时间把破坏后的产物刷成 ItemEntity */
-    private static final int SPAWN_GRACE = 15;
-    /** 观察兜底上限（tick）：防止附近持续有刷新掉落物导致无限等待 */
-    private static final int MAX_OBSERVE = 200;
+    /** 连续无掉落物这么久才判定捡完（tick），避免服务端尚未把产物刷成 ItemEntity 就提前收工 */
+    private static final int EMPTY_GRACE = 40;
+    /** 整段拾取的总时长兜底（tick），到点无条件结束，避免状态机卡死 */
+    private static final int MAX_TOTAL_TICKS = 400;
+    /** 追同一目标、原地吸不到或落水找不到干燥站位时，超过此 tick 数放弃 */
+    private static final int STUCK_TICKS = 50;
     /** 玩家磁吸掉落物的半径平方（约 1.5 格），在此范围内等待自然入包 */
     private static final double PICKUP_RADIUS_SQ = 2.25;
+    /** 以玩家为圆心的最小搜索半径（格），保证选区外掉落物也能被看到 */
+    private static final double MIN_SEARCH_RADIUS = 8.0;
+    /** 掉落物落水时，水平搜索干燥站位的最远距离（格） */
+    private static final int DRY_SEARCH_RADIUS = 4;
 
-    private final BlockPos pos;
+    private final BlockPos ref;
     private final double collectRange;
     private int waited;
+    private int emptyTicks;
+    private int stuckTicks;
+    private int targetId = -1;
 
-    public CollectTask(BlockPos pos, double collectRange) {
-        this.pos = pos;
+    public CollectTask(BlockPos ref, double collectRange) {
+        this.ref = ref;
         this.collectRange = collectRange;
     }
 
@@ -37,25 +46,65 @@ public final class CollectTask implements FarmTask {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return TaskResult.IN_PROGRESS;
 
+        // 总时长兜底：无论掉落物多难捡，到点直接结束，绝不卡死状态机
+        if (waited >= MAX_TOTAL_TICKS) {
+            FarmNav.cancel();
+            return TaskResult.SUCCESS;
+        }
+
         ItemEntity nearest = nearestItem(mc);
         if (nearest == null) {
-            // 附近无掉落物，且已过生成宽限期 → 观察判定拾取完成
-            return waited >= SPAWN_GRACE ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
+            FarmNav.cancel();
+            stuckTicks = 0;
+            targetId = -1;
+            emptyTicks++;
+            return emptyTicks >= EMPTY_GRACE ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
+        }
+        emptyTicks = 0;
+
+        double dist = mc.player.distanceToSqr(nearest);
+
+        // 已进入磁吸范围：等待自然入包，长时间吸不到则放弃
+        if (dist <= PICKUP_RADIUS_SQ) {
+            FarmNav.cancel();
+            stuckTicks++;
+            return stuckTicks >= STUCK_TICKS ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
         }
 
-        // 掉落物在磁吸范围外 → 主动导航过去，让磁吸生效
-        if (mc.player.distanceToSqr(nearest) > PICKUP_RADIUS_SQ) {
-            if (!FarmNav.available()) {
-                // 无法导航：兜底等待，超过观察上限结束，避免无限卡住
-                return waited >= MAX_OBSERVE ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
-            }
-            if (!FarmNav.pathing()) FarmNav.goTo(nearest.blockPosition(), 1);
-            return TaskResult.IN_PROGRESS;
-        }
-        FarmNav.cancel();
+        BlockPos pos = nearest.blockPosition();
 
-        // 掉落物在磁吸范围内 → 等待自然入包（兜底超时）
-        return waited >= MAX_OBSERVE ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
+        // 掉落物卡在实心方块（竹子/仙人掌等）内部：不导航硬追，原地等自然吸入
+        if (!isLiquid(mc, pos) && !mc.level.getBlockState(pos).isAir()) {
+            FarmNav.cancel();
+            stuckTicks++;
+            return stuckTicks >= STUCK_TICKS ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
+        }
+
+        // 换目标时重置卡死计时，持续追同一目标无进展则累计
+        if (nearest.getId() != targetId) {
+            targetId = nearest.getId();
+            stuckTicks = 0;
+        } else {
+            stuckTicks++;
+        }
+
+        if (stuckTicks >= STUCK_TICKS) {
+            FarmNav.cancel();
+            return TaskResult.SUCCESS;
+        }
+
+        if (!FarmNav.available()) return TaskResult.IN_PROGRESS;
+
+        // 掉落物落水：导航到附近干燥方块，绝不直接导航进水
+        BlockPos nav = navTarget(mc, nearest);
+        if (nav == null) {
+            FarmNav.cancel();
+            stuckTicks++;
+            return stuckTicks >= STUCK_TICKS ? TaskResult.SUCCESS : TaskResult.IN_PROGRESS;
+        }
+
+        if (!FarmNav.pathing()) FarmNav.goTo(nav, 1);
+        return TaskResult.IN_PROGRESS;
     }
 
     @Override
@@ -68,17 +117,19 @@ public final class CollectTask implements FarmTask {
         FarmNav.cancel();
     }
 
-    /** 收割点附近收集范围内最近的掉落物（以收割点为中心，而非玩家） */
+    /** 以玩家为中心，搜索半径取配置值与最小值中的较大者 */
     private ItemEntity nearestItem(Minecraft mc) {
-        double rangeSq = collectRange * collectRange;
-        double cx = pos.getX() + 0.5;
-        double cy = pos.getY() + 0.5;
-        double cz = pos.getZ() + 0.5;
+        double radius = Math.max(collectRange, MIN_SEARCH_RADIUS);
+        double rangeSq = radius * radius;
+        double px = mc.player.getX();
+        double py = mc.player.getY() + 0.5;
+        double pz = mc.player.getZ();
+
         ItemEntity best = null;
         double bestSq = Double.MAX_VALUE;
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (entity instanceof ItemEntity item) {
-                double d = item.distanceToSqr(cx, cy, cz);
+                double d = item.distanceToSqr(px, py, pz);
                 if (d <= rangeSq && d < bestSq) {
                     bestSq = d;
                     best = item;
@@ -86,5 +137,32 @@ public final class CollectTask implements FarmTask {
             }
         }
         return best;
+    }
+
+    /**
+     * 掉落物导航目标：不在水里直接导航到掉落物；在水里则找水平方向最近的干燥方块，
+     * 让玩家站在水渠边上把掉落物吸进来，避免跳进水里起不来。附近全是水返回 null。
+     */
+    private BlockPos navTarget(Minecraft mc, ItemEntity item) {
+        BlockPos ip = item.blockPosition();
+        if (!isLiquid(mc, ip)) return ip;
+
+        for (int r = 1; r <= DRY_SEARCH_RADIUS; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (dx == 0 && dz == 0) continue;
+                    BlockPos p = ip.offset(dx, 0, dz);
+                    if (!isLiquid(mc, p) && !isLiquid(mc, p.below())) {
+                        return p;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 该坐标是否有液体（水/岩浆） */
+    private boolean isLiquid(Minecraft mc, BlockPos pos) {
+        return !mc.level.getFluidState(pos).isEmpty();
     }
 }

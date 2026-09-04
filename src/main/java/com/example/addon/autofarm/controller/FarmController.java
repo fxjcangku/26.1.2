@@ -8,6 +8,8 @@ import com.example.addon.autofarm.model.SiteType;
 import com.example.addon.autofarm.navigation.FarmNav;
 import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.autofarm.scan.FarmScanner;
+import com.example.addon.autofarm.task.BatchHarvestTask;
+import com.example.addon.autofarm.task.BatchPlantTask;
 import com.example.addon.autofarm.task.CollectTask;
 import com.example.addon.autofarm.task.FarmTask;
 import com.example.addon.autofarm.task.HarvestTask;
@@ -18,6 +20,7 @@ import com.example.addon.autofarm.task.TaskResult;
 import com.example.addon.autofarm.task.TillTask;
 import com.example.addon.autofarm.task.UnloadTask;
 import com.example.addon.farm.ContainerBroker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
@@ -108,13 +111,14 @@ public final class FarmController {
         return currentTask;
     }
 
-    /** 当前是否有激活的批量收割计划 */
+    /** 当前是否有激活的批量收割计划（含正在执行的瞬间批量收割任务） */
     public boolean hasBatchPlan() {
-        return batchPlan != null;
+        return batchPlan != null || currentTask instanceof BatchHarvestTask;
     }
 
     /** 批量计划剩余未执行目标数，无计划返回 0 */
     public int batchRemaining() {
+        if (currentTask instanceof BatchHarvestTask batch) return batch.remaining();
         return batchPlan == null ? 0 : batchPlan.remaining();
     }
 
@@ -169,31 +173,35 @@ public final class FarmController {
             return;
         }
 
-        // 批量收割计划继续：逐个取目标，执行前校验有效性，无效跳过
+        // 批量收割计划继续：一次性把全部有效目标交给瞬间多破坏任务
         if (batchPlan != null) {
+            List<FarmTarget> all = new ArrayList<>();
             while (batchPlan.hasNext()) {
                 FarmTarget target = batchPlan.next();
-                if (verifier.targetStillValid(target)) {
-                    currentTask = new HarvestTask(target, verifier, decision.reachDistance());
-                    setState(FarmState.HARVEST);
-                    return;
-                }
+                if (verifier.targetStillValid(target)) all.add(target);
             }
-            batchPlan = null; // 计划耗尽，丢弃
+            batchPlan = null;
+            if (!all.isEmpty()) {
+                currentTask = new BatchHarvestTask(all, verifier, decision.reachDistance());
+                setState(FarmState.HARVEST);
+                return;
+            }
             logger.accept("§a✓ 本轮批量收割完成");
         }
 
-        // 批量补种计划继续：逐个取目标，执行前校验底盘仍可种，无效跳过
+        // 批量补种计划继续：一次性把全部有效目标交给瞬间多补种任务
         if (batchPlantPlan != null) {
+            List<FarmTarget> all = new ArrayList<>();
             while (batchPlantPlan.hasNext()) {
                 FarmTarget target = batchPlantPlan.next();
-                if (verifier.targetStillValid(target)) {
-                    currentTask = new PlantTask(target, verifier, decision.reachDistance());
-                    setState(FarmState.PLANT);
-                    return;
-                }
+                if (verifier.targetStillValid(target)) all.add(target);
             }
-            batchPlantPlan = null; // 计划耗尽，丢弃
+            batchPlantPlan = null;
+            if (!all.isEmpty()) {
+                currentTask = new BatchPlantTask(all, verifier, decision.reachDistance());
+                setState(FarmState.PLANT);
+                return;
+            }
         }
 
         // 批量锄地计划继续：逐个取目标，执行前校验仍可开垦，无效跳过
@@ -243,22 +251,27 @@ public final class FarmController {
         List<FarmTarget> plantTargets = decision.selectPlantTargets();
         if (!plantTargets.isEmpty()) {
             if (plantTargets.size() > 1) {
-                batchPlantPlan = new BatchPlantPlan(plantTargets.subList(1, plantTargets.size()));
+                // 批量补种：锁定全部目标，下一 tick 由 batchPlantPlan 分支瞬间补满
+                batchPlantPlan = new BatchPlantPlan(plantTargets);
+                setState(FarmState.PLANT);
+            } else {
+                currentTask = new PlantTask(plantTargets.get(0), verifier, decision.reachDistance());
+                setState(FarmState.PLANT);
             }
-            currentTask = new PlantTask(plantTargets.get(0), verifier, decision.reachDistance());
-            setState(FarmState.PLANT);
             return;
         }
 
-        // 收割决策：补满后（无空耕地）再收割成熟作物；单颗返回 1 个，批量返回 N 个
+        // 收割决策：补满后（无空耕地）再收割成熟作物；单颗走单个收割，多颗走瞬间批量破坏
         List<FarmTarget> harvestTargets = decision.selectHarvestTargets();
         if (!harvestTargets.isEmpty()) {
             if (harvestTargets.size() > 1) {
-                batchPlan = new BatchHarvestPlan(harvestTargets.subList(1, harvestTargets.size()));
+                // 批量收割：锁定全部目标，下一 tick 由 batchPlan 分支瞬间破坏
+                batchPlan = new BatchHarvestPlan(harvestTargets);
+                setState(FarmState.HARVEST);
+            } else {
+                currentTask = new HarvestTask(harvestTargets.get(0), verifier, decision.reachDistance());
+                setState(FarmState.HARVEST);
             }
-            FarmTarget first = harvestTargets.get(0);
-            currentTask = new HarvestTask(first, verifier, decision.reachDistance());
-            setState(FarmState.HARVEST);
             return;
         }
 
@@ -266,13 +279,15 @@ public final class FarmController {
         updateIdleWait();
     }
 
-    /** 农场范围中心点，用于无菜时站桩等待 */
+    /** 农场范围中心点，用于无菜时站桩等待；Y 取玩家当前脚下高度，避免寻路到空气中卡住 */
     private BlockPos farmCenter() {
         BlockPos min = scanner.min();
         BlockPos max = scanner.max();
+        Minecraft mc = Minecraft.getInstance();
+        int y = mc.player != null ? mc.player.getBlockY() : (min.getY() + max.getY()) / 2;
         return new BlockPos(
             (min.getX() + max.getX()) / 2,
-            (min.getY() + max.getY()) / 2,
+            y,
             (min.getZ() + max.getZ()) / 2);
     }
 
@@ -291,7 +306,7 @@ public final class FarmController {
         BlockPos center = farmCenter();
 
         // 已到达中心点附近：停下等待
-        if (FarmNav.arrived(center, 2.5)) {
+        if (FarmNav.arrived(center, 3.0)) {
             FarmNav.cancel();
             idleReturnTicks = 0;
             if (!"arrived".equals(lastIdleNotify)) {
@@ -317,7 +332,7 @@ public final class FarmController {
                 lastIdleNotify = "returning";
                 logger.accept("§7正在回农场中心点等待...");
             }
-            FarmNav.goTo(center, 4);
+            FarmNav.goTo(center, 9, true);
             setState(FarmState.OBSERVE);
             return;
         }
@@ -376,6 +391,23 @@ public final class FarmController {
             return;
         }
 
+        // 批量瞬间收割完成 → 统一补种 + 拾取
+        if (task instanceof BatchHarvestTask batch) {
+            List<FarmTarget> harvested = batch.harvested();
+            for (FarmTarget t : harvested) scanner.invalidate(t.pos());
+            batchHarvested.clear();
+            batchHarvested.addAll(harvested);
+            startBatchReplant();
+            return;
+        }
+
+        // 批量瞬间补种完成 → 失效已种坐标，回观察（补种无掉落物，无需拾取）
+        if (task instanceof BatchPlantTask batch) {
+            for (FarmTarget t : batch.planted()) scanner.invalidate(t.pos());
+            setState(FarmState.OBSERVE);
+            return;
+        }
+
         // 补种完成 → 按来源衔接：批量补种计划回观察接下一个；批量收割统一补种接下一个；单个模式拾取
         if (task instanceof PlantTask plant) {
             scanner.invalidate(plant.target().pos());
@@ -425,7 +457,10 @@ public final class FarmController {
 
         // 物流任务（卸货/补货/毒马铃薯）完成 → 播报结果并直接重新观察
         if (task.exclusive()) {
-            if (result.ok()) {
+            if (task instanceof RestockTask restock && result == TaskResult.CONTAINER_EMPTY) {
+                decision.suppressRestock(restock.crop());
+                logger.accept("§e⚠ " + restock.crop().displayName() + "作物箱无货（可能被漏斗吸走） §8▸ 已跳过补货，先收菜");
+            } else if (result.ok()) {
                 logger.accept("§a✓ " + taskName(task) + "完成");
             } else {
                 logger.accept("§c✗ " + taskName(task) + "失败");
@@ -444,7 +479,7 @@ public final class FarmController {
     private String taskName(FarmTask task) {
         if (task instanceof UnloadTask) return "卸货";
         if (task instanceof RestockTask) return "补货";
-        if (task instanceof PoisonDumpTask) return "毒马铃薯处理";
+        if (task instanceof PoisonDumpTask) return "杂物处理";
         return "物流";
     }
 
@@ -467,10 +502,7 @@ public final class FarmController {
     private void startBatchCollect() {
         BlockPos min = scanner.min();
         BlockPos max = scanner.max();
-        BlockPos center = new BlockPos(
-            (min.getX() + max.getX()) / 2,
-            (min.getY() + max.getY()) / 2,
-            (min.getZ() + max.getZ()) / 2);
+        BlockPos center = farmCenter();
         double range = Math.max(Math.max(max.getX() - min.getX(), max.getZ() - min.getZ()), 2) / 2.0 + 3;
         currentTask = new CollectTask(center, range);
         setState(FarmState.COLLECT);

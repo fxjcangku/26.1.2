@@ -65,10 +65,10 @@ public final class FarmSelfCheck {
             requireSite(missing, sites, SiteType.MULTI_STORAGE, "§d多作物箱");
         }
 
-        // 毒马铃薯箱仅在选择会产生附带掉落物（毒马铃薯）的作物时才需要，未选马铃薯不强制
-        boolean needsPoisonBox = enabledCrops.stream().anyMatch(p -> !p.extraLoot().isEmpty());
-        if (needsPoisonBox) {
-            requireSite(missing, sites, SiteType.POISON_STORAGE, "§c毒马铃薯箱");
+        // 杂物箱仅在会产生杂物（毒马铃薯/仙人掌花）时才需要：马铃薯附带毒马铃薯，仙人掌长出仙人掌花
+        boolean needsJunkBox = enabledCrops.stream().anyMatch(p -> !p.extraLoot().isEmpty() || p.junk());
+        if (needsJunkBox) {
+            requireSite(missing, sites, SiteType.POISON_STORAGE, "§c杂物箱");
         }
 
         // 维度一致性检测
@@ -77,7 +77,7 @@ public final class FarmSelfCheck {
         if (needsSingle) checkDimension(missing, sites, SiteType.SINGLE_STORAGE, "§6单作物箱");
         if (needsSeed) checkDimension(missing, sites, SiteType.SEED_STORAGE, "§b种子补货箱");
         if (needsMulti) checkDimension(missing, sites, SiteType.MULTI_STORAGE, "§d多作物箱");
-        if (needsPoisonBox) checkDimension(missing, sites, SiteType.POISON_STORAGE, "§c毒马铃薯箱");
+        if (needsJunkBox) checkDimension(missing, sites, SiteType.POISON_STORAGE, "§c杂物箱");
 
         // 农场范围有效性：两个对角不能重合
         FarmSite start = sites.get(SiteType.START);
