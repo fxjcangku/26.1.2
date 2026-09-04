@@ -234,25 +234,6 @@ public final class FarmResourceManager {
         return false;
     }
 
-    /** 背包里可卸货物品的总个数（用于卸货阈值判断的组数换算） */
-    public int depositableStacks() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return 0;
-
-        int total = 0;
-        for (ItemStack stack : mc.player.getInventory().getNonEquipmentItems()) {
-            if (!stack.isEmpty() && depositable(stack)) total += stack.getCount();
-        }
-        ItemStack offhand = mc.player.getOffhandItem();
-        if (!offhand.isEmpty() && depositable(offhand)) total += offhand.getCount();
-        return (total + 63) / 64;
-    }
-
-    /** 判断物品是否属于任意一类可卸货范围（种子/单物品/双物品收获物） */
-    private boolean depositable(ItemStack stack) {
-        return shouldDepositSeed(stack) || shouldDepositSingle(stack) || shouldDepositDual(stack);
-    }
-
     /** 背包里是否存在应卸入种子补货箱的种子（超补货种子数量） */
     public boolean hasDepositableSeed() {
         return hasDepositable(this::shouldDepositSeed);

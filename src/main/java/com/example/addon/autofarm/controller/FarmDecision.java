@@ -46,7 +46,6 @@ public final class FarmDecision {
     private final ContainerBroker broker;
 
     /** 运行期可变配置，由模块每 tick 同步最新设置值 */
-    private int unloadThreshold;
     private int poisonUnloadThreshold;
     private int bpt;
     private double reachDistance;
@@ -70,21 +69,19 @@ public final class FarmDecision {
 
     public FarmDecision(FarmScanner scanner, FarmResourceManager resources, FarmObserver observer,
                         FarmVerifier verifier, ContainerBroker broker,
-                        int unloadThreshold, int poisonUnloadThreshold, int bpt, double reachDistance) {
+                        int poisonUnloadThreshold, int bpt, double reachDistance) {
         this.scanner = scanner;
         this.resources = resources;
         this.observer = observer;
         this.verifier = verifier;
         this.broker = broker;
-        this.unloadThreshold = unloadThreshold;
         this.poisonUnloadThreshold = poisonUnloadThreshold;
         this.bpt = bpt;
         this.reachDistance = reachDistance;
     }
 
     /** 同步最新设置值 */
-    public void update(int unloadThreshold, int poisonUnloadThreshold, int bpt, double reachDistance) {
-        this.unloadThreshold = unloadThreshold;
+    public void update(int poisonUnloadThreshold, int bpt, double reachDistance) {
         this.poisonUnloadThreshold = poisonUnloadThreshold;
         this.bpt = bpt;
         this.reachDistance = reachDistance;
@@ -147,8 +144,11 @@ public final class FarmDecision {
             }
         }
 
-        // 3. 卸货：产物超过阈值 或 背包快满，按物品去向智能分流三类箱子
-        if (resources.depositableStacks() >= unloadThreshold || observer.freeInventorySlots() <= 2) {
+        // 3. 卸货：任一作物产物超过自己的逐作物卸货数量 或 背包快满，按物品去向智能分流三类箱子
+        if (resources.hasDepositableSeed()
+            || resources.hasDepositableSingle()
+            || resources.hasDepositableDual()
+            || observer.freeInventorySlots() <= 2) {
             // 双物品作物种子 → 种子补货箱
             if (resources.hasDepositableSeed()) {
                 FarmSite seedBox = validSite(sites, SiteType.SEED_STORAGE);

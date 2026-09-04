@@ -35,8 +35,8 @@ import java.util.function.Consumer;
  * currentTask 非空时只执行该任务，Scanner 继续观察但新目标不创建任务、不抢占 Baritone；
  * currentTask 为空时才允许决策。物流任务（卸货/补货/毒马铃薯）期间同样独占。
  *
- * 批量模式：一次 Decision 锁定多个目标到 BatchHarvestPlan，但仍是严格串行执行，
- * 每个目标完成 Harvest → Verify → Plant → Verify → Collect 完整闭环后才取下一个。
+ * 批量模式：一次 Decision 锁定多个目标，瞬间批量破坏后紧跟快速批量补种（边收边种），
+ * 补种完最后统一拾取掉落物；收割与补种均为一帧内批量操作，整轮很快，掉落物不会滞留超时。
  * 计划绝不跨越物流、世界切换、模块关闭、死亡、断线。
  */
 public final class FarmController {
@@ -75,8 +75,8 @@ public final class FarmController {
     /** 回中心点寻路超时阈值（tick），超过则取消并原地等待，防止无限寻路卡死 */
     private static final int CENTER_WAIT_TIMEOUT = 200;
 
-    /** 批量模式下已收割、待统一补种的目标清单（连续收割时累积，收割阶段结束后逐个补种） */
-    private final List<FarmTarget> batchHarvested = new ArrayList<>();
+    /** 批量收割后的快速补种阶段标志（补种完成后需继续统一拾取掉落物） */
+    private boolean harvestReplantPhase = false;
 
     /** 动态配置（onActivate / 点位变更时更新） */
     private Map<SiteType, FarmSite> sites = Map.of();
@@ -138,7 +138,7 @@ public final class FarmController {
             noHoeNotified = false;
             idleReturnTicks = 0;
             lastIdleNotify = "";
-            batchHarvested.clear();
+            harvestReplantPhase = false;
             FarmNav.cancel();
             setState(FarmState.OBSERVE);
             return;
@@ -167,7 +167,7 @@ public final class FarmController {
             batchTillPlan = null;
             tillActiveNotified = false;
             noHoeNotified = false;
-            batchHarvested.clear();
+            harvestReplantPhase = false;
             currentTask = logistics;
             setState(stateFor(logistics));
             return;
@@ -354,21 +354,6 @@ public final class FarmController {
             if (result.ok()) {
                 // 收割坐标已破坏，立即从缓存移除，避免补种前被再次选中
                 scanner.invalidate(harvest.target().pos());
-                // 批量模式：连续收割（跳过补种/拾取，加速），收割阶段结束后统一补种
-                if (batchPlan != null) {
-                    batchHarvested.add(harvest.target());
-                    while (batchPlan.hasNext()) {
-                        FarmTarget next = batchPlan.next();
-                        if (verifier.targetStillValid(next)) {
-                            currentTask = new HarvestTask(next, verifier, decision.reachDistance());
-                            setState(FarmState.HARVEST);
-                            return;
-                        }
-                    }
-                    batchPlan = null;
-                    startBatchReplant();
-                    return;
-                }
                 // 单个模式：补种 + 拾取
                 CropProfile crop = harvest.target().profile();
                 if (crop.needsReplant() && resources.countItem(crop.plantItem()) > 0) {
@@ -381,44 +366,38 @@ public final class FarmController {
                 }
                 return;
             }
-            // 收割失败：导航系统不可用属系统级失败，丢弃整个批量计划；目标失效只跳过当前目标
-            if (result == TaskResult.NAVIGATION_FAILED) {
-                batchPlan = null;
-                batchHarvested.clear();
-            }
+            // 收割失败：导航不可用属系统级失败，目标失效只跳过当前目标
             scanner.invalidate(harvest.target().pos());
             setState(FarmState.OBSERVE);
             return;
         }
 
-        // 批量瞬间收割完成 → 统一补种 + 拾取
+        // 批量瞬间收割完成 → 紧跟快速批量补种（边收边种），补种完再统一拾取
         if (task instanceof BatchHarvestTask batch) {
             List<FarmTarget> harvested = batch.harvested();
             for (FarmTarget t : harvested) scanner.invalidate(t.pos());
-            batchHarvested.clear();
-            batchHarvested.addAll(harvested);
-            startBatchReplant();
+            startBatchReplant(harvested);
             return;
         }
 
-        // 批量瞬间补种完成 → 失效已种坐标，回观察（补种无掉落物，无需拾取）
+        // 批量瞬间补种完成 → 失效已种坐标；若来自批量收割后的快速补种则继续统一拾取，否则回观察
         if (task instanceof BatchPlantTask batch) {
             for (FarmTarget t : batch.planted()) scanner.invalidate(t.pos());
-            setState(FarmState.OBSERVE);
+            if (harvestReplantPhase) {
+                harvestReplantPhase = false;
+                startBatchCollect();
+            } else {
+                setState(FarmState.OBSERVE);
+            }
             return;
         }
 
-        // 补种完成 → 按来源衔接：批量补种计划回观察接下一个；批量收割统一补种接下一个；单个模式拾取
+        // 补种完成 → 批量补种计划回观察接下一个；单个模式收割后补种则拾取掉落物
         if (task instanceof PlantTask plant) {
             scanner.invalidate(plant.target().pos());
             // 批量补种计划进行中：回观察，由 tick() 的批量补种计划分支接下一个空耕地
             if (batchPlantPlan != null) {
                 setState(FarmState.OBSERVE);
-                return;
-            }
-            // 批量收割后的统一补种：继续下一个补种，补完统一拾取
-            if (!batchHarvested.isEmpty()) {
-                startBatchReplant();
                 return;
             }
             // 单个模式收割后补种：拾取掉落物
@@ -483,19 +462,23 @@ public final class FarmController {
         return "物流";
     }
 
-    /** 批量补种阶段：从已收割清单取下一个补种，清单空则进入统一拾取 */
-    private void startBatchReplant() {
-        while (!batchHarvested.isEmpty()) {
-            FarmTarget target = batchHarvested.remove(0);
+    /** 批量收割后的快速补种：把已收割目标里需要补种的交给 BatchPlantTask 瞬间补满，补完再统一拾取 */
+    private void startBatchReplant(List<FarmTarget> harvested) {
+        List<FarmTarget> toPlant = new ArrayList<>();
+        for (FarmTarget target : harvested) {
             CropProfile crop = target.profile();
-            if (crop.needsReplant() && resources.countItem(crop.plantItem()) > 0) {
-                BlockPos soil = target.pos().below();
-                currentTask = new PlantTask(FarmTarget.plant(crop, soil), verifier, decision.reachDistance());
-                setState(FarmState.PLANT);
-                return;
+            if (crop.needsReplant()) {
+                toPlant.add(FarmTarget.plant(crop, target.pos().below()));
             }
         }
-        startBatchCollect();
+        if (!toPlant.isEmpty()) {
+            harvestReplantPhase = true;
+            currentTask = new BatchPlantTask(toPlant, verifier, decision.reachDistance());
+            setState(FarmState.PLANT);
+        } else {
+            harvestReplantPhase = false;
+            startBatchCollect();
+        }
     }
 
     /** 批量统一拾取：以农场范围中心为参考，覆盖整个农场拾取掉落物 */
@@ -536,7 +519,7 @@ public final class FarmController {
         noHoeNotified = false;
         idleReturnTicks = 0;
         lastIdleNotify = "";
-        batchHarvested.clear();
+        harvestReplantPhase = false;
         FarmNav.cancel();
         broker.reset();
         scanner.reset();

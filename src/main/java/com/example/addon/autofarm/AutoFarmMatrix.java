@@ -99,7 +99,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final Setting<Integer> batchCount;
     private final Setting<PlantMode> plantMode;
     private final Setting<Integer> plantBatchCount;
-    private final Setting<Integer> unloadThreshold;
     private final Setting<Integer> poisonUnloadThreshold;
     private final Setting<Integer> bpt;
     private final Setting<Integer> reachDistance;
@@ -225,12 +224,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .defaultValue(8).min(1).max(32).noSlider()
             .build());
 
-        unloadThreshold = sgLogistics.add(new IntSetting.Builder()
-            .name("卸货阈值")
-            .description("背包可卸货物品满多少组时触发卸货")
-            .defaultValue(20).min(1).max(36).noSlider()
-            .build());
-
         poisonUnloadThreshold = sgLogistics.add(new IntSetting.Builder()
             .name("杂物卸货")
             .description("杂物（毒马铃薯 + 仙人掌花）攒够多少个才卸货一次，避免捡一个就跑一次")
@@ -304,7 +297,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
         // 构建决策器与控制器（依赖上面的设置字段默认值）
         decision = new FarmDecision(scanner, resources, observer, verifier, broker,
-            unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
+            poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         controller = new FarmController(scanner, resources, observer, verifier, broker, decision);
         controller.setLogger(this::notify);
     }
@@ -359,7 +352,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         lastNotifiedState = "";
         lastBatchProgress = "";
         controller.configure(getSitesMap(), reachDistance.get());
-        decision.update(unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
+        decision.update(poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         decision.updateMode(harvestMode.get(), batchCount.get());
         decision.updatePlantMode(plantMode.get());
         decision.updatePlantBatchCount(plantBatchCount.get());
@@ -415,7 +408,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             report.append("\n§7农田范围　§8▸ ").append(highlightText(rangeX + "×" + rangeZ)).append("§r");
         }
 
-        report.append("\n§7卸货阈值　§8▸ ").append(highlightText(unloadThreshold.get() + " 组")).append("§r");
         report.append("\n§7自动锄地　§8▸ ").append(autoTill.get() ? "§a开" : "§c关").append("§r");
 
         // 每种启用作物的独立卸货/补货数量（单种子配置页里逐项可调）
@@ -474,7 +466,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         // 同步最新运行配置
-        decision.update(unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
+        decision.update(poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         decision.updateMode(harvestMode.get(), batchCount.get());
         decision.updatePlantMode(plantMode.get());
         decision.updatePlantBatchCount(plantBatchCount.get());
