@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -79,6 +80,9 @@ public final class TeleportContext {
 
     /** 调试档案：安全搜索评估过的候选格（渲染用，带上限） */
     public final List<BlockPos> debugCells = new ArrayList<>();
+
+    /** 调试渲染：本次移动对象（玩家或载具+乘客）在目标位置的实际碰撞箱（可空） */
+    public List<AABB> subjectBoxes;
 
     /** 调试档案：单次传送的完整过程记录（有上限，防止无限膨胀） */
     public final List<String> debugLog = new ArrayList<>();

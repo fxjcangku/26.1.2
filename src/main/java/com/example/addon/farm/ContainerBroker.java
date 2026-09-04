@@ -10,7 +10,6 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.function.Predicate;
 
@@ -31,6 +30,21 @@ public final class ContainerBroker {
 
     /** stateId 需要连续稳定多少 tick 才认为容器同步完成 */
     private static final int STABLE_TICKS_REQUIRED = 3;
+
+    /**
+     * 存入操作的单次结果。调用方据此区分「已移动 / 箱子满 / 无匹配 / 未同步」，
+     * 避免再用 player.getInventory() 等真实背包数据源与本地菜单 menu.slots 交叉判断造成误判。
+     */
+    public enum DepositResult {
+        /** 已发出一次快速移动 */
+        MOVED,
+        /** 有匹配物品但箱子放不下 */
+        CHEST_FULL,
+        /** 无匹配物品（已全部移完） */
+        NONE,
+        /** 容器尚未同步稳定 */
+        NOT_READY
+    }
 
     private int lastStateId = Integer.MIN_VALUE;
     private int stableTicks;
@@ -81,31 +95,6 @@ public final class ContainerBroker {
         return menu;
     }
 
-    /**
-     * 校验当前打开的容器是否就是绑定的目标容器。
-     *
-     * 打开容器后不能仅凭 containerId != 0 就认为开对了箱子；这里通过比对
-     * 箱子侧槽位的 container 引用与目标坐标的 BlockEntity 是否同一实例来兜底。
-     */
-    public static boolean isBoundContainer(BlockPos expected) {
-        Minecraft mc = Minecraft.getInstance();
-        LocalPlayer player = mc.player;
-        if (player == null || mc.level == null) return false;
-
-        AbstractContainerMenu menu = openMenu();
-        if (menu == null) return false;
-
-        BlockEntity entity = mc.level.getBlockEntity(expected);
-        if (!(entity instanceof Container expectedContainer)) return false;
-
-        Inventory inventory = player.getInventory();
-        for (Slot slot : menu.slots) {
-            if (slot.container == inventory) continue;
-            if (slot.container == expectedContainer) return true;
-        }
-        return false;
-    }
-
     /** 箱子侧是否还有空位可以接收物品 */
     public static boolean hasChestSpace(AbstractContainerMenu menu, ItemStack stack) {
         LocalPlayer player = Minecraft.getInstance().player;
@@ -130,32 +119,39 @@ public final class ContainerBroker {
      * 把玩家背包侧符合条件的物品 shift 点进箱子。
      * 一次只处理一个槽位，由调用方按 BPT 节流分批执行。
      *
+     * 返回 {@link DepositResult} 精确区分三种结局：
+     * 遍历到能放下的物品就快速移动（MOVED）；有匹配但都放不下（CHEST_FULL）；
+     * 没有任何匹配（NONE）。未同步稳定则返回 NOT_READY，调用方应继续等待而非关闭容器。
+     *
      * @param filter 物品筛选条件
-     * @return 是否实际发出了一次操作
      */
-    public boolean depositOne(Predicate<ItemStack> filter) {
-        if (!isReady()) return false;
+    public DepositResult depositOne(Predicate<ItemStack> filter) {
+        if (!isReady()) return DepositResult.NOT_READY;
 
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
-        if (player == null || mc.gameMode == null) return false;
+        if (player == null || mc.gameMode == null) return DepositResult.NONE;
 
         AbstractContainerMenu menu = openMenu();
-        if (menu == null) return false;
+        if (menu == null) return DepositResult.NONE;
 
         Inventory inventory = player.getInventory();
+        boolean hasMatching = false;
         for (Slot slot : menu.slots) {
             // 只处理玩家背包侧的槽位
             if (slot.container != inventory) continue;
 
             ItemStack stack = slot.getItem();
             if (stack.isEmpty() || !filter.test(stack)) continue;
-            if (!hasChestSpace(menu, stack)) return false;
+            hasMatching = true;
+
+            // 该物品当前放不进箱子时跳过它，尝试其它匹配槽位，避免误判箱子满
+            if (!hasChestSpace(menu, stack)) continue;
 
             quickMove(menu, slot.index);
-            return true;
+            return DepositResult.MOVED;
         }
-        return false;
+        return hasMatching ? DepositResult.CHEST_FULL : DepositResult.NONE;
     }
 
     /**

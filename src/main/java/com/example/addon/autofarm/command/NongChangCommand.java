@@ -21,11 +21,11 @@ import net.minecraft.world.phys.HitResult;
  * <pre>
  * .farm                               查看六个锚点的绑定情况
  * .farm set 农场点位1/农场点位2       绑定农田范围对角
- * .farm set 单作物箱/双作物箱/三作物箱  绑定对应专用作物箱（必须是容器）
- * .farm set 毒马铃薯箱                 绑定毒马铃薯独立处理箱（必须是容器）
- * .farm remove 任意锚点                解绑
- * .farm status                         显示详细信息
- * .farm clear                          清空全部锚点
+ * .farm set 单作物箱/种子补货箱/多作物箱  绑定对应作物箱（必须是容器）
+ * .farm set 毒马铃薯箱                绑定毒马铃薯独立处理箱（必须是容器）
+ * .farm remove 任意锚点               解绑
+ * .farm status                        显示详细信息
+ * .farm clear                         清空全部锚点
  * </pre>
  *
  * 硬校验：容器类锚点必须命中 Container 方块实体；模块运行中禁止修改；
@@ -183,8 +183,8 @@ public class NongChangCommand extends Command {
             case START -> "§a";
             case END -> "§e";
             case SINGLE_STORAGE -> "§6";
-            case DUAL_STORAGE -> "§b";
-            case TRIPLE_STORAGE -> "§d";
+            case MULTI_STORAGE -> "§d";
+            case SEED_STORAGE -> "§b";
             case POISON_STORAGE -> "§c";
         };
     }

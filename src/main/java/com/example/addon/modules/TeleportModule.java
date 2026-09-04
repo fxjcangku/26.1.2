@@ -22,7 +22,7 @@ import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.world.phys.Vec3;
 
-import static com.example.addon.core.AddonTemplate.CATEGORY_TACTICAL;
+import static com.example.addon.core.AddonTemplate.CATEGORY;
 
 /**
  * 传送模块：TP地面 / TP穿墙 / TP坐标 三个独立功能，各绑独立按键（松开触发）。
@@ -71,7 +71,7 @@ public class TeleportModule extends YiyiaddonModule {
     private final TeleportCoordinator coordinator = new TeleportCoordinator(sink());
 
     public TeleportModule() {
-        super(CATEGORY_TACTICAL, "传送", "三模式安全传送：TP地面回地表 / TP穿墙过障碍 / TP坐标定点，带服务端回弹验证。");
+        super(CATEGORY, "传送", "三模式安全传送：TP地面回地表 / TP穿墙过障碍 / TP坐标定点，带服务端回弹验证。");
 
         // 禁用基类自动订阅：本模块的订阅由 onActivate/onDeactivate 自行管理，
         // 否则 toggle() 的基类订阅 + onActivate 订阅会双重注册，事件全部触发两次
@@ -263,6 +263,7 @@ public class TeleportModule extends YiyiaddonModule {
     public void onDeactivate() {
         MeteorClient.EVENT_BUS.unsubscribe(this);
         coordinator.cancel("模块已关闭，传送中止");
+        coordinator.clear();
     }
 
     @EventHandler

@@ -90,12 +90,16 @@ public final class UnloadService {
         }
         opCooldown = OP_INTERVAL;
 
-        if (broker.depositOne(this::isTaskTarget)) {
+        ContainerBroker.DepositResult result = broker.depositOne(this::isTaskTarget);
+        if (result == ContainerBroker.DepositResult.MOVED) {
             failStreak = 0;
             return;
         }
+        if (result == ContainerBroker.DepositResult.NOT_READY) {
+            return; // 容器尚未同步稳定，继续等待，不判完成
+        }
 
-        // 连续搬不动：背包里已没有任务物品（或箱子满），判定完成
+        // 连续搬不动（箱子满或已无任务物品）：判定完成
         if (++failStreak >= DONE_STREAK_LIMIT) {
             log("§a卸货完成");
             state = State.COMPLETED;

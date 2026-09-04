@@ -106,6 +106,12 @@ public enum CropProfile {
         return extraLoot;
     }
 
+    /** 中文显示名，供配置界面选择器与 EnumSetting 序列化使用 */
+    @Override
+    public String toString() {
+        return displayName;
+    }
+
     /** 是否需要补种。柱状物与果实按规则不补种 */
     public boolean needsReplant() {
         return kind == Kind.CROP;

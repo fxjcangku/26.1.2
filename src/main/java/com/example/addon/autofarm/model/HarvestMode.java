@@ -11,8 +11,8 @@ package com.example.addon.autofarm.model;
  */
 public enum HarvestMode {
 
-    /** 单颗收割：一次只处理一个成熟目标 */
-    SINGLE("单颗收割"),
+    /** 单个收割：一次只处理一个成熟目标 */
+    SINGLE("单个收割"),
 
     /** 批量收割：一次锁定多个目标，串行逐颗处理 */
     BATCH("批量收割");

@@ -1,49 +1,53 @@
 package com.example.addon.autofarm.task;
 
-import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.farm.ContainerBroker;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.function.Predicate;
 
 /**
- * 卸货任务：把超出安全库存的产物卸入当前模式对应的专用作物箱。
+ * 卸货任务：把背包里满足指定过滤规则的物品卸入目标箱子。
  *
- * 明确区分「卸完」与「箱子满」：箱子满时返回 CONTAINER_FULL，绝不再无脑折返；
- * 种植材料的安全库存由 FarmResourceManager 截留，不会被整堆卸空。
+ * 过滤规则由调用方（FarmDecision）传入，对应三类箱子：种子补货箱卸种子、单作物箱卸单物品收获物、多作物箱卸双物品收获物。
+ * 明确区分「卸完」与「箱子满」：箱子满时返回 CONTAINER_FULL，绝不再无脑折返。
  */
 public final class UnloadTask extends ContainerTask {
 
-    private final FarmResourceManager resources;
     private final int bpt;
+    private final Predicate<ItemStack> depositFilter;
 
     public UnloadTask(BlockPos boxPos, ContainerBroker broker, double reachDistance,
-                      FarmResourceManager resources, int bpt) {
+                      int bpt, Predicate<ItemStack> depositFilter) {
         super(boxPos, broker, reachDistance);
-        this.resources = resources;
         this.bpt = bpt;
+        this.depositFilter = depositFilter;
     }
 
     @Override
     protected TaskResult transfer() {
-        // 没有可卸货物 → 卸货完成
-        if (!resources.hasDepositable()) {
-            ContainerBroker.closeContainer();
-            broker.reset();
-            return TaskResult.SUCCESS;
-        }
-
-        // 每 tick 最多搬 bpt 次
+        // 每 tick 最多搬 bpt 次。depositOne 只读本地菜单 menu.slots，
+        // 与过滤判断读取的真实背包隔离，避免快速移动后本地已清空而真实背包
+        // 尚未同步，导致「真实背包还有货但本地菜单已空」被误判为箱子满。
         boolean moved = false;
+        ContainerBroker.DepositResult last = ContainerBroker.DepositResult.NONE;
         for (int i = 0; i < bpt; i++) {
-            if (!broker.depositOne(resources::shouldDepositItem)) break;
-            moved = true;
+            last = broker.depositOne(depositFilter);
+            if (last == ContainerBroker.DepositResult.MOVED) {
+                moved = true;
+                continue;
+            }
+            break;
         }
 
-        // 一个都搬不动：要么箱子满，要么没有可卸货物
-        if (!moved) {
-            ContainerBroker.closeContainer();
-            broker.reset();
-            return resources.hasDepositable() ? TaskResult.CONTAINER_FULL : TaskResult.SUCCESS;
-        }
-        return TaskResult.IN_PROGRESS;
+        // 已发出移动 → 下一 tick 继续推进
+        if (moved) return TaskResult.IN_PROGRESS;
+        // 容器尚未同步稳定 → 继续等待，不关闭容器
+        if (last == ContainerBroker.DepositResult.NOT_READY) return TaskResult.IN_PROGRESS;
+
+        // 一个都搬不动：箱子满或已无货物
+        ContainerBroker.closeContainer();
+        broker.reset();
+        return last == ContainerBroker.DepositResult.CHEST_FULL ? TaskResult.CONTAINER_FULL : TaskResult.SUCCESS;
     }
 }

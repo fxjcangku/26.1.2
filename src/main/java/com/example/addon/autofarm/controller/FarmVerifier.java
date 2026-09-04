@@ -2,7 +2,9 @@ package com.example.addon.autofarm.controller;
 
 import com.example.addon.autofarm.model.CropProfile;
 import com.example.addon.autofarm.model.FarmTarget;
+import com.example.addon.autofarm.scan.FarmScanner;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -40,6 +42,16 @@ public final class FarmVerifier {
         return above.is(target.profile().block());
     }
 
+    /**
+     * 锄地是否成功：目标方块已经变成耕地。
+     */
+    public boolean tillSucceeded(FarmTarget target) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return false;
+
+        return mc.level.getBlockState(target.pos()).is(Blocks.FARMLAND);
+    }
+
     /** 目标是否仍然有效（仍可收割），用于执行前二次确认 */
     public boolean targetStillValid(FarmTarget target) {
         Minecraft mc = Minecraft.getInstance();
@@ -49,6 +61,10 @@ public final class FarmVerifier {
             BlockState state = mc.level.getBlockState(target.pos());
             CropProfile profile = CropProfile.byBlock(state.getBlock());
             return profile != null && profile.isHarvestable(state, mc.level, target.pos());
+        }
+
+        if (target.type() == FarmTarget.TargetType.TILL) {
+            return FarmScanner.isTillable(mc.level, target.pos());
         }
 
         // 补种目标：底盘仍正确且上方仍为空

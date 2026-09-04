@@ -7,7 +7,7 @@ package com.example.addon.autofarm.model;
  * 属于 FarmTask 自身的子阶段，不在这里展开。决策（DECIDE）与资源检查（RESOURCE_CHECK）
  * 都发生在 OBSERVE 状态、且仅在 currentTask 为空时执行，因此不单列状态。
  *
- * 寻路过渡（前往目标 / 返回农场）不播报，避免每 tick 刷屏。
+ * 寻路过渡（前往目标）不播报，避免每 tick 刷屏。
  */
 public enum FarmState {
 
@@ -20,6 +20,9 @@ public enum FarmState {
     /** 补种：PlantTask 执行中 */
     PLANT("补种"),
 
+    /** 锄地：TillTask 执行中，把草方块/泥土锄成耕地 */
+    TILL("锄地"),
+
     /** 拾取：CollectTask 执行中 */
     COLLECT("拾取"),
 
@@ -30,10 +33,7 @@ public enum FarmState {
     RESTOCK("补货"),
 
     /** 毒马铃薯处理：PoisonDumpTask 执行中（独占） */
-    POISON_DUMP("毒马铃薯处理"),
-
-    /** 返回农场：物流任务完成后归位，清理陈旧目标后重新观察 */
-    RETURN_FARM("返回农场");
+    POISON_DUMP("毒马铃薯处理");
 
     private final String cn;
 

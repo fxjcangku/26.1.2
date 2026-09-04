@@ -43,6 +43,7 @@ import com.example.addon.itemid.IdConfigModule;
 import com.example.addon.itemid.IdIdentifyModule;
 import com.example.addon.itemid.ItemIdManager;
 import com.example.addon.itemid.ItemTargetSetting;
+import com.example.addon.water.WaterESPModule;
 import com.example.addon.utils.YiyiaddonWatermark;
 import com.example.addon.utils.YiyiaddonWelcomeService;
 import com.example.addon.utils.YiyiaddonTelemetryService;
@@ -139,6 +140,9 @@ public class AddonTemplate extends MeteorAddon {
         Modules.get().add(new AutoEnchantBook());
 
         // ── 辅助模块 ──
+        // 水源显示：以玩家为中心渲染水源与灌溉范围，方便规划放水与农场选点
+        Modules.get().add(new WaterESPModule());
+
         // ID识别 → ID配置管理 → 自动箱子，三功能共享同一份 ID 配置数据源
         ItemIdManager itemIdManager = new ItemIdManager();
         EntityIdManager entityIdManager = new EntityIdManager();

@@ -6,9 +6,9 @@ import com.example.addon.teleport.model.TeleportContext;
 import com.example.addon.teleport.model.TeleportMode;
 import com.example.addon.teleport.model.TeleportRequest;
 import com.example.addon.teleport.model.TeleportState;
+import com.example.addon.teleport.model.TeleportSubject;
 import com.example.addon.teleport.model.TeleportTarget;
 import com.example.addon.teleport.move.PositionExecutor;
-import com.example.addon.teleport.safety.CollisionSafety;
 import com.example.addon.teleport.safety.SafePositionFinder;
 import com.example.addon.teleport.verify.RubberbandVerifier;
 import java.util.Locale;
@@ -16,8 +16,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -197,17 +195,25 @@ public final class TeleportCoordinator {
         }
     }
 
+    /** 模块关闭：清空进行中与最近一次渲染上下文，彻底清理 ESP 临时渲染状态 */
+    public void clear() {
+        active = null;
+        last = null;
+        state = TeleportState.IDLE;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  决策：三模式目标计算（同步完成）
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** @return 失败原因（中文），成功返回 null */
     private String decide(LocalPlayer player, ClientLevel level, TeleportContext ctx, TeleportRequest req) {
-        EntityDimensions dims = player.getDimensions(Pose.STANDING);
+        // 本轮真正移动的对象：玩家单独 或 根载具 + 全部乘客（真实碰撞箱）
+        TeleportSubject subject = TeleportSubject.of(player);
 
         switch (req.mode) {
             case GROUND -> {
-                SurfaceScanner.Result r = SurfaceScanner.scan(level, dims, player.position(), req.maxRise);
+                SurfaceScanner.Result r = SurfaceScanner.scan(level, subject, player.position(), req.maxRise);
                 ctx.debug("地面扫描 ▸ 位移 " + r.rise + (r.target == null ? " ▸ " + r.failReason : ""));
                 if (r.target == null) return r.failReason;
                 ctx.target = r.target;
@@ -218,12 +224,12 @@ public final class TeleportCoordinator {
                 if (req.rayOrigin == null || req.rayDir == null) return "视线快照缺失，请重试";
 
                 // 主路：沿锁定三维准星方向采样搜索（穿墙 + 方向赶路一体，
-                // 不强制前方必须有墙，普通方块/门窗/半砖均不是阻挡）
+                // 不强制前方必须有墙，普通方块/门窗/半砖/栅栏均不是阻挡）
                 WallRayScanner.Landing landing = WallRayScanner.findLanding(
-                    level, dims, req.rayOrigin, req.rayDir, req.eyeHeight, req.maxDistance, req.maxFall);
+                    level, subject, req.rayOrigin, req.rayDir, req.eyeHeight, req.maxDistance, req.maxFall, ctx.debugCells);
                 ctx.wallLayers = landing.layers;
                 ctx.debug("墙体扫描 ▸ 穿透层数 " + landing.layers
-                    + (landing.target != null ? " ▸ 落点沿射线最远采样命中" : " ▸ 主路无候选"));
+                    + (landing.target != null ? " ▸ 越过障碍后最近落点命中" : " ▸ 主路无候选"));
 
                 if (landing.target != null) {
                     ctx.target = landing.target;
@@ -242,7 +248,7 @@ public final class TeleportCoordinator {
                     p.maxDeviation = req.maxDeviation;
                     p.minAhead = WallRayScanner.START;
                     p.debugCells = ctx.debugCells;
-                    TeleportTarget wt = SafePositionFinder.find(level, dims, p);
+                    TeleportTarget wt = SafePositionFinder.find(level, subject, p);
                     if (wt == null) return "准星方向的落点修正范围内没有可站立位置";
                     ctx.debug("墙体扫描 ▸ 理想落点不可容纳 ▸ 局部修正命中");
                     ctx.target = wt;
@@ -252,7 +258,7 @@ public final class TeleportCoordinator {
                 Vec3 center = req.coord;
                 if (center == null) return "未指定传送坐标";
 
-                String problem = CollisionSafety.checkStand(level, dims, center.x(), center.y(), center.z());
+                String problem = subject.checkStand(level, center.x(), center.y(), center.z());
                 if (problem != null) {
                     ctx.debug("坐标不安全 ▸ " + problem + " ▸ 启动邻近搜索");
                     ctx.fallbackSearched = true;
@@ -260,7 +266,7 @@ public final class TeleportCoordinator {
                     p.center = center;
                     p.radius = req.fallbackRadius;
                     p.debugCells = ctx.debugCells;
-                    TeleportTarget alt = SafePositionFinder.find(level, dims, p);
+                    TeleportTarget alt = SafePositionFinder.find(level, subject, p);
                     if (alt == null) return "目标坐标不安全，邻近搜索无可用落点";
                     ctx.target = alt;
                 } else {
@@ -271,6 +277,9 @@ public final class TeleportCoordinator {
                 return "未知传送模式";
             }
         }
+
+        // 同步给 ESP 渲染：目标位置的实际移动对象碰撞箱（单一事实来源）
+        ctx.subjectBoxes = subject.boxesAt(ctx.target.feet().x(), ctx.target.feet().y(), ctx.target.feet().z());
         return null;
     }
 
@@ -289,10 +298,15 @@ public final class TeleportCoordinator {
         if (!player.isAlive()) return "传送前玩家状态异常，已取消执行";
         if (ctx.target == null) return "目标缺失，已取消执行";
 
-        EntityDimensions dims = player.getDimensions(Pose.STANDING);
-        String problem = CollisionSafety.checkStand(level, dims,
+        // 最终复核：重新读取移动对象当前实际碰撞箱（Pose/载具/乘客可能已变化），
+        // 不用搜索阶段缓存的旧碰撞箱，任何失效立即取消执行
+        TeleportSubject subject = TeleportSubject.of(player);
+        String problem = subject.checkStand(level,
             ctx.target.feet().x(), ctx.target.feet().y(), ctx.target.feet().z());
         if (problem != null) return "目标区域已变化（" + problem + "），已取消执行";
+
+        // 刷新给 ESP 的移动对象碰撞箱（执行前最终状态）
+        ctx.subjectBoxes = subject.boxesAt(ctx.target.feet().x(), ctx.target.feet().y(), ctx.target.feet().z());
         return null;
     }
 

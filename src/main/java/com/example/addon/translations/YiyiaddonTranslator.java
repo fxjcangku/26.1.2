@@ -704,9 +704,13 @@ public final class YiyiaddonTranslator {
         translated = translateUniqueScopedValue(original);
         if (!translated.equals(original)) return translated;
         if (value instanceof Enum<?> enumValue) {
-            String name = enumValue.name().replace('_', ' ');
-            translated = translateVisible(name);
-            if (!translated.equals(name)) return translated;
+            // 枚举重写了 toString（返回自定义中文显示名，如收割模式的「单个收割」）时，
+            // 直接采用 toString，不再用 name() 兜底翻译，否则会把 SINGLE 译成「单层」覆盖掉中文名
+            String name = enumValue.name();
+            if (!original.equals(name)) return original;
+            String nameSpaced = name.replace('_', ' ');
+            translated = translateVisible(nameSpaced);
+            if (!translated.equals(nameSpaced)) return translated;
             StringBuilder formatted = new StringBuilder();
             for (String part : name.toLowerCase().split(" ")) {
                 if (!part.isEmpty()) {

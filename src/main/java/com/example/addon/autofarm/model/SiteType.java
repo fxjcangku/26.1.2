@@ -4,18 +4,20 @@ package com.example.addon.autofarm.model;
  * 自动农场需要绑定的六个锚点类型。
  *
  * 点位一与点位二是农田范围的两个对角，只要坐标；
- * 单/双/三作物箱与毒马铃薯箱必须指向真正的容器方块，绑定时做 Container 校验。
+ * 单作物箱/种子补货箱/多作物箱与毒马铃薯箱必须指向真正的容器方块，绑定时做 Container 校验。
  *
- * 单/双/三作物箱按「当前启用作物数量」择一使用，同时承担卸货 + 补货；
- * 毒马铃薯箱独立处理有毒产物，绝不与普通作物箱混用。
+ * 箱子按「物品去向」智能分类：
+ * 单作物箱装单物品作物（种子==收获物，如马铃薯/胡萝卜/下界疣，以及甘蔗/竹子/仙人掌这类无种子作物），补货与卸货共用；
+ * 种子补货箱只放双物品作物（小麦/甜菜根）的种子，多作物箱装双物品作物的成熟掉落物；
+ * 毒马铃薯箱独立处理马铃薯附带的毒马铃薯，绝不与普通作物箱混用。
  */
 public enum SiteType {
 
     START("农场点位1", "start", false),
     END("农场点位2", "end", false),
     SINGLE_STORAGE("单作物箱", "single", true),
-    DUAL_STORAGE("双作物箱", "dual", true),
-    TRIPLE_STORAGE("三作物箱", "triple", true),
+    MULTI_STORAGE("多作物箱", "multi", true),
+    SEED_STORAGE("种子补货箱", "seed", true),
     POISON_STORAGE("毒马铃薯箱", "poison", true);
 
     private final String cn;
@@ -41,20 +43,5 @@ public enum SiteType {
     /** 绑定时是否必须命中容器方块 */
     public boolean requiresContainer() {
         return requiresContainer;
-    }
-
-    /** 是否属于作物存储箱（单/双/三），供按启用作物数量选择对应箱子 */
-    public boolean isCropStorage() {
-        return this == SINGLE_STORAGE || this == DUAL_STORAGE || this == TRIPLE_STORAGE;
-    }
-
-    /** 按启用作物数量返回对应的作物存储箱类型；数量非法返回 null */
-    public static SiteType cropStorageFor(int enabledCount) {
-        return switch (enabledCount) {
-            case 1 -> SINGLE_STORAGE;
-            case 2 -> DUAL_STORAGE;
-            case 3 -> TRIPLE_STORAGE;
-            default -> null;
-        };
     }
 }

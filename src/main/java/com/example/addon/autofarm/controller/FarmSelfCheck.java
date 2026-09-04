@@ -12,9 +12,11 @@ import java.util.Set;
 /**
  * 启动前配置自检。
  *
- * 根据启用作物数量推断所需的专用作物箱（单/双/三），并一次性收集全部缺项，
- * 避免「配好一项下次还缺一项」的挤牙膏式报错。自检失败时不启动 Controller、
- * 不启动 Baritone、不扫描、不操作箱子。
+ * 根据启用作物类型智能推断所需箱子（单物品作物与柱状物/果实→单作物箱、
+ * 双作物判定（需要补种且种子≠收获物）→种子补货箱（种子）+ 多作物箱（成熟掉落物）同判定、
+ * 毒马铃薯箱独立），并一次性收集全部缺项，
+ * 避免「配好一项下次还缺一项」的挤牙膏式报错。
+ * 自检失败时不启动 Controller、不启动 Baritone、不扫描、不操作箱子。
  */
 public final class FarmSelfCheck {
 
@@ -45,20 +47,37 @@ public final class FarmSelfCheck {
         requireSite(missing, sites, SiteType.START, "§a农场点位1");
         requireSite(missing, sites, SiteType.END, "§e农场点位2");
 
-        // 根据启用数量确定所需作物箱
-        SiteType requiredStorage = SiteType.cropStorageFor(enabledCrops.size());
-        if (requiredStorage != null) {
-            requireSite(missing, sites, requiredStorage, "§6" + requiredStorage.cn());
+        // 智能箱子需求：单物品作物（种子==收获物）与不补种作物（柱状物/果实）→单作物箱；
+        // 双作物判定（需要补种且种子≠收获物）→种子补货箱（种子）+ 多作物箱（成熟掉落物）
+        boolean needsSingle = enabledCrops.stream().anyMatch(p -> !p.needsReplant() || p.plantItem() == p.harvestItem());
+        boolean needsDual = enabledCrops.stream().anyMatch(p -> p.needsReplant() && p.plantItem() != p.harvestItem());
+        // 种子补货箱与多作物箱完全同判定：只有双物品作物才需要这两个箱子
+        boolean needsSeed = needsDual;
+        boolean needsMulti = needsDual;
+
+        if (needsSingle) {
+            requireSite(missing, sites, SiteType.SINGLE_STORAGE, "§6单作物箱");
+        }
+        if (needsSeed) {
+            requireSite(missing, sites, SiteType.SEED_STORAGE, "§b种子补货箱");
+        }
+        if (needsMulti) {
+            requireSite(missing, sites, SiteType.MULTI_STORAGE, "§d多作物箱");
         }
 
-        // 毒马铃薯箱始终需要（独立处理毒产物）
-        requireSite(missing, sites, SiteType.POISON_STORAGE, "§d毒马铃薯箱");
+        // 毒马铃薯箱仅在选择会产生附带掉落物（毒马铃薯）的作物时才需要，未选马铃薯不强制
+        boolean needsPoisonBox = enabledCrops.stream().anyMatch(p -> !p.extraLoot().isEmpty());
+        if (needsPoisonBox) {
+            requireSite(missing, sites, SiteType.POISON_STORAGE, "§c毒马铃薯箱");
+        }
 
         // 维度一致性检测
         checkDimension(missing, sites, SiteType.START, "§a农场点位1");
         checkDimension(missing, sites, SiteType.END, "§e农场点位2");
-        if (requiredStorage != null) checkDimension(missing, sites, requiredStorage, "§6" + requiredStorage.cn());
-        checkDimension(missing, sites, SiteType.POISON_STORAGE, "§d毒马铃薯箱");
+        if (needsSingle) checkDimension(missing, sites, SiteType.SINGLE_STORAGE, "§6单作物箱");
+        if (needsSeed) checkDimension(missing, sites, SiteType.SEED_STORAGE, "§b种子补货箱");
+        if (needsMulti) checkDimension(missing, sites, SiteType.MULTI_STORAGE, "§d多作物箱");
+        if (needsPoisonBox) checkDimension(missing, sites, SiteType.POISON_STORAGE, "§c毒马铃薯箱");
 
         // 农场范围有效性：两个对角不能重合
         FarmSite start = sites.get(SiteType.START);

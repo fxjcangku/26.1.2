@@ -8,17 +8,17 @@ import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.HoeItem;
 
 /**
- * 补种任务：前往待补种底盘 → 准备种植材料 → 播种 → 等待更新 → 验证。
+ * 锄地任务：前往待开垦草方块/泥土 → 准备锄头 → 右键锄成耕地 → 等待更新 → 验证。
  *
- * 种植材料搜索顺序：副手 → 主手 → 快捷栏 → 主背包。
- * 材料不足时不假装成功，返回 RESOURCE_INSUFFICIENT 交由资源检查处理。
+ * 锄地必须手持锄头（主手），副手锄头无法触发原版 useOn。
+ * 背包没有锄头时返回 RESOURCE_INSUFFICIENT，由 Controller 跳过并继续状态机。
  */
-public final class PlantTask implements FarmTask {
+public final class TillTask implements FarmTask {
 
-    /** 发播种包后等待服务端确认的 tick 数（批量快速补种下调，失败由重试兜底） */
+    /** 发锄地包后等待服务端确认的 tick 数（批量快速锄地下调） */
     private static final int WAIT_TICKS = 2;
     private static final int MAX_RETRIES = 2;
 
@@ -28,26 +28,28 @@ public final class PlantTask implements FarmTask {
 
     private InteractionHand hand;
     private boolean acted;
+    private boolean swapped;
     private int waitTicks;
     private int retries;
 
-    public PlantTask(FarmTarget target, FarmVerifier verifier, double reachDistance) {
+    public TillTask(FarmTarget target, FarmVerifier verifier, double reachDistance) {
         this.target = target;
         this.verifier = verifier;
         this.reachDistance = reachDistance;
     }
 
-    /** 当前补种目标，供 Controller 在补种完成后衔接拾取 */
+    /** 当前锄地目标 */
     public FarmTarget target() {
         return target;
     }
 
     @Override
     public TaskResult tick() {
-        // 目标底盘不再可种（被占用/底盘变化）→ 重新观察
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return TaskResult.TARGET_INVALID;
-        if (!target.profile().isPlantable(mc.level, target.pos())) return TaskResult.TARGET_INVALID;
+
+        // 执行前校验：只在尚未锄地时检查目标是否仍可开垦
+        if (!acted && !verifier.targetStillValid(target)) return TaskResult.TARGET_INVALID;
 
         // 距离不够则导航
         if (!inReach()) {
@@ -57,28 +59,28 @@ public final class PlantTask implements FarmTask {
         }
         FarmNav.cancel();
 
-        // 准备种植材料
+        // 准备锄头（必须主手）
         if (hand == null) {
-            hand = preparePlantingItem(target.profile().plantItem());
+            hand = prepareHoe();
             if (hand == null) return TaskResult.RESOURCE_INSUFFICIENT;
         }
 
-        // 发播种包
+        // 发锄地包
         if (!acted) {
-            FarmPacketOps.useOnBlock(hand, target.pos());
+            FarmPacketOps.tillBlock(hand, target.pos());
             acted = true;
             waitTicks = 0;
             return TaskResult.IN_PROGRESS;
         }
 
-        // 等待世界更新
+        // 等待世界状态更新
         if (waitTicks < WAIT_TICKS) {
             waitTicks++;
             return TaskResult.IN_PROGRESS;
         }
 
-        // 验证补种结果
-        if (verifier.plantSucceeded(target)) return TaskResult.SUCCESS;
+        // 验证锄地结果
+        if (verifier.tillSucceeded(target)) return TaskResult.SUCCESS;
 
         if (retries < MAX_RETRIES) {
             retries++;
@@ -97,27 +99,30 @@ public final class PlantTask implements FarmTask {
     @Override
     public void cancel() {
         FarmNav.cancel();
+        if (swapped) InvUtils.swapBack();
     }
 
-    /** 种植材料搜索：副手已有则直接用，否则从快捷栏/主背包移到副手，保证主手不被占用 */
-    private InteractionHand preparePlantingItem(Item plantItem) {
+    /** 锄头准备：主手已是锄头直接用，否则从快捷栏切换或从背包移到主手 */
+    private InteractionHand prepareHoe() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return null;
 
-        // 副手已是种子：直接使用
-        if (mc.player.getOffhandItem().is(plantItem)) return InteractionHand.OFF_HAND;
+        // 主手已是锄头
+        if (mc.player.getMainHandItem().getItem() instanceof HoeItem) return InteractionHand.MAIN_HAND;
 
-        // 种子不在副手：从快捷栏/主背包找到并移到副手（主手保持工具/空手，不占主手播种）
-        FindItemResult hotbar = InvUtils.findInHotbar(plantItem);
-        if (hotbar.found()) {
-            InvUtils.move().from(hotbar.slot()).toOffhand();
-            return InteractionHand.OFF_HAND;
+        // 快捷栏有锄头：直接切换到主手，锄完恢复原选中槽
+        FindItemResult hotbar = InvUtils.findInHotbar(stack -> stack.getItem() instanceof HoeItem);
+        if (hotbar.found() && hotbar.isHotbar()) {
+            InvUtils.swap(hotbar.slot(), true);
+            swapped = true;
+            return InteractionHand.MAIN_HAND;
         }
 
-        FindItemResult inventory = InvUtils.find(plantItem);
+        // 全背包找锄头（含主背包/副手），移到主手
+        FindItemResult inventory = InvUtils.find(stack -> stack.getItem() instanceof HoeItem);
         if (inventory.found()) {
-            InvUtils.move().from(inventory.slot()).toOffhand();
-            return InteractionHand.OFF_HAND;
+            InvUtils.move().from(inventory.slot()).to(mc.player.getInventory().getSelectedSlot());
+            return InteractionHand.MAIN_HAND;
         }
         return null;
     }

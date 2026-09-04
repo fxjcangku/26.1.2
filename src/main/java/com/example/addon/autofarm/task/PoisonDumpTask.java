@@ -1,6 +1,5 @@
 package com.example.addon.autofarm.task;
 
-import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.farm.ContainerBroker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Items;
@@ -13,39 +12,35 @@ import net.minecraft.world.item.Items;
  */
 public final class PoisonDumpTask extends ContainerTask {
 
-    private final FarmResourceManager resources;
     private final int bpt;
 
-    public PoisonDumpTask(BlockPos boxPos, ContainerBroker broker, double reachDistance,
-                          FarmResourceManager resources, int bpt) {
+    public PoisonDumpTask(BlockPos boxPos, ContainerBroker broker, double reachDistance, int bpt) {
         super(boxPos, broker, reachDistance);
-        this.resources = resources;
         this.bpt = bpt;
     }
 
     @Override
     protected TaskResult transfer() {
-        // 没有毒马铃薯 → 完成
-        if (resources.countPoisonousPotato() == 0) {
-            ContainerBroker.closeContainer();
-            broker.reset();
-            return TaskResult.SUCCESS;
-        }
-
+        // 每 tick 最多搬 bpt 次，只读本地菜单 menu.slots 判定，
+        // 避免与真实背包数据源交叉造成「本地已清空但真实背包未同步」的误判
         boolean moved = false;
+        ContainerBroker.DepositResult last = ContainerBroker.DepositResult.NONE;
         for (int i = 0; i < bpt; i++) {
-            if (!broker.depositOne(stack -> stack.is(Items.POISONOUS_POTATO))) break;
-            moved = true;
+            last = broker.depositOne(stack -> stack.is(Items.POISONOUS_POTATO));
+            if (last == ContainerBroker.DepositResult.MOVED) {
+                moved = true;
+                continue;
+            }
+            break;
         }
 
-        if (!moved) {
-            ContainerBroker.closeContainer();
-            broker.reset();
-            // 还有毒马铃薯但搬不动 → 毒箱满
-            return resources.countPoisonousPotato() > 0
-                ? TaskResult.POISON_CONTAINER_FULL
-                : TaskResult.SUCCESS;
-        }
-        return TaskResult.IN_PROGRESS;
+        if (moved) return TaskResult.IN_PROGRESS;
+        if (last == ContainerBroker.DepositResult.NOT_READY) return TaskResult.IN_PROGRESS;
+
+        ContainerBroker.closeContainer();
+        broker.reset();
+        return last == ContainerBroker.DepositResult.CHEST_FULL
+            ? TaskResult.POISON_CONTAINER_FULL
+            : TaskResult.SUCCESS;
     }
 }

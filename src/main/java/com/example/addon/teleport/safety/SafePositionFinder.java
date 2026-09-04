@@ -1,10 +1,10 @@
 package com.example.addon.teleport.safety;
 
+import com.example.addon.teleport.model.TeleportSubject;
 import com.example.addon.teleport.model.TeleportTarget;
 import java.util.List;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -52,7 +52,7 @@ public final class SafePositionFinder {
      *
      * @return 找到的最近落点（含偏离值）；搜索范围内全部不安全则返回 null
      */
-    public static TeleportTarget find(ClientLevel level, EntityDimensions dims, SearchParams p) {
+    public static TeleportTarget find(ClientLevel level, TeleportSubject subject, SearchParams p) {
         if (p == null || p.center == null || p.maxCandidates <= 0) return null;
 
         int cx = floor(p.center.x());
@@ -98,7 +98,7 @@ public final class SafePositionFinder {
                             if (ahead < p.minAhead) continue;
                         }
 
-                        String problem = CollisionSafety.checkStand(level, dims, feetX, feetY, feetZ);
+                        String problem = subject.checkStand(level, feetX, feetY, feetZ);
                         if (problem != null) continue;
 
                         // 成本：穿墙=偏离权重+纵深前进距离；其余=到目标中心的三维距离

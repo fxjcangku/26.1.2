@@ -28,6 +28,10 @@ public final class TeleportRender {
     /** 安全搜索候选格：黄色淡框 */
     private static final Color CELL = new Color(255, 255, 0, 60);
 
+    /** 移动对象碰撞箱（玩家 / 载具+乘客）：橙色线框 */
+    private static final Color SUBJECT_LINE = new Color(255, 160, 40, 200);
+    private static final Color SUBJECT_SIDE = new Color(255, 160, 40, 40);
+
     private TeleportRender() {
     }
 
@@ -40,11 +44,10 @@ public final class TeleportRender {
             event.renderer.box(cell, CELL, CELL, ShapeMode.Lines, 0);
         }
 
-        // 穿墙锁定射线
+        // 穿墙锁定射线：始终画到「最大搜索距离」终点，表达搜索范围边界；
+        // 实际选中目标由下方绿色线框单独标识，二者分离避免「必须传到最远」的错觉
         if (last.rayOrigin != null && last.rayDir != null) {
-            Vec3 end = last.target != null
-                ? last.target.feet().add(0, 1.0, 0)
-                : last.rayOrigin.add(last.rayDir.scale(last.rayLength));
+            Vec3 end = last.rayOrigin.add(last.rayDir.scale(last.rayLength));
             event.renderer.line(last.rayOrigin.x(), last.rayOrigin.y(), last.rayOrigin.z(),
                 end.x(), end.y(), end.z(), RAY);
         }
@@ -52,6 +55,13 @@ public final class TeleportRender {
         // 目标落点（玩家身高线框）
         if (last.target != null) {
             boxFor(event, last.target, TARGET_SIDE, TARGET_LINE);
+        }
+
+        // 移动对象实际碰撞箱（玩家 / 载具+乘客）：调试辅助判断大型载具是否容纳
+        if (last.subjectBoxes != null) {
+            for (AABB box : last.subjectBoxes) {
+                event.renderer.box(box, SUBJECT_SIDE, SUBJECT_LINE, ShapeMode.Lines, 0);
+            }
         }
 
         // 服务器回弹点

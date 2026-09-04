@@ -12,9 +12,8 @@ import net.minecraft.world.phys.AABB;
 import org.joml.Vector3d;
 
 /**
- * 轻量渲染层：只画农场范围、点位与当前作业目标，本身不参与任何业务决策。
- *
- * 已按规范删除水源渲染、水源覆盖、水源扫描等旧逻辑，Renderer 不再为渲染而扫描整个农场。
+ * 轻量渲染层：只画农场边界、点位与当前作业目标，本身不参与任何业务决策。
+ * 水源渲染已独立到 WaterESPModule，与农场模块解耦。
  */
 public final class FarmRenderer {
 
@@ -23,13 +22,12 @@ public final class FarmRenderer {
     private FarmRenderer() {
     }
 
-    /** 画农场边界外框。min/max 是包含端点的对角格 */
-    public static void renderBounds(Render3DEvent event, BlockPos min, BlockPos max,
-                                    Color line, Color side, ShapeMode mode) {
+    /** 画农场边界外框一圈（只画 12 条边线，不渲染面，大农场也流畅）。min/max 是包含端点的对角格 */
+    public static void renderBorder(Render3DEvent event, BlockPos min, BlockPos max, Color color) {
         AABB box = new AABB(
             min.getX(), min.getY(), min.getZ(),
             max.getX() + 1.0, max.getY() + 1.0, max.getZ() + 1.0);
-        event.renderer.box(box, side, line, mode, 0);
+        event.renderer.box(box, color, color, ShapeMode.Lines, 0);
     }
 
     /** 高亮单个方块（当前作业目标） */

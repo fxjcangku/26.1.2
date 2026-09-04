@@ -40,8 +40,10 @@ public final class HarvestTask implements FarmTask {
 
     @Override
     public TaskResult tick() {
-        // 目标失效（被他人破坏 / 不再成熟）→ 重新观察
-        if (!verifier.targetStillValid(target)) return TaskResult.TARGET_INVALID;
+        // 执行前校验：只在尚未破坏方块时检查目标是否仍成熟。
+        // breakBlock 会本地立即置空气，若每 tick 都重新校验，下一 tick 会把
+        // 已置空气的目标误判为 TARGET_INVALID，导致收割成功却无法衔接补种/拾取。
+        if (!acted && !verifier.targetStillValid(target)) return TaskResult.TARGET_INVALID;
 
         // 距离不够则导航
         if (!inReach()) {

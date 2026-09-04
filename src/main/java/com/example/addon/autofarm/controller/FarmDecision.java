@@ -4,16 +4,23 @@ import com.example.addon.autofarm.model.CropProfile;
 import com.example.addon.autofarm.model.FarmSite;
 import com.example.addon.autofarm.model.FarmTarget;
 import com.example.addon.autofarm.model.HarvestMode;
+import com.example.addon.autofarm.model.PlantMode;
 import com.example.addon.autofarm.model.SiteType;
 import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.autofarm.scan.FarmScanner;
-import com.example.addon.autofarm.task.PlantTask;
+import com.example.addon.autofarm.task.FarmTask;
 import com.example.addon.autofarm.task.PoisonDumpTask;
 import com.example.addon.autofarm.task.RestockTask;
-import com.example.addon.autofarm.task.FarmTask;
 import com.example.addon.autofarm.task.UnloadTask;
 import com.example.addon.farm.ContainerBroker;
+import meteordevelopment.meteorclient.utils.player.InvUtils;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.level.block.Block;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,7 +32,7 @@ import java.util.Set;
  * 实际执行全部由 Task 层负责。
  *
  * 物流（毒马铃薯 / 补货 / 卸货）优先级最高，且会打断并丢弃当前批量计划；
- * 收割目标选择支持单颗 / 批量两种模式，补种兜底处理遗留空地。
+ * 收割目标选择支持单个 / 批量两种模式，补种兜底处理遗留空地。
  */
 public final class FarmDecision {
 
@@ -37,6 +44,7 @@ public final class FarmDecision {
 
     /** 运行期可变配置，由模块每 tick 同步最新设置值 */
     private int unloadThreshold;
+    private int poisonUnloadThreshold;
     private int bpt;
     private double reachDistance;
 
@@ -44,22 +52,35 @@ public final class FarmDecision {
     private HarvestMode mode = HarvestMode.SINGLE;
     private int batchCount = 8;
 
+    /** 补种模式，随设置热更新 */
+    private PlantMode plantMode = PlantMode.SEQUENTIAL;
+    /** 均匀轮转模式的游标，指向下一个优先补种的启用作物 */
+    private int rotateCursor = 0;
+    /** 批量补种数量，一次补种决策最多锁定的空耕地数 */
+    private int plantBatchCount = 8;
+    /** 自动锄地开关，随设置热更新 */
+    private boolean tillEnabled = true;
+    /** 批量锄地数量，一次锄地决策最多锁定的草方块/泥土数 */
+    private int tillBatchCount = 8;
+
     public FarmDecision(FarmScanner scanner, FarmResourceManager resources, FarmObserver observer,
                         FarmVerifier verifier, ContainerBroker broker,
-                        int unloadThreshold, int bpt, double reachDistance) {
+                        int unloadThreshold, int poisonUnloadThreshold, int bpt, double reachDistance) {
         this.scanner = scanner;
         this.resources = resources;
         this.observer = observer;
         this.verifier = verifier;
         this.broker = broker;
         this.unloadThreshold = unloadThreshold;
+        this.poisonUnloadThreshold = poisonUnloadThreshold;
         this.bpt = bpt;
         this.reachDistance = reachDistance;
     }
 
     /** 同步最新设置值 */
-    public void update(int unloadThreshold, int bpt, double reachDistance) {
+    public void update(int unloadThreshold, int poisonUnloadThreshold, int bpt, double reachDistance) {
         this.unloadThreshold = unloadThreshold;
+        this.poisonUnloadThreshold = poisonUnloadThreshold;
         this.bpt = bpt;
         this.reachDistance = reachDistance;
     }
@@ -68,6 +89,22 @@ public final class FarmDecision {
     public void updateMode(HarvestMode mode, int batchCount) {
         this.mode = mode;
         this.batchCount = Math.max(1, batchCount);
+    }
+
+    /** 同步补种模式 */
+    public void updatePlantMode(PlantMode plantMode) {
+        this.plantMode = plantMode;
+    }
+
+    /** 同步批量补种数量 */
+    public void updatePlantBatchCount(int plantBatchCount) {
+        this.plantBatchCount = Math.max(1, plantBatchCount);
+    }
+
+    /** 同步自动锄地开关与批量数量 */
+    public void updateTill(boolean enabled, int batchCount) {
+        this.tillEnabled = enabled;
+        this.tillBatchCount = Math.max(1, batchCount);
     }
 
     /** 收割距离，供 Controller 在任务衔接时复用 */
@@ -79,29 +116,49 @@ public final class FarmDecision {
      * 物流决策：毒马铃薯 → 补货 → 卸货。
      * 返回非 null 表示需要执行物流任务，Controller 应丢弃当前批量计划。
      */
-    public FarmTask decideLogistics(Set<CropProfile> enabledCrops, Map<SiteType, FarmSite> sites) {
-        // 1. 毒马铃薯处理（独立，最高优先级）
-        if (resources.countPoisonousPotato() > 0) {
+    public FarmTask decideLogistics(Map<SiteType, FarmSite> sites) {
+        // 1. 毒马铃薯处理（独立，最高优先级）：攒够阈值才卸，避免捡一个就跑一次
+        if (resources.countPoisonousPotato() >= poisonUnloadThreshold) {
             FarmSite poison = validSite(sites, SiteType.POISON_STORAGE);
             if (poison != null) {
-                return new PoisonDumpTask(poison.pos(), broker, reachDistance, resources, bpt);
+                return new PoisonDumpTask(poison.pos(), broker, reachDistance, bpt);
             }
         }
 
-        // 2. 补货：某作物种植材料不足安全库存
+        // 2. 补货：某作物种植材料不足安全库存，按作物类型智能选箱
         CropProfile restockCrop = resources.firstNeedsRestock();
         if (restockCrop != null) {
-            FarmSite box = validSite(sites, SiteType.cropStorageFor(enabledCrops.size()));
+            // 单物品作物（种子==收获物，如马铃薯/胡萝卜/下界疣）补货去单作物箱；双物品作物（小麦/甜菜根）去种子补货箱
+            SiteType boxType = restockCrop.plantItem() != restockCrop.harvestItem()
+                ? SiteType.SEED_STORAGE : SiteType.SINGLE_STORAGE;
+            FarmSite box = validSite(sites, boxType);
             if (box != null) {
                 return new RestockTask(box.pos(), broker, reachDistance, resources, restockCrop);
             }
         }
 
-        // 3. 卸货：产物超过阈值 或 背包快满
+        // 3. 卸货：产物超过阈值 或 背包快满，按物品去向智能分流三类箱子
         if (resources.depositableStacks() >= unloadThreshold || observer.freeInventorySlots() <= 2) {
-            FarmSite box = validSite(sites, SiteType.cropStorageFor(enabledCrops.size()));
-            if (box != null) {
-                return new UnloadTask(box.pos(), broker, reachDistance, resources, bpt);
+            // 双物品作物种子 → 种子补货箱
+            if (resources.hasDepositableSeed()) {
+                FarmSite seedBox = validSite(sites, SiteType.SEED_STORAGE);
+                if (seedBox != null) {
+                    return new UnloadTask(seedBox.pos(), broker, reachDistance, bpt, resources::shouldDepositSeed);
+                }
+            }
+            // 单物品作物收获物 → 单作物箱
+            if (resources.hasDepositableSingle()) {
+                FarmSite singleBox = validSite(sites, SiteType.SINGLE_STORAGE);
+                if (singleBox != null) {
+                    return new UnloadTask(singleBox.pos(), broker, reachDistance, bpt, resources::shouldDepositSingle);
+                }
+            }
+            // 双物品/无种子作物收获物 → 多作物箱
+            if (resources.hasDepositableDual()) {
+                FarmSite dualBox = validSite(sites, SiteType.MULTI_STORAGE);
+                if (dualBox != null) {
+                    return new UnloadTask(dualBox.pos(), broker, reachDistance, bpt, resources::shouldDepositDual);
+                }
             }
         }
 
@@ -110,20 +167,123 @@ public final class FarmDecision {
 
     /**
      * 收割目标选择：按当前模式返回待处理的成熟目标清单。
-     * 单颗返回 0~1 个，批量返回 0~batchCount 个（按距离升序）。
+     * 单个返回 0~1 个，批量返回 0~batchCount 个（按距离升序）。
      */
     public List<FarmTarget> selectHarvestTargets() {
         int max = (mode == HarvestMode.BATCH) ? batchCount : 1;
         return scanner.nearestHarvests(max);
     }
 
-    /** 补种决策：处理扫描发现的可补种空地，材料不足则返回 null 交由资源检查 */
-    public FarmTask decidePlant() {
-        FarmTarget plant = scanner.nearestPlantable();
-        if (plant != null && resources.countItem(plant.profile().plantItem()) > 0) {
-            return new PlantTask(plant, verifier, reachDistance);
+    /** 批量补种目标选择：按补种模式为最近的至多 plantBatchCount 个空耕地选定作物（材料不足自动过滤） */
+    public List<FarmTarget> selectPlantTargets() {
+        List<FarmTarget> result = new ArrayList<>();
+        for (BlockPos soil : scanner.nearestPlantablePositions(plantBatchCount)) {
+            FarmTarget target = selectCropFor(soil);
+            if (target != null && resources.countItem(target.profile().plantItem()) > 0) {
+                result.add(target);
+            }
+        }
+        return result;
+    }
+
+    /** 批量锄地目标选择：自动锄地开启且背包有锄头时，取最近的至多 tillBatchCount 个草方块/泥土 */
+    public List<FarmTarget> selectTillTargets() {
+        List<FarmTarget> result = new ArrayList<>();
+        if (!tillEnabled || !hasHoe()) return result;
+        for (BlockPos pos : scanner.nearestTillablePositions(tillBatchCount)) {
+            result.add(FarmTarget.till(pos));
+        }
+        return result;
+    }
+
+    /** 当前是否存在可锄地工作（开启且有草方块/泥土目标） */
+    public boolean tillWorkAvailable() {
+        return tillEnabled && scanner.hasTillable();
+    }
+
+    /** 背包里是否有任意锄头（任意品质的锄头都能开垦耕地） */
+    public boolean hasHoe() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return false;
+        return InvUtils.find(stack -> stack.getItem() instanceof HoeItem).found();
+    }
+
+    /** 按当前补种模式为单个空耕地选定作物 */
+    private FarmTarget selectCropFor(BlockPos soil) {
+        return switch (plantMode) {
+            case SEQUENTIAL -> selectSequential(soil);
+            case ROTATE -> selectRotate(soil);
+            case FOLLOW_NEARBY -> selectFollowNearby(soil);
+        };
+    }
+
+    /** 顺序优先：按枚举声明顺序返回第一个能种在该底盘的启用作物 */
+    private FarmTarget selectSequential(BlockPos soil) {
+        Minecraft mc = Minecraft.getInstance();
+        for (CropProfile crop : scanner.enabledCrops()) {
+            if (crop.isPlantable(mc.level, soil)) {
+                return FarmTarget.plant(crop, soil);
+            }
         }
         return null;
+    }
+
+    /** 均匀轮转：从轮转游标开始找第一个能种在该底盘的启用作物，种完游标后移保证均衡 */
+    private FarmTarget selectRotate(BlockPos soil) {
+        Minecraft mc = Minecraft.getInstance();
+        List<CropProfile> list = new ArrayList<>(scanner.enabledCrops());
+        if (list.isEmpty()) return null;
+
+        // 从游标开始环形找第一个能种的作物，避免某底盘被跳过导致空转
+        for (int i = 0; i < list.size(); i++) {
+            int index = (rotateCursor + i) % list.size();
+            CropProfile crop = list.get(index);
+            if (crop.isPlantable(mc.level, soil)) {
+                rotateCursor = (index + 1) % list.size();
+                return FarmTarget.plant(crop, soil);
+            }
+        }
+        return null;
+    }
+
+    /** 就近跟随的搜索半径（水平格数），空耕地周围此范围内有作物则种回同类 */
+    private static final int FOLLOW_RADIUS = 4;
+
+    /** 就近跟随：空耕地种回周围已有作物的同类；周围没有则按启用顺序兜底 */
+    private FarmTarget selectFollowNearby(BlockPos soil) {
+        Minecraft mc = Minecraft.getInstance();
+        Set<CropProfile> enabled = scanner.enabledCrops();
+
+        // 统计底盘水平范围内、作物层（底盘上方一格）已有的启用作物类型与数量
+        EnumMap<CropProfile, Integer> nearby = new EnumMap<>(CropProfile.class);
+        for (int dx = -FOLLOW_RADIUS; dx <= FOLLOW_RADIUS; dx++) {
+            for (int dz = -FOLLOW_RADIUS; dz <= FOLLOW_RADIUS; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                Block block = mc.level.getBlockState(soil.offset(dx, 0, dz).above()).getBlock();
+                CropProfile profile = CropProfile.byBlock(block);
+                if (profile != null && profile.needsReplant() && enabled.contains(profile)) {
+                    nearby.merge(profile, 1, Integer::sum);
+                }
+            }
+        }
+
+        // 附近有作物：优先种数量最多的同类（保持手动规划的混种分区）
+        if (!nearby.isEmpty()) {
+            CropProfile best = null;
+            int bestCount = -1;
+            for (Map.Entry<CropProfile, Integer> entry : nearby.entrySet()) {
+                if (entry.getValue() > bestCount) {
+                    bestCount = entry.getValue();
+                    best = entry.getKey();
+                }
+            }
+            if (best != null && best.isPlantable(mc.level, soil)) {
+                return FarmTarget.plant(best, soil);
+            }
+        }
+
+        // 附近无作物：按启用顺序兜底
+        return selectSequential(soil);
     }
 
     /** 取已绑定且位于当前维度的站点，否则返回 null */

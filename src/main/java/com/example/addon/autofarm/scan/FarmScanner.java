@@ -5,6 +5,8 @@ import com.example.addon.autofarm.model.FarmTarget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -41,6 +43,8 @@ public final class FarmScanner {
     private final Set<BlockPos> matureBlocks = new HashSet<>();
     /** 当前已知的可补种底盘坐标缓存，持续刷新 */
     private final Set<BlockPos> plantableBlocks = new HashSet<>();
+    /** 当前已知的待锄地草方块/泥土坐标缓存，持续刷新 */
+    private final Set<BlockPos> tillableBlocks = new HashSet<>();
 
     private final Set<CropProfile> enabled = EnumSet.noneOf(CropProfile.class);
 
@@ -54,6 +58,10 @@ public final class FarmScanner {
             Math.max(a.getX(), b.getX()),
             Math.max(a.getY(), b.getY()),
             Math.max(a.getZ(), b.getZ()));
+        // 补种检测需要识别作物下方的耕地层（作物在耕地正上方），
+        // 而锚点通常对准作物或地面本身，上下各扩一格确保底盘层与作物层都在扫描范围内。
+        min = new BlockPos(min.getX(), min.getY() - 1, min.getZ());
+        max = new BlockPos(max.getX(), max.getY() + 1, max.getZ());
         bounded = true;
         restart();
     }
@@ -64,6 +72,11 @@ public final class FarmScanner {
         enabled.clear();
         enabled.addAll(crops);
         restart();
+    }
+
+    /** 当前启用的作物集合（只读视图，供决策层按补种模式选作物） */
+    public Set<CropProfile> enabledCrops() {
+        return java.util.Collections.unmodifiableSet(enabled);
     }
 
     public boolean bounded() {
@@ -87,25 +100,6 @@ public final class FarmScanner {
         return dx * dy * dz;
     }
 
-    /** 当前是否有已知成熟目标 */
-    public boolean hasMature() {
-        return !matureBlocks.isEmpty();
-    }
-
-    /** 当前是否有已知可补种空地 */
-    public boolean hasPlantable() {
-        return !plantableBlocks.isEmpty();
-    }
-
-    /** 取离玩家最近的一个成熟目标，没有返回 null */
-    public FarmTarget nearestHarvest() {
-        BlockPos nearest = nearest(matureBlocks);
-        if (nearest == null) return null;
-        CropProfile profile = CropProfile.byBlock(Minecraft.getInstance().level.getBlockState(nearest).getBlock());
-        if (profile == null) return null;
-        return FarmTarget.harvest(profile, nearest);
-    }
-
     /** 取离玩家最近的至多 maxCount 个成熟目标，按距离升序；实际数量不足则返回实际数量 */
     public List<FarmTarget> nearestHarvests(int maxCount) {
         List<FarmTarget> result = new ArrayList<>();
@@ -126,16 +120,45 @@ public final class FarmScanner {
         return result;
     }
 
-    /** 取离玩家最近的一个可补种目标，没有返回 null */
-    public FarmTarget nearestPlantable() {
-        BlockPos nearest = nearest(plantableBlocks);
-        if (nearest == null) return null;
-        for (CropProfile profile : enabled) {
-            if (profile.isPlantable(Minecraft.getInstance().level, nearest)) {
-                return FarmTarget.plant(profile, nearest);
-            }
+    /** 取离玩家最近的至多 maxCount 个可补种底盘坐标（不含作物，由决策层按补种模式选作物），按距离升序 */
+    public List<BlockPos> nearestPlantablePositions(int maxCount) {
+        List<BlockPos> result = new ArrayList<>();
+        if (maxCount <= 0 || plantableBlocks.isEmpty()) return result;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return result;
+
+        List<BlockPos> sorted = new ArrayList<>(plantableBlocks);
+        sorted.sort(Comparator.comparingDouble(this::distanceSqToPlayer));
+
+        for (BlockPos pos : sorted) {
+            if (result.size() >= maxCount) break;
+            result.add(pos);
         }
-        return null;
+        return result;
+    }
+
+    /** 取离玩家最近的至多 maxCount 个待锄地坐标（草方块/泥土），按距离升序 */
+    public List<BlockPos> nearestTillablePositions(int maxCount) {
+        List<BlockPos> result = new ArrayList<>();
+        if (maxCount <= 0 || tillableBlocks.isEmpty()) return result;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return result;
+
+        List<BlockPos> sorted = new ArrayList<>(tillableBlocks);
+        sorted.sort(Comparator.comparingDouble(this::distanceSqToPlayer));
+
+        for (BlockPos pos : sorted) {
+            if (result.size() >= maxCount) break;
+            result.add(pos);
+        }
+        return result;
+    }
+
+    /** 当前是否有待锄地目标（O(1) 判定，供决策层快速判断锄地工作是否存在） */
+    public boolean hasTillable() {
+        return !tillableBlocks.isEmpty();
     }
 
     /** 坐标是否落在扫描范围内 */
@@ -146,24 +169,18 @@ public final class FarmScanner {
             && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
     }
 
-    /** 农场中心上方一格，供返回农场时作为归位点 */
-    public BlockPos center() {
-        return new BlockPos(
-            (min.getX() + max.getX()) / 2,
-            min.getY() + 1,
-            (min.getZ() + max.getZ()) / 2);
-    }
-
     /** 主动移除某个坐标（目标被处理或失效后调用，避免等下一轮扫描才刷新） */
     public void invalidate(BlockPos pos) {
         matureBlocks.remove(pos);
         plantableBlocks.remove(pos);
+        tillableBlocks.remove(pos);
     }
 
     public void reset() {
         bounded = false;
         matureBlocks.clear();
         plantableBlocks.clear();
+        tillableBlocks.clear();
         restart();
     }
 
@@ -216,6 +233,7 @@ public final class FarmScanner {
         if (state.isAir()) {
             matureBlocks.remove(pos);
             plantableBlocks.remove(pos);
+            tillableBlocks.remove(pos);
             return;
         }
 
@@ -239,23 +257,20 @@ public final class FarmScanner {
         } else {
             plantableBlocks.remove(pos);
         }
+
+        // 该格是草方块/泥土且上方为空气时，视为待锄地目标
+        if (isTillable(level, pos)) {
+            tillableBlocks.add(pos.immutable());
+        } else {
+            tillableBlocks.remove(pos);
+        }
     }
 
-    /** 在集合里取离玩家眼睛最近的坐标 */
-    private BlockPos nearest(Set<BlockPos> positions) {
-        Minecraft mc = Minecraft.getInstance();
-        if (positions.isEmpty() || mc.player == null) return null;
-
-        BlockPos best = null;
-        double bestDistSq = Double.MAX_VALUE;
-        for (BlockPos pos : positions) {
-            double distSq = distanceSqToPlayer(pos);
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                best = pos;
-            }
-        }
-        return best;
+    /** 判定某坐标是否为可用锄头开垦成耕地的草方块/泥土（要求上方为空气，否则锄头无法生效） */
+    public static boolean isTillable(BlockGetter level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (!state.is(Blocks.GRASS_BLOCK) && !state.is(Blocks.DIRT)) return false;
+        return level.getBlockState(pos.above()).isAir();
     }
 
     /** 计算某坐标到玩家眼睛的平方距离，用于按距离排序选目标 */

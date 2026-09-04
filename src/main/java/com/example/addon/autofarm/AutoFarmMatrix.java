@@ -10,8 +10,8 @@ import com.example.addon.autofarm.model.CropProfile;
 import com.example.addon.autofarm.model.FarmSite;
 import com.example.addon.autofarm.model.FarmState;
 import com.example.addon.autofarm.model.HarvestMode;
+import com.example.addon.autofarm.model.PlantMode;
 import com.example.addon.autofarm.model.SiteType;
-import com.example.addon.autofarm.navigation.FarmNav;
 import com.example.addon.autofarm.render.FarmRenderer;
 import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.autofarm.scan.FarmScanner;
@@ -52,13 +52,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * 自动农场 - 全自动农业系统（重写版）。
  *
  * 核心流程：Observe → Decide → Act → Verify → Replan。
  * 熟一颗收一颗，收割后验证、补种、拾取，物流任务（卸货/补货/毒马铃薯）独占，
- * 单/双/三作物箱按启用作物数量择一使用，毒马铃薯独立处理。
+ * 单作物箱装单物品作物与柱状/果实产物、种子补货箱装双物品作物种子、多作物箱装双物品成熟掉落物，
+ * 多作物箱与种子补货箱同套双作物判定，毒马铃薯独立处理。
  */
 public final class AutoFarmMatrix extends YiyiaddonModule {
 
@@ -77,9 +79,10 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     // ═══════════════════════════════════════════════════════════════════
 
     private final SettingGroup sgCrops = settings.createGroup("作物选择", true);
-    private final SettingGroup sgLogistics = settings.createGroup("后勤设置", false);
-    private final SettingGroup sgSafety = settings.createGroup("安全设置", false);
-    private final SettingGroup sgRender = settings.createGroup("显示设置", false);
+    private final SettingGroup sgPerSeed = settings.createGroup("逐作物独立配置", true);
+    private final SettingGroup sgLogistics = settings.createGroup("运行参数", false);
+    private final SettingGroup sgSafety = settings.createGroup("保护与锄地", false);
+    private final SettingGroup sgRender = settings.createGroup("渲染显示", false);
 
     // ─── 作物分类选择器 ───
     private final Setting<List<Block>> cropsDouble;
@@ -87,16 +90,23 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final Setting<List<Block>> cropsPillar;
     private final Setting<List<Block>> cropsVine;
 
+    // ─── 单种子独立配置（跟随「作物选择」启用作物联动显示） ───
+    private final Map<CropProfile, Setting<Integer>> perCropUnload = new HashMap<>();
+    private final Map<CropProfile, Setting<Integer>> perCropRestock = new HashMap<>();
+
     // ─── 后勤配置 ───
     private final Setting<HarvestMode> harvestMode;
     private final Setting<Integer> batchCount;
+    private final Setting<PlantMode> plantMode;
+    private final Setting<Integer> plantBatchCount;
     private final Setting<Integer> unloadThreshold;
-    private final Setting<Integer> seedSafetyStock;
+    private final Setting<Integer> poisonUnloadThreshold;
     private final Setting<Integer> bpt;
     private final Setting<Integer> reachDistance;
 
     // ─── 安全保护 ───
     private final Setting<Boolean> antiTrample;
+    private final Setting<Boolean> autoTill;
 
     // ─── 渲染辅助 ───
     private final Setting<Boolean> renderBounds;
@@ -109,8 +119,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final Setting<String> siteStart;
     private final Setting<String> siteEnd;
     private final Setting<String> siteSingle;
-    private final Setting<String> siteDual;
-    private final Setting<String> siteTriple;
+    private final Setting<String> siteMulti;
+    private final Setting<String> siteSeed;
     private final Setting<String> sitePoison;
 
     /** 物流状态播报去重锁 */
@@ -121,55 +131,71 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     public AutoFarmMatrix() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动农场",
-            "熟一颗收一颗，自动补种拾取，单/双/三作物箱与毒马铃薯箱物流自动化。点击按钮查看说明。");
+            "熟一颗收一颗，自动补种拾取，单作物箱/种子补货箱/多作物箱与毒马铃薯箱物流自动化。点击按钮查看说明。");
 
         // ─── 作物分类选择器 ───
         cropsDouble = sgCrops.add(new BlockListSetting.Builder()
             .name("双作物")
             .description("种子与产物分离：小麦、甜菜根")
             .defaultValue(List.of())
-            .filter(block -> {
-                CropProfile profile = CropProfile.byBlock(block);
-                return profile != null && profile.kind() == CropProfile.Kind.CROP
-                    && profile.plantItem() != profile.harvestItem();
-            })
+            .filter(this::isDoubleCrop)
             .build());
 
         cropsSingle = sgCrops.add(new BlockListSetting.Builder()
             .name("单作物")
             .description("产物即种子：胡萝卜、马铃薯、下界疣")
             .defaultValue(List.of())
-            .filter(block -> {
-                CropProfile profile = CropProfile.byBlock(block);
-                return profile != null && profile.kind() == CropProfile.Kind.CROP
-                    && profile.plantItem() == profile.harvestItem();
-            })
+            .filter(this::isSingleCrop)
             .build());
 
         cropsPillar = sgCrops.add(new BlockListSetting.Builder()
             .name("柱状物")
             .description("切根部上方：竹子、甘蔗、仙人掌")
             .defaultValue(List.of())
-            .filter(block -> {
-                CropProfile profile = CropProfile.byBlock(block);
-                return profile != null && profile.kind() == CropProfile.Kind.PILLAR;
-            })
+            .filter(this::isPillar)
             .build());
 
         cropsVine = sgCrops.add(new BlockListSetting.Builder()
             .name("果实")
             .description("只砍果实：南瓜、西瓜")
             .defaultValue(List.of())
-            .filter(block -> {
-                CropProfile profile = CropProfile.byBlock(block);
-                return profile != null && profile.kind() == CropProfile.Kind.FRUIT;
-            })
+            .filter(this::isFruit)
             .build());
+
+        // ─── 单种子独立配置页：跟随「作物选择」联动，启用几种作物就显示几种配置 ───
+        // 双物品作物成熟掉落物卸入多作物箱（判别与种子补货箱同套判定），其余产物卸入单作物箱；
+        // 三种作物共用多作物箱时，各作物的卸货数量互不影响、各按各的阈值卸货
+        for (CropProfile profile : CropProfile.values()) {
+            String unloadDesc = profile.needsReplant() && profile.plantItem() != profile.harvestItem()
+                ? "该作物成熟掉落物超过此组数才卸入 §d多作物箱§r（种子的盈余仍卸入种子补货箱）"
+                : "该作物产物超过此组数才卸入 §6单作物箱";
+
+            Setting<Integer> unload = sgPerSeed.add(new IntSetting.Builder()
+                .name(profile.displayName() + "-卸货数量")
+                .description(unloadDesc)
+                .defaultValue(FarmResourceManager.DEFAULT_UNLOAD_GROUPS)
+                .min(1).max(36).noSlider()
+                .visible(() -> getEnabledCrops().contains(profile))
+                .build());
+            perCropUnload.put(profile, unload);
+
+            // 补货种子数量仅对需要补种的作物有意义，柱状物/果实不显示
+            if (profile.needsReplant()) {
+                Setting<Integer> restock = sgPerSeed.add(new IntSetting.Builder()
+                    .name(profile.displayName() + "-补货种子数量")
+                    .description("该作物种植材料低于多少组时自动去作物箱补货，卸货时始终保留这批材料")
+                    .defaultValue(FarmResourceManager.DEFAULT_RESTOCK_GROUPS)
+                    .min(1).max(10).noSlider()
+                    .visible(() -> getEnabledCrops().contains(profile))
+                    .build());
+                perCropRestock.put(profile, restock);
+            }
+        }
 
         // ─── 后勤配置 ───
         harvestMode = sgLogistics.add(new EnumSetting.Builder<HarvestMode>()
             .name("收割模式")
-            .description("单颗收割：每次只处理一个成熟目标；批量收割：一次锁定多个目标后严格串行执行")
+            .description("单个收割：每次只处理一个成熟目标；批量收割：一次锁定多个目标后严格串行执行")
             .defaultValue(HarvestMode.SINGLE)
             .onChanged(this::onHarvestModeChanged)
             .build());
@@ -181,16 +207,29 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .visible(() -> harvestMode.get() == HarvestMode.BATCH)
             .build());
 
+        plantMode = sgLogistics.add(new EnumSetting.Builder<PlantMode>()
+            .name("补种模式")
+            .description("顺序优先：按作物枚举顺序种满一种再种下一种；均匀轮转：启用作物轮流种保持均衡；就近跟随：空耕地种回周围已有作物的同类，保持混种分区")
+            .defaultValue(PlantMode.SEQUENTIAL)
+            .build());
+
+        plantBatchCount = sgLogistics.add(new IntSetting.Builder()
+            .name("批量补种数量")
+            .description("一次补种决策最多锁定并连续补种的空耕地数（1~32），越大补满越快")
+            .defaultValue(8).min(1).max(32).noSlider()
+            .build());
+
         unloadThreshold = sgLogistics.add(new IntSetting.Builder()
             .name("卸货阈值")
             .description("背包可卸货物品满多少组时触发卸货")
             .defaultValue(20).min(1).max(36).noSlider()
             .build());
 
-        seedSafetyStock = sgLogistics.add(new IntSetting.Builder()
-            .name("种植材料安全库存")
-            .description("每类作物种植材料截留多少组，卸货时保留、低于此值触发补货")
-            .defaultValue(3).min(1).max(10).noSlider()
+        poisonUnloadThreshold = sgLogistics.add(new IntSetting.Builder()
+            .name("毒马铃薯卸货")
+            .description("毒马铃薯攒够多少个才卸货一次，避免捡一个就跑一次")
+            .defaultValue(64).min(1).max(64).noSlider()
+            .visible(() -> getEnabledCrops().stream().anyMatch(p -> !p.extraLoot().isEmpty()))
             .build());
 
         bpt = sgLogistics.add(new IntSetting.Builder()
@@ -212,10 +251,16 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .defaultValue(true)
             .build());
 
+        autoTill = sgSafety.add(new BoolSetting.Builder()
+            .name("自动锄地")
+            .description("农田范围内发现草方块/泥土时，自动拿锄头锄成耕地；背包无锄头则跳过")
+            .defaultValue(true)
+            .build());
+
         // ─── 渲染辅助 ───
         renderBounds = sgRender.add(new BoolSetting.Builder()
             .name("农田边界")
-            .description("渲染农场范围的大外接盒")
+            .description("只渲染农场范围的外框一圈（不填面），大农场也不卡")
             .defaultValue(true)
             .build());
 
@@ -247,13 +292,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         siteStart = hiddenAnchor("_anchor_start", "农场点位1");
         siteEnd = hiddenAnchor("_anchor_end", "农场点位2");
         siteSingle = hiddenAnchor("_anchor_single", "单作物箱");
-        siteDual = hiddenAnchor("_anchor_dual", "双作物箱");
-        siteTriple = hiddenAnchor("_anchor_triple", "三作物箱");
+        siteMulti = hiddenAnchor("_anchor_multi", "多作物箱");
+        siteSeed = hiddenAnchor("_anchor_seed", "种子补货箱");
         sitePoison = hiddenAnchor("_anchor_poison", "毒马铃薯箱");
 
         // 构建决策器与控制器（依赖上面的设置字段默认值）
         decision = new FarmDecision(scanner, resources, observer, verifier, broker,
-            unloadThreshold.get(), bpt.get(), reachDistance.get());
+            unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         controller = new FarmController(scanner, resources, observer, verifier, broker, decision);
         controller.setLogger(this::notify);
     }
@@ -280,6 +325,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             return;
         }
 
+        // 清理历史脏数据，确保四个作物选择器只保留本分类方块
+        sanitizeCropSelectors();
+
         // 自检：作物数量、点位、维度、范围一次性列全
         if (!reportSelfCheck(selfCheck.check(getEnabledCrops(), getSitesMap()))) return;
 
@@ -290,14 +338,17 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         if (start != null && end != null) {
             scanner.setBounds(start.pos(), end.pos());
         }
-        resources.configure(getEnabledCrops(), seedSafetyStock.get());
+        resources.configure(getEnabledCrops(), buildUnloadGroups(), buildRestockGroups());
 
         // 重置状态并同步运行配置
         lastNotifiedState = "";
         lastBatchProgress = "";
-        controller.configure(getEnabledCrops(), getSitesMap(), reachDistance.get());
-        decision.update(unloadThreshold.get(), bpt.get(), reachDistance.get());
+        controller.configure(getSitesMap(), reachDistance.get());
+        decision.update(unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         decision.updateMode(harvestMode.get(), batchCount.get());
+        decision.updatePlantMode(plantMode.get());
+        decision.updatePlantBatchCount(plantBatchCount.get());
+        decision.updateTill(autoTill.get(), plantBatchCount.get());
 
         reportStartupInfo();
     }
@@ -317,9 +368,28 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
         report.append("\n§7启用作物　§8▸ ").append(crops).append("§r");
 
-        // 专用作物箱
-        SiteType storage = SiteType.cropStorageFor(enabled.size());
-        report.append("\n§7作物箱　　§8▸ ").append(highlightText(storage == null ? "未配置" : storage.cn())).append("§r");
+        // 智能识别：单物品作物（种子==收获物）与不补种作物（柱状物/果实）→单作物箱；
+        // 双作物判定（需要补种且种子≠收获物）→种子补货箱（种子），多作物箱（成熟掉落物）与种子补货箱同判定
+        boolean hasSingle = enabled.stream().anyMatch(p -> !p.needsReplant() || p.plantItem() == p.harvestItem());
+        boolean hasDualSeed = enabled.stream().anyMatch(p -> p.needsReplant() && p.plantItem() != p.harvestItem());
+        boolean hasDualHarvest = hasDualSeed;
+
+        StringBuilder boxes = new StringBuilder();
+        if (hasSingle) boxes.append("单作物箱 ");
+        if (hasDualSeed) boxes.append("种子补货箱 ");
+        if (hasDualHarvest) boxes.append("多作物箱 ");
+        report.append("\n§7作物箱　　§8▸ ").append(highlightText(boxes.toString().trim())).append("§r");
+
+        // 物品类型状态提示：单物品 / 双物品 / 混合
+        String kindDesc;
+        if (hasDualSeed && hasSingle) {
+            kindDesc = "混合（单物品 + 双物品）";
+        } else if (hasDualSeed) {
+            kindDesc = "双物品（种子 + 收获物分离）";
+        } else {
+            kindDesc = "单物品（仅一种产物）";
+        }
+        report.append("\n§7物品类型　§8▸ ").append(highlightText(kindDesc)).append("§r");
 
         // 农田范围
         FarmSite start = site(SiteType.START);
@@ -330,12 +400,22 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             report.append("\n§7农田范围　§8▸ ").append(highlightText(rangeX + "×" + rangeZ)).append("§r");
         }
 
-        report.append("\n§7卸货阈值　§8▸ ").append(highlightText(unloadThreshold.get() + " 组")).append("§r")
-            .append("§f · 安全库存 ").append(highlightText(seedSafetyStock.get() + " 组")).append("§r");
+        report.append("\n§7卸货阈值　§8▸ ").append(highlightText(unloadThreshold.get() + " 组")).append("§r");
+        report.append("\n§7自动锄地　§8▸ ").append(autoTill.get() ? "§a开" : "§c关").append("§r");
+
+        // 每种启用作物的独立卸货/补货数量（单种子配置页里逐项可调）
+        for (CropProfile profile : enabled) {
+            report.append("\n§7").append(highlightText(profile.displayName()))
+                .append(" §8▸ §7卸 ").append(highlightText(perCropUnload.get(profile).get() + " 组"));
+            if (profile.needsReplant()) {
+                report.append(" §r· 补 ").append(highlightText(perCropRestock.get(profile).get() + " 组"));
+            }
+            report.append("§r");
+        }
 
         String modeText = harvestMode.get() == HarvestMode.BATCH
             ? "批量收割 · " + batchCount.get() + " 个"
-            : "单颗收割";
+            : "单个收割";
         report.append("\n§7收割模式　§8▸ ").append(highlightText(modeText)).append("§r");
 
         notify(report.toString());
@@ -353,7 +433,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         if (mode == HarvestMode.BATCH) {
             notify("§b已切换为批量收割 §8▸ 每次最多锁定 " + highlightText(batchCount.get() + " 个目标"));
         } else {
-            notify("§a已切换为单颗收割 §8▸ 每次只处理一个成熟目标");
+            notify("§a已切换为单个收割 §8▸ 每次只处理一个成熟目标");
         }
     }
 
@@ -373,10 +453,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         }
 
         // 同步最新运行配置
-        decision.update(unloadThreshold.get(), bpt.get(), reachDistance.get());
+        decision.update(unloadThreshold.get(), poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         decision.updateMode(harvestMode.get(), batchCount.get());
-        resources.configure(getEnabledCrops(), seedSafetyStock.get());
-        controller.configure(getEnabledCrops(), getSitesMap(), reachDistance.get());
+        decision.updatePlantMode(plantMode.get());
+        decision.updatePlantBatchCount(plantBatchCount.get());
+        decision.updateTill(autoTill.get(), plantBatchCount.get());
+        resources.configure(getEnabledCrops(), buildUnloadGroups(), buildRestockGroups());
+        controller.configure(getSitesMap(), reachDistance.get());
 
         // 推进状态机
         controller.tick();
@@ -420,10 +503,9 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private void onRender3D(Render3DEvent event) {
         if (!scanner.bounded()) return;
 
-        // 农场边界
+        // 农场边界（只画外框一圈，不渲染面）
         if (renderBounds.get()) {
-            FarmRenderer.renderBounds(event, scanner.min(), scanner.max(),
-                boundsColor.get(), boundsColor.get(), ShapeMode.Lines);
+            FarmRenderer.renderBorder(event, scanner.min(), scanner.max(), boundsColor.get());
         }
 
         // 当前作业目标
@@ -444,8 +526,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         renderLabel(event, SiteType.START, "§a农场点位1");
         renderLabel(event, SiteType.END, "§e农场点位2");
         renderLabel(event, SiteType.SINGLE_STORAGE, "§6单作物箱");
-        renderLabel(event, SiteType.DUAL_STORAGE, "§b双作物箱");
-        renderLabel(event, SiteType.TRIPLE_STORAGE, "§d三作物箱");
+        renderLabel(event, SiteType.MULTI_STORAGE, "§d多作物箱");
+        renderLabel(event, SiteType.SEED_STORAGE, "§b种子补货箱");
         renderLabel(event, SiteType.POISON_STORAGE, "§c毒马铃薯箱");
     }
 
@@ -464,9 +546,13 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     @EventHandler
     private void onOpenScreen(OpenScreenEvent event) {
         if (mc.player == null) return;
-        // 静默容器：自动化运行中打开箱子屏幕时取消显示（不抢鼠标），
-        // 排除背包界面，玩家手动按 E 打开背包必须放行。
-        if (isActive() && event.screen instanceof AbstractContainerScreen<?>
+        // 静默容器：仅在物流任务（卸货/补货/毒马铃薯，exclusive=true）执行期间取消箱子界面显示，
+        // 避免自动化开箱时抢鼠标/焦点。玩家手动开箱（模块空闲/观察/收割/补种/拾取阶段）必须放行，
+        // 否则模块开启时玩家无法打开箱子，也无法在后台挂机时切回前台手动开箱。
+        FarmTask task = controller.currentTask();
+        boolean logisticsRunning = task != null && task.exclusive();
+        if (isActive() && logisticsRunning
+            && event.screen instanceof AbstractContainerScreen<?>
             && !(event.screen instanceof InventoryScreen)) {
             event.setCancelled(true);
         }
@@ -509,8 +595,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             case START -> siteStart.get();
             case END -> siteEnd.get();
             case SINGLE_STORAGE -> siteSingle.get();
-            case DUAL_STORAGE -> siteDual.get();
-            case TRIPLE_STORAGE -> siteTriple.get();
+            case MULTI_STORAGE -> siteMulti.get();
+            case SEED_STORAGE -> siteSeed.get();
             case POISON_STORAGE -> sitePoison.get();
         };
     }
@@ -520,8 +606,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             case START -> siteStart.set(value);
             case END -> siteEnd.set(value);
             case SINGLE_STORAGE -> siteSingle.set(value);
-            case DUAL_STORAGE -> siteDual.set(value);
-            case TRIPLE_STORAGE -> siteTriple.set(value);
+            case MULTI_STORAGE -> siteMulti.set(value);
+            case SEED_STORAGE -> siteSeed.set(value);
             case POISON_STORAGE -> sitePoison.set(value);
         }
     }
@@ -530,26 +616,76 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     //  辅助方法
     // ═══════════════════════════════════════════════════════════════════
 
-    /** 从四组作物选择器汇总启用作物集合 */
+    /** 从四组作物选择器汇总启用作物集合（按各自分类二次过滤，防御历史脏数据） */
     private Set<CropProfile> getEnabledCrops() {
         Set<CropProfile> enabled = EnumSet.noneOf(CropProfile.class);
-        for (Block block : cropsDouble.get()) {
-            CropProfile profile = CropProfile.byBlock(block);
-            if (profile != null) enabled.add(profile);
-        }
-        for (Block block : cropsSingle.get()) {
-            CropProfile profile = CropProfile.byBlock(block);
-            if (profile != null) enabled.add(profile);
-        }
-        for (Block block : cropsPillar.get()) {
-            CropProfile profile = CropProfile.byBlock(block);
-            if (profile != null) enabled.add(profile);
-        }
-        for (Block block : cropsVine.get()) {
-            CropProfile profile = CropProfile.byBlock(block);
-            if (profile != null) enabled.add(profile);
-        }
+        addCrops(enabled, cropsDouble.get(), this::isDoubleCrop);
+        addCrops(enabled, cropsSingle.get(), this::isSingleCrop);
+        addCrops(enabled, cropsPillar.get(), this::isPillar);
+        addCrops(enabled, cropsVine.get(), this::isFruit);
         return enabled;
+    }
+
+    /** 把符合分类的方块转成作物图鉴并加入集合 */
+    private void addCrops(Set<CropProfile> enabled, List<Block> blocks, Predicate<Block> valid) {
+        for (Block block : blocks) {
+            if (!valid.test(block)) continue;
+            CropProfile profile = CropProfile.byBlock(block);
+            if (profile != null) enabled.add(profile);
+        }
+    }
+
+    /** 双作物：普通农作物且种子与产物分离（小麦、甜菜根） */
+    private boolean isDoubleCrop(Block block) {
+        CropProfile profile = CropProfile.byBlock(block);
+        return profile != null && profile.kind() == CropProfile.Kind.CROP
+            && profile.plantItem() != profile.harvestItem();
+    }
+
+    /** 单作物：普通农作物且产物即种子（胡萝卜、马铃薯、下界疣） */
+    private boolean isSingleCrop(Block block) {
+        CropProfile profile = CropProfile.byBlock(block);
+        return profile != null && profile.kind() == CropProfile.Kind.CROP
+            && profile.plantItem() == profile.harvestItem();
+    }
+
+    /** 柱状物：竹子、甘蔗、仙人掌 */
+    private boolean isPillar(Block block) {
+        CropProfile profile = CropProfile.byBlock(block);
+        return profile != null && profile.kind() == CropProfile.Kind.PILLAR;
+    }
+
+    /** 果实：南瓜、西瓜 */
+    private boolean isFruit(Block block) {
+        CropProfile profile = CropProfile.byBlock(block);
+        return profile != null && profile.kind() == CropProfile.Kind.FRUIT;
+    }
+
+    /** 清理四个作物选择器里的历史脏数据，确保每个选择器只保留本分类方块 */
+    private void sanitizeCropSelectors() {
+        sanitize(cropsDouble, this::isDoubleCrop);
+        sanitize(cropsSingle, this::isSingleCrop);
+        sanitize(cropsPillar, this::isPillar);
+        sanitize(cropsVine, this::isFruit);
+    }
+
+    /** 移除选择器中不属于指定分类的方块 */
+    private void sanitize(Setting<List<Block>> setting, Predicate<Block> valid) {
+        setting.get().removeIf(block -> !valid.test(block));
+    }
+
+    /** 汇总每作物独立卸货数量（组），供资源管理器热更新 */
+    private Map<CropProfile, Integer> buildUnloadGroups() {
+        Map<CropProfile, Integer> map = new HashMap<>();
+        perCropUnload.forEach((crop, setting) -> map.put(crop, setting.get()));
+        return map;
+    }
+
+    /** 汇总每作物独立补货种子数量（组），供资源管理器热更新 */
+    private Map<CropProfile, Integer> buildRestockGroups() {
+        Map<CropProfile, Integer> map = new HashMap<>();
+        perCropRestock.forEach((crop, setting) -> map.put(crop, setting.get()));
+        return map;
     }
 
     /** 构建六点位映射 */
@@ -569,9 +705,15 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            table.add(theme.label("§b§l自动农场 §r§8▸ §f全自动农业系统")).expandX();
+            table.row();
+            table.add(theme.label(statusSummary())).expandX();
+            table.row();
+            table.add(theme.label(" ")).expandX();
+            table.row();
+
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
             table.row();
 
             // 六点位卡片（两列三行）
@@ -583,16 +725,34 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
             WTable row2 = theme.table();
             buildLocationCard(theme, row2, "单作物箱", SiteType.SINGLE_STORAGE, "§6");
-            buildLocationCard(theme, row2, "双作物箱", SiteType.DUAL_STORAGE, "§b");
+            buildLocationCard(theme, row2, "多作物箱", SiteType.MULTI_STORAGE, "§d");
             table.add(row2).expandX();
             table.row();
 
             WTable row3 = theme.table();
-            buildLocationCard(theme, row3, "三作物箱", SiteType.TRIPLE_STORAGE, "§d");
+            buildLocationCard(theme, row3, "种子补货箱", SiteType.SEED_STORAGE, "§b");
             buildLocationCard(theme, row3, "毒马铃薯箱", SiteType.POISON_STORAGE, "§c");
             table.add(row3).expandX();
             table.row();
         });
+    }
+
+    /** 配置页顶部状态摘要：一眼看清启用了什么、锄地是否开启、收割模式 */
+    private String statusSummary() {
+        Set<CropProfile> enabled = getEnabledCrops();
+        StringBuilder crops = new StringBuilder();
+        int index = 0;
+        for (CropProfile profile : enabled) {
+            if (index++ > 0) crops.append("§f、");
+            crops.append(highlightText(profile.displayName()));
+        }
+        String till = autoTill.get() ? "§a开" : "§c关";
+        String mode = harvestMode.get() == HarvestMode.BATCH
+            ? highlightFunction("批量 " + batchCount.get())
+            : highlightFunction("单个");
+        return "§7作物 §8▸ " + (enabled.isEmpty() ? "§8未选择" : crops.toString())
+            + " §8│ §7锄地 §8▸ " + till
+            + " §8│ §7收割 §8▸ " + mode;
     }
 
     /** 构建点位设置卡片（含坐标、维度、设置、删除按钮） */
@@ -650,15 +810,15 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             new HelpScreen.HelpSection("准备工作",
                 "  §8├─ §f建好农田 §7(耕地或对应底盘)",
                 "  §8├─ §f用 .farm set 农场点位1 / 农场点位2 框出矩形范围",
-                "  §8├─ §f按启用作物数量绑定对应作物箱 §7(单/双/三作物箱)",
+                "  §8├─ §f智能绑定单作物箱/种子补货箱/多作物箱 §7(单物品→单箱，双物品→种子+多箱)",
                 "  §8└─ §f绑定毒马铃薯箱 §7(独立处理毒马铃薯)"
             ),
             new HelpScreen.HelpSection("点位设置 §7(指令)",
                 "  §8> §3.farm set 农场点位1 §8— §7准星对准农田对角起点",
                 "  §8> §3.farm set 农场点位2 §8— §7准星对准农田对角终点",
-                "  §8> §3.farm set 单作物箱 §8— §7准星对准箱子",
-                "  §8> §3.farm set 双作物箱 §8— §7准星对准箱子",
-                "  §8> §3.farm set 三作物箱 §8— §7准星对准箱子",
+                "  §8> §3.farm set 单作物箱 §8— §7准星对准箱子(单物品作物)",
+                "  §8> §3.farm set 种子补货箱 §8— §7准星对准箱子(双物品种子)",
+                "  §8> §3.farm set 多作物箱 §8— §7准星对准箱子(双物品成熟掉落物)",
                 "  §8> §3.farm set 毒马铃薯箱 §8— §7准星对准箱子"
             ),
             new HelpScreen.HelpSection("作物选择",
@@ -668,13 +828,20 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 "  §a▸ §f果实 §8- §7南瓜、西瓜",
                 "  §c▸ §f不支持 §7海带、甜浆果"
             ),
+            new HelpScreen.HelpSection("单种子独立配置",
+                "  §a▸ §f启用几种作物 §8- §7面板就自动显示几种独立配置",
+                "  §a▸ §f卸货数量 §8- §7该作物产物超过此组数才卸入作物箱",
+                "  §a▸ §f补货种子数量 §8- §7种植材料低于此组数自动补货",
+                "  §e▸ §f双物品成熟掉落物卸入多作物箱 §8· §7其余卸入单作物箱"
+            ),
             new HelpScreen.HelpSection("收割模式",
-                "  §a▸ §f单颗收割 §8- §7每次只收一个成熟目标，收完补种拾取后再观察",
+                "  §a▸ §f单个收割 §8- §7每次只收一个成熟目标，收完补种拾取后再观察",
                 "  §a▸ §f批量收割 §8- §7一次锁定多个目标，但仍严格串行逐颗处理",
                 "  §e▸ §f批量数量默认 8，范围 1~32，仅在批量模式下生效",
                 "  §c▸ §f批量不是并发：任何时候都不会同时执行多个收割任务"
             ),
             new HelpScreen.HelpSection("工作流程",
+                "  §a[0] §f锄地 §8→ §7范围内草方块/泥土自动锄成耕地",
                 "  §a[1] §f观察 §8→ §7分帧扫描农场，发现成熟目标",
                 "  §a[2] §f收割 §8→ §7熟一颗收一颗，验证后接补种/拾取",
                 "  §a[3] §f补种 §8→ §7需要补种的作物自动播种",

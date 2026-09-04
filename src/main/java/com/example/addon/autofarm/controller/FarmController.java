@@ -15,13 +15,14 @@ import com.example.addon.autofarm.task.PlantTask;
 import com.example.addon.autofarm.task.PoisonDumpTask;
 import com.example.addon.autofarm.task.RestockTask;
 import com.example.addon.autofarm.task.TaskResult;
+import com.example.addon.autofarm.task.TillTask;
 import com.example.addon.autofarm.task.UnloadTask;
 import com.example.addon.farm.ContainerBroker;
 import net.minecraft.core.BlockPos;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -53,8 +54,28 @@ public final class FarmController {
     /** 批量收割计划（可能为 null），一次 Decision 锁定、严格串行消耗 */
     private BatchHarvestPlan batchPlan;
 
+    /** 批量补种计划（可能为 null），一次补种决策锁定、连续快速补种 */
+    private BatchPlantPlan batchPlantPlan;
+
+    /** 批量锄地计划（可能为 null），一次锄地决策锁定、连续快速锄地 */
+    private BatchTillPlan batchTillPlan;
+
+    /** 「正在锄地」播报去重锁 */
+    private boolean tillActiveNotified = false;
+    /** 「没有锄头」播报去重锁 */
+    private boolean noHoeNotified = false;
+    /** 回中心点等待的归位计时（看门狗防卡死） */
+    private int idleReturnTicks = 0;
+    /** 回中心点等待的播报去重锁 */
+    private String lastIdleNotify = "";
+
+    /** 回中心点寻路超时阈值（tick），超过则取消并原地等待，防止无限寻路卡死 */
+    private static final int CENTER_WAIT_TIMEOUT = 200;
+
+    /** 批量模式下已收割、待统一补种的目标清单（连续收割时累积，收割阶段结束后逐个补种） */
+    private final List<FarmTarget> batchHarvested = new ArrayList<>();
+
     /** 动态配置（onActivate / 点位变更时更新） */
-    private Set<CropProfile> enabledCrops = Set.of();
     private Map<SiteType, FarmSite> sites = Map.of();
     private double collectRange = 4;
 
@@ -74,8 +95,7 @@ public final class FarmController {
     }
 
     /** 更新动态配置 */
-    public void configure(Set<CropProfile> enabledCrops, Map<SiteType, FarmSite> sites, double collectRange) {
-        this.enabledCrops = enabledCrops;
+    public void configure(Map<SiteType, FarmSite> sites, double collectRange) {
         this.sites = sites;
         this.collectRange = collectRange;
     }
@@ -108,6 +128,13 @@ public final class FarmController {
                 currentTask = null;
             }
             batchPlan = null;
+            batchPlantPlan = null;
+            batchTillPlan = null;
+            tillActiveNotified = false;
+            noHoeNotified = false;
+            idleReturnTicks = 0;
+            lastIdleNotify = "";
+            batchHarvested.clear();
             FarmNav.cancel();
             setState(FarmState.OBSERVE);
             return;
@@ -116,12 +143,6 @@ public final class FarmController {
         // 持续观察 + 容器同步
         scanner.tick();
         broker.tick();
-
-        // 返回农场状态
-        if (state == FarmState.RETURN_FARM) {
-            tickReturnFarm();
-            return;
-        }
 
         // 有当前任务：只执行它
         if (currentTask != null) {
@@ -135,15 +156,20 @@ public final class FarmController {
         }
 
         // 无任务：先物流检查（触发则丢弃批量计划）
-        FarmTask logistics = decision.decideLogistics(enabledCrops, sites);
+        FarmTask logistics = decision.decideLogistics(sites);
         if (logistics != null) {
             batchPlan = null;
+            batchPlantPlan = null;
+            batchTillPlan = null;
+            tillActiveNotified = false;
+            noHoeNotified = false;
+            batchHarvested.clear();
             currentTask = logistics;
             setState(stateFor(logistics));
             return;
         }
 
-        // 批量计划继续：逐个取目标，执行前校验有效性，无效跳过
+        // 批量收割计划继续：逐个取目标，执行前校验有效性，无效跳过
         if (batchPlan != null) {
             while (batchPlan.hasNext()) {
                 FarmTarget target = batchPlan.next();
@@ -157,7 +183,74 @@ public final class FarmController {
             logger.accept("§a✓ 本轮批量收割完成");
         }
 
-        // 收割决策：单颗返回 1 个，批量返回 N 个；剩余目标进入批量计划
+        // 批量补种计划继续：逐个取目标，执行前校验底盘仍可种，无效跳过
+        if (batchPlantPlan != null) {
+            while (batchPlantPlan.hasNext()) {
+                FarmTarget target = batchPlantPlan.next();
+                if (verifier.targetStillValid(target)) {
+                    currentTask = new PlantTask(target, verifier, decision.reachDistance());
+                    setState(FarmState.PLANT);
+                    return;
+                }
+            }
+            batchPlantPlan = null; // 计划耗尽，丢弃
+        }
+
+        // 批量锄地计划继续：逐个取目标，执行前校验仍可开垦，无效跳过
+        if (batchTillPlan != null) {
+            while (batchTillPlan.hasNext()) {
+                FarmTarget target = batchTillPlan.next();
+                if (verifier.targetStillValid(target)) {
+                    currentTask = new TillTask(target, verifier, decision.reachDistance());
+                    setState(FarmState.TILL);
+                    return;
+                }
+            }
+            batchTillPlan = null; // 计划耗尽，丢弃
+            tillActiveNotified = false;
+            logger.accept("§a✓ 锄地完成");
+        }
+
+        // 锄地决策：优先把草方块/泥土开垦成耕地，为后续补种准备底盘
+        if (decision.tillWorkAvailable()) {
+            List<FarmTarget> tillTargets = decision.selectTillTargets();
+            if (tillTargets.isEmpty()) {
+                // 有可锄目标但没有锄头：跳过锄地，继续补种/收割
+                tillActiveNotified = false;
+                if (!noHoeNotified) {
+                    noHoeNotified = true;
+                    logger.accept("§c✗ 没有锄头 §8▸ 已跳过锄地");
+                }
+            } else {
+                noHoeNotified = false;
+                if (!tillActiveNotified) {
+                    tillActiveNotified = true;
+                    logger.accept("§7正在锄地...");
+                }
+                if (tillTargets.size() > 1) {
+                    batchTillPlan = new BatchTillPlan(tillTargets.subList(1, tillTargets.size()));
+                }
+                currentTask = new TillTask(tillTargets.get(0), verifier, decision.reachDistance());
+                setState(FarmState.TILL);
+                return;
+            }
+        } else {
+            tillActiveNotified = false;
+            noHoeNotified = false;
+        }
+
+        // 补种决策：优先批量补种空耕地（模块开启后先快速补满，再进入收割状态机等菜熟收）
+        List<FarmTarget> plantTargets = decision.selectPlantTargets();
+        if (!plantTargets.isEmpty()) {
+            if (plantTargets.size() > 1) {
+                batchPlantPlan = new BatchPlantPlan(plantTargets.subList(1, plantTargets.size()));
+            }
+            currentTask = new PlantTask(plantTargets.get(0), verifier, decision.reachDistance());
+            setState(FarmState.PLANT);
+            return;
+        }
+
+        // 收割决策：补满后（无空耕地）再收割成熟作物；单颗返回 1 个，批量返回 N 个
         List<FarmTarget> harvestTargets = decision.selectHarvestTargets();
         if (!harvestTargets.isEmpty()) {
             if (harvestTargets.size() > 1) {
@@ -169,14 +262,73 @@ public final class FarmController {
             return;
         }
 
-        // 补种决策：处理扫描发现的可补种空地
-        FarmTask plant = decision.decidePlant();
-        if (plant != null) {
-            currentTask = plant;
-            setState(FarmState.PLANT);
+        // 无任何可做工作：回农场中心点等待菜成熟（带看门狗防卡死）
+        updateIdleWait();
+    }
+
+    /** 农场范围中心点，用于无菜时站桩等待 */
+    private BlockPos farmCenter() {
+        BlockPos min = scanner.min();
+        BlockPos max = scanner.max();
+        return new BlockPos(
+            (min.getX() + max.getX()) / 2,
+            (min.getY() + max.getY()) / 2,
+            (min.getZ() + max.getZ()) / 2);
+    }
+
+    /**
+     * 无菜时的归位等待：回到农场中心点站桩，期间扫描器继续观察。
+     * 带超时看门狗，寻路不可用或超时则原地等待，避免历史上回中心点卡死的问题。
+     */
+    private void updateIdleWait() {
+        if (!scanner.bounded()) {
+            idleReturnTicks = 0;
+            lastIdleNotify = "";
+            setState(FarmState.OBSERVE);
             return;
         }
 
+        BlockPos center = farmCenter();
+
+        // 已到达中心点附近：停下等待
+        if (FarmNav.arrived(center, 2.5)) {
+            FarmNav.cancel();
+            idleReturnTicks = 0;
+            if (!"arrived".equals(lastIdleNotify)) {
+                lastIdleNotify = "arrived";
+                logger.accept("§a✓ 已就位农场中心点 §8▸ 等待菜成熟");
+            }
+            setState(FarmState.OBSERVE);
+            return;
+        }
+
+        // 寻路不可用：不归位，原地等待
+        if (!FarmNav.available()) {
+            idleReturnTicks = 0;
+            lastIdleNotify = "";
+            setState(FarmState.OBSERVE);
+            return;
+        }
+
+        // 未在寻路：下发回中心点寻路（首次或被打断后重新归位）
+        if (!FarmNav.pathing()) {
+            idleReturnTicks = 0;
+            if (!"returning".equals(lastIdleNotify)) {
+                lastIdleNotify = "returning";
+                logger.accept("§7正在回农场中心点等待...");
+            }
+            FarmNav.goTo(center, 4);
+            setState(FarmState.OBSERVE);
+            return;
+        }
+
+        // 正在归位寻路中：超时看门狗
+        if (++idleReturnTicks > CENTER_WAIT_TIMEOUT) {
+            FarmNav.cancel();
+            idleReturnTicks = 0;
+            lastIdleNotify = "timeout";
+            logger.accept("§e⚠ 回中心点超时 §8▸ 已原地等待");
+        }
         setState(FarmState.OBSERVE);
     }
 
@@ -185,6 +337,24 @@ public final class FarmController {
         // 收割成功 → 需要补种则接 PlantTask，否则接 CollectTask
         if (task instanceof HarvestTask harvest) {
             if (result.ok()) {
+                // 收割坐标已破坏，立即从缓存移除，避免补种前被再次选中
+                scanner.invalidate(harvest.target().pos());
+                // 批量模式：连续收割（跳过补种/拾取，加速），收割阶段结束后统一补种
+                if (batchPlan != null) {
+                    batchHarvested.add(harvest.target());
+                    while (batchPlan.hasNext()) {
+                        FarmTarget next = batchPlan.next();
+                        if (verifier.targetStillValid(next)) {
+                            currentTask = new HarvestTask(next, verifier, decision.reachDistance());
+                            setState(FarmState.HARVEST);
+                            return;
+                        }
+                    }
+                    batchPlan = null;
+                    startBatchReplant();
+                    return;
+                }
+                // 单个模式：补种 + 拾取
                 CropProfile crop = harvest.target().profile();
                 if (crop.needsReplant() && resources.countItem(crop.plantItem()) > 0) {
                     BlockPos soil = harvest.target().pos().below();
@@ -199,17 +369,51 @@ public final class FarmController {
             // 收割失败：导航系统不可用属系统级失败，丢弃整个批量计划；目标失效只跳过当前目标
             if (result == TaskResult.NAVIGATION_FAILED) {
                 batchPlan = null;
+                batchHarvested.clear();
             }
             scanner.invalidate(harvest.target().pos());
             setState(FarmState.OBSERVE);
             return;
         }
 
-        // 补种完成（无论成败）→ 拾取掉落物
+        // 补种完成 → 按来源衔接：批量补种计划回观察接下一个；批量收割统一补种接下一个；单个模式拾取
         if (task instanceof PlantTask plant) {
             scanner.invalidate(plant.target().pos());
+            // 批量补种计划进行中：回观察，由 tick() 的批量补种计划分支接下一个空耕地
+            if (batchPlantPlan != null) {
+                setState(FarmState.OBSERVE);
+                return;
+            }
+            // 批量收割后的统一补种：继续下一个补种，补完统一拾取
+            if (!batchHarvested.isEmpty()) {
+                startBatchReplant();
+                return;
+            }
+            // 单个模式收割后补种：拾取掉落物
             currentTask = new CollectTask(plant.target().pos().above(), collectRange);
             setState(FarmState.COLLECT);
+            return;
+        }
+
+        // 锄地完成 → 批量锄地计划回观察接下一个；无锄头/导航失败丢弃整批计划
+        if (task instanceof TillTask till) {
+            scanner.invalidate(till.target().pos());
+            tillActiveNotified = false;
+            if (result == TaskResult.NAVIGATION_FAILED || result == TaskResult.RESOURCE_INSUFFICIENT) {
+                batchTillPlan = null;
+            }
+            // 单目标锄地（无批量计划）在结束时播报结果；批量批次统一在计划耗尽处播报
+            if (batchTillPlan == null) {
+                if (result.ok()) {
+                    logger.accept("§a✓ 锄地完成");
+                } else if (result == TaskResult.RESOURCE_INSUFFICIENT) {
+                    noHoeNotified = true;
+                    logger.accept("§c✗ 没有锄头 §8▸ 已跳过锄地");
+                } else if (result != TaskResult.TARGET_INVALID) {
+                    logger.accept("§c✗ 锄地失败");
+                }
+            }
+            setState(FarmState.OBSERVE);
             return;
         }
 
@@ -219,14 +423,17 @@ public final class FarmController {
             return;
         }
 
-        // 物流任务（卸货/补货/毒马铃薯）完成 → 播报结果并返回农场
+        // 物流任务（卸货/补货/毒马铃薯）完成 → 播报结果并直接重新观察
         if (task.exclusive()) {
             if (result.ok()) {
                 logger.accept("§a✓ " + taskName(task) + "完成");
             } else {
                 logger.accept("§c✗ " + taskName(task) + "失败");
             }
-            setState(FarmState.RETURN_FARM);
+            // 直接重新观察：Scanner 扫描范围与玩家位置无关，无需先导航回农场中心，
+            // 避免物流后长时间归位等待导致「不再继续收菜」。
+            batchPlan = null;
+            setState(FarmState.OBSERVE);
             return;
         }
 
@@ -241,24 +448,38 @@ public final class FarmController {
         return "物流";
     }
 
-    /** 返回农场：导航到农场中心，到达后清理陈旧目标与批量计划并重新观察 */
-    private void tickReturnFarm() {
-        if (FarmNav.available()) {
-            BlockPos center = scanner.center();
-            if (!FarmNav.arrived(center, 3)) {
-                if (!FarmNav.pathing()) FarmNav.goTo(center, 9);
+    /** 批量补种阶段：从已收割清单取下一个补种，清单空则进入统一拾取 */
+    private void startBatchReplant() {
+        while (!batchHarvested.isEmpty()) {
+            FarmTarget target = batchHarvested.remove(0);
+            CropProfile crop = target.profile();
+            if (crop.needsReplant() && resources.countItem(crop.plantItem()) > 0) {
+                BlockPos soil = target.pos().below();
+                currentTask = new PlantTask(FarmTarget.plant(crop, soil), verifier, decision.reachDistance());
+                setState(FarmState.PLANT);
                 return;
             }
-            FarmNav.cancel();
         }
-        // 到达：清理陈旧状态，重新观察（不沿用物流前的旧目标/旧批量计划）
-        batchPlan = null;
-        setState(FarmState.OBSERVE);
+        startBatchCollect();
+    }
+
+    /** 批量统一拾取：以农场范围中心为参考，覆盖整个农场拾取掉落物 */
+    private void startBatchCollect() {
+        BlockPos min = scanner.min();
+        BlockPos max = scanner.max();
+        BlockPos center = new BlockPos(
+            (min.getX() + max.getX()) / 2,
+            (min.getY() + max.getY()) / 2,
+            (min.getZ() + max.getZ()) / 2);
+        double range = Math.max(Math.max(max.getX() - min.getX(), max.getZ() - min.getZ()), 2) / 2.0 + 3;
+        currentTask = new CollectTask(center, range);
+        setState(FarmState.COLLECT);
     }
 
     private FarmState stateFor(FarmTask task) {
         if (task instanceof HarvestTask) return FarmState.HARVEST;
         if (task instanceof PlantTask) return FarmState.PLANT;
+        if (task instanceof TillTask) return FarmState.TILL;
         if (task instanceof CollectTask) return FarmState.COLLECT;
         if (task instanceof UnloadTask) return FarmState.UNLOAD;
         if (task instanceof RestockTask) return FarmState.RESTOCK;
@@ -277,6 +498,13 @@ public final class FarmController {
             currentTask = null;
         }
         batchPlan = null;
+        batchPlantPlan = null;
+        batchTillPlan = null;
+        tillActiveNotified = false;
+        noHoeNotified = false;
+        idleReturnTicks = 0;
+        lastIdleNotify = "";
+        batchHarvested.clear();
         FarmNav.cancel();
         broker.reset();
         scanner.reset();

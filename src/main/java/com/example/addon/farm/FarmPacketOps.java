@@ -146,6 +146,34 @@ public final class FarmPacketOps {
     }
 
     /**
+     * 对方块本体右键使用锄头（锄地）。
+     *
+     * 与 {@link #useOnBlock} 不同，锄地改变的是方块自身（草方块/泥土 → 耕地），
+     * 因此预测登记的是目标方块自身，命中面上表面，朝向 UP。
+     */
+    public static boolean tillBlock(InteractionHand hand, BlockPos pos) {
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        ClientLevel level = mc.level;
+        if (player == null || level == null) return false;
+
+        Vec3 hitVec = new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
+        BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, pos, false);
+
+        BlockState original = level.getBlockState(pos);
+        BlockStatePredictionHandler handler = predictionHandler(level);
+
+        try (BlockStatePredictionHandler predicting = handler.startPredicting()) {
+            predicting.retainKnownServerState(pos, original, player);
+            int sequence = predicting.currentSequence();
+            player.connection.send(new ServerboundUseItemOnPacket(hand, hitResult, sequence));
+        }
+
+        player.swing(hand);
+        return true;
+    }
+
+    /**
      * 计算物品剩余耐久。不可损坏物品返回 Integer.MAX_VALUE。
      * 用于时运防爆锁：剩余耐久低于阈值时切空手停止破坏，防止工具爆掉。
      */
