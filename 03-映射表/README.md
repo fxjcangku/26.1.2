@@ -1,4 +1,4 @@
-# Mappings - Fabric 26.1.2 API 速查目录
+# 03-映射表 - Fabric 26.1.2 API 速查目录
 
 ## 快速开始
 
@@ -7,18 +7,18 @@
 .\gradlew.bat classes
 
 # 2. 生成类名索引
-node Mappings\工具\从MinecraftJAR生成索引.js
+node 03-映射表\工具\从MinecraftJAR生成索引.js
 
 # 3. 查询 API
-node Mappings\工具\查JARAPI.js Minecraft
-node Mappings\工具\查JARAPI.js LocalPlayer sendSystem
-node Mappings\工具\查JARAPI.js --找 sendCommand
+node 03-映射表\工具\查JARAPI.js Minecraft
+node 03-映射表\工具\查JARAPI.js LocalPlayer sendSystem
+node 03-映射表\工具\查JARAPI.js --找 sendCommand
 ```
 
 ## 目录结构
 
 ```
-Mappings/
+03-映射表/
 ├─ README.md                         快速入门（本文件）
 ├─ 工具/                             开发工具
 │  ├─ 从MinecraftJAR生成索引.js     从本地 JAR 生成索引
@@ -68,24 +68,24 @@ Mappings/
 .\gradlew.bat classes
 
 # 2. 生成索引
-node Mappings\工具\从MinecraftJAR生成索引.js
+node 03-映射表\工具\从MinecraftJAR生成索引.js
 
 # 3. 生成分类速查表（可选）
-node Mappings\工具\生成分类速查表.js
+node 03-映射表\工具\生成分类速查表.js
 
 # 4. 生成易错对照表（可选）
-node Mappings\工具\验证易错API.js
+node 03-映射表\工具\验证易错API.js
 ```
 
 ### 日常查询
 
 ```powershell
 # 查类和方法
-node Mappings\工具\查JARAPI.js Minecraft
-node Mappings\工具\查JARAPI.js LocalPlayer sendSystem
+node 03-映射表\工具\查JARAPI.js Minecraft
+node 03-映射表\工具\查JARAPI.js LocalPlayer sendSystem
 
 # 全局搜方法
-node Mappings\工具\查JARAPI.js --找 sendCommand
+node 03-映射表\工具\查JARAPI.js --找 sendCommand
 ```
 
 ## 为什么要这样设计
@@ -119,16 +119,16 @@ Minecraft 26.1 起，Mojang 官方发布**非混淆代码**：
 
 ```powershell
 # 方式 1：查看类名索引
-cat Mappings\生成的索引文件\类名索引-26.1.2.txt | Select-String "Identifier"
+cat 03-映射表\生成的索引文件\类名索引-26.1.2.txt | Select-String "Identifier"
 
 # 方式 2：使用查询工具
-node Mappings\工具\查JARAPI.js Identifier
+node 03-映射表\工具\查JARAPI.js Identifier
 ```
 
 ### 如何查找某个方法在哪个类里？
 
 ```powershell
-node Mappings\工具\查JARAPI.js --找 sendCommand
+node 03-映射表\工具\查JARAPI.js --找 sendCommand
 ```
 
 ### 为什么有些类找不到？

@@ -5,9 +5,9 @@ const fs = require('fs');
 const path = require('path');
 
 const mixin目录 = 'd:/mcaddon/26.1.2/src/main/java/com/example/addon/mixin';
-const MC源 = 'd:/mcaddon/26.1.2/26.1.2-开发参考库/Minecraft原始源码';
-const Meteor源 = 'd:/mcaddon/26.1.2/26.1.2-开发参考库/Meteor原始源码/meteordevelopment';
-const Baritone源 = 'd:/mcaddon/26.1.2/Baritone26.1.2/baritone-26.1.2-source/src/main/java';
+const MC源 = 'd:/mcaddon/26.1.2/01-开发参考库/Minecraft原始源码';
+const Meteor源 = 'd:/mcaddon/26.1.2/01-开发参考库/Meteor原始源码/meteordevelopment';
+const Baritone源 = 'd:/mcaddon/26.1.2/02-Baritone自动寻路/baritone-26.1.2-source/src/main/java';
 
 function 收集源码(根) {
     const map = new Map(); // 类FQN -> 文件路径

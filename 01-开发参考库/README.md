@@ -1,4 +1,4 @@
-# Minecraft 26.1.2 + Meteor Client 26.1.2-SNAPSHOT 中文开发参考资料库
+# 01-开发参考库 - Minecraft 26.1.2 + Meteor Client 26.1.2-SNAPSHOT 中文开发参考资料库
 
 > 本资料库是 yiyiaddon 项目以后所有客户端 addon 开发/修 Bug/查 API 的**第一优先事实来源**。
 > 用途：查 Minecraft API、查 Meteor API、修 Bug、开发新 Module、开发新 Addon、查 Packet/Event/Mixin/Player/Entity/Block/Item/Inventory/Screen/DataComponent/Enchantment/Registry/Movement/Network 及原生机制。
@@ -23,7 +23,7 @@
 ## 二、目录结构
 
 ```
-26.1.2-开发参考库/
+01-开发参考库/
 ├── README.md                   本文件：总入口 + 查询顺序铁律
 ├── Minecraft原始源码/          Minecraft 26.1.2 官方源码完整保留（6882 个 .java，Mojang 官方映射）
 │   ├── net/minecraft/...       主体源码
@@ -33,7 +33,7 @@
 │   └── meteordevelopment/orbit/          orbit 事件系统源码
 ├── API参考/
 │   ├── Minecraft/               15 篇：玩家/实体/世界与方块/物品与物品栏/数据组件/附魔/网络/数据包/移动/碰撞/注册表/命令/GUI与界面/Mixin/其他
-│   └── Meteor/                  14 篇：Module模块/Setting设置/Event事件/Packet数据包/Network网络/玩家工具/物品栏工具/方块工具/实体工具/渲染/命令/Addon/Mixin/其他
+│   └── Meteor客户端/            14 篇：Module模块/Setting设置/Event事件/Packet数据包/Network网络/玩家工具/物品栏工具/方块工具/实体工具/渲染/命令/Addon/Mixin/其他
 ├── 快速索引/                    类/方法/字段/数据包/事件/Mixin/注册表/数据组件/Setting/Module 索引 + 问题检索地图
 ├── 开发机制/                    20+ 篇机制文档（玩家移动/网络/数据包生命周期/位置同步/物品栏/容器同步/数据组件/附魔/Module生命周期/Event生命周期/Setting系统/Command系统/Tick/世界切换/常见错误/版本规则）
 ├── 真实代码示例/                10 篇从真实源码提取的开发模式示例
@@ -68,12 +68,12 @@
 - 资料库中**查到了也建议在引用前 Grep 原始源码复核一次**（防止文档笔误）。
 - 禁止凭旧版本经验（旧 Yarn 名、旧 Minecraft API、旧 Meteor API）生成代码。
 - 所有文档中的「待源码确认」标记 = 尚未核实，禁止直接使用。
-- 命令行速查工具（整合自 Mappings/）：
+- 命令行速查工具（整合自 03-映射表/）：
 
 ```powershell
-node "d:\mcaddon\26.1.2\26.1.2-开发参考库\工具\查JARAPI.js" LocalPlayer          # 查类全路径+字段+方法
-node "d:\mcaddon\26.1.2\26.1.2-开发参考库\工具\查JARAPI.js" LocalPlayer sendSys  # 类内搜方法
-node "d:\mcaddon\26.1.2\26.1.2-开发参考库\工具\查JARAPI.js" --找 sendCommand     # 全局搜方法
+node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" LocalPlayer          # 查类全路径+字段+方法
+node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" LocalPlayer sendSys  # 类内搜方法
+node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" --找 sendCommand     # 全局搜方法
 ```
 
 ---

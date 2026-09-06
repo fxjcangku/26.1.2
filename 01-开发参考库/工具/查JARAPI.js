@@ -1,9 +1,9 @@
 /**
  * 从本地 Minecraft JAR 查询类和方法
  * 用法：
- *   node Mappings/工具/查JARAPI.js Minecraft
- *   node Mappings/工具/查JARAPI.js LocalPlayer sendSystem
- *   node Mappings/工具/查JARAPI.js --找 sendCommand
+ *   node 03-映射表/工具/查JARAPI.js Minecraft
+ *   node 03-映射表/工具/查JARAPI.js LocalPlayer sendSystem
+ *   node 03-映射表/工具/查JARAPI.js --找 sendCommand
  */
 
 const fs = require('fs');
@@ -30,7 +30,7 @@ function 查找JAR(目录) {
 }
 
 if (!fs.existsSync(索引文件)) {
-    console.error('找不到类名索引，请先执行：node Mappings/工具/从MinecraftJAR生成索引.js');
+    console.error('找不到类名索引，请先执行：node 03-映射表/工具/从MinecraftJAR生成索引.js');
     process.exit(1);
 }
 

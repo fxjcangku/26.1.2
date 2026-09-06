@@ -16,7 +16,7 @@
 
 关键铁律提醒（下一步开发前逐条对照）：
 - 规范注释只增不删；证据驱动排查（Bug 先埋点取证据）；中文 + 日期归档。
-- API 先查后写：Mojang 官方映射，查 `node Mappings/工具/查JARAPI.js <类名>`。
+- API 先查后写：Mojang 官方映射，查 `node 03-映射表/工具/查JARAPI.js <类名>`。
 - 分类铁律：新功能独立英文包；中文注释；禁 emoji（用 ✓ ✗ ⚠ ▸）。
 - 消息规范：前缀走 `YiyiaddonModule.formatMessage`；面板按钮走 `addUniformButton`；强调色走 `highlight*`；开关绿 §a / 关红 §c 不颠倒。
 

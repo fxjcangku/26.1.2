@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const 库 = 'd:/mcaddon/26.1.2/26.1.2-开发参考库';
+const 库 = 'd:/mcaddon/26.1.2/01-开发参考库';
 const MC源 = path.join(库, 'Minecraft原始源码');
 const Meteor源 = path.join(库, 'Meteor原始源码');
 const 类名索引 = fs.readFileSync(path.join(库, '生成的索引文件', '类名索引-26.1.2.txt'), 'utf8')

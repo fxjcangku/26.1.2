@@ -1,8 +1,8 @@
 /**
  * 验证常见 Yarn / 旧版类名在 26.1.2 官方映射里是否存在
  *
- * 用法：node Mappings/工具/验证易错API.js
- * 输出：Mappings/易错对照表-26.1.2.txt
+ * 用法：node 03-映射表/工具/验证易错API.js
+ * 输出：03-映射表/易错对照表-26.1.2.txt
  *
  * 为什么需要：26.1.2（1.21.11）之后 Mojang 官方映射有大量改名，
  * 很多 AI 和教程还在用 Yarn 名或旧官方名，直接抄会编译不过。
@@ -17,7 +17,7 @@ const 索引文件 = path.join(根目录, '生成的索引文件', '类名索引
 
 if (!fs.existsSync(索引文件)) {
     console.error(`找不到类名索引：${索引文件}`);
-    console.error('请先运行 node Mappings/工具/从MinecraftJAR生成索引.js');
+    console.error('请先运行 node 03-映射表/工具/从MinecraftJAR生成索引.js');
     process.exit(1);
 }
 
@@ -115,8 +115,8 @@ const 输出 =
 `# 26.1.2 易错 API 对照表（Yarn / 旧官方名 → 26.1.2 官方映射）
 #
 # 版本：Minecraft 26.1.2（内部版本号 1.21.11）
-# 事实来源：Mappings/类名索引-26.1.2.txt（由本地 Minecraft JAR 生成）
-# 生成命令：node Mappings/工具/验证易错API.js
+# 事实来源：03-映射表/类名索引-26.1.2.txt（由本地 Minecraft JAR 生成）
+# 生成命令：node 03-映射表/工具/验证易错API.js
 #
 # 图例：
 #   X  该名称在 26.1.2 中不存在，必须改用右侧名称（最容易踩的坑）
@@ -134,4 +134,4 @@ ${结果行.join('\n')}
 
 fs.writeFileSync(path.join(根目录, '生成的索引文件', '易错对照表-26.1.2.txt'), 输出, 'utf8');
 console.log(`已改名 ${已改名数} 个，未改名 ${未改名数} 个，待复查 ${待查数} 个`);
-console.log('输出：Mappings/易错对照表-26.1.2.txt');
+console.log('输出：03-映射表/易错对照表-26.1.2.txt');

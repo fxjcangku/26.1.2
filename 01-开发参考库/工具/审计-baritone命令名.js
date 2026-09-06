@@ -1,6 +1,6 @@
 // 校验 BaritoneCommandLongDescMixin 的 41 个 targets 字符串类在 baritone-fabric-26.1.2.jar 中存在
 const { execSync } = require('child_process');
-const jar = 'd:/mcaddon/26.1.2/Baritone26.1.2/baritone-fabric-26.1.2.jar';
+const jar = 'd:/mcaddon/26.1.2/02-Baritone自动寻路/baritone-fabric-26.1.2.jar';
 const targets = `baritone.command.defaults.AxisCommand
 baritone.command.defaults.BlacklistCommand
 baritone.command.defaults.BuildCommand

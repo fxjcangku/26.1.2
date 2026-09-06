@@ -38,9 +38,9 @@ package com.example.addon.convention;
 //   1. 规范注释只增不删：不得删除、精简或改写任何一条既有规范。
 //   2. 证据驱动排查：用户报 Bug 后，先按第六章协议埋点取运行时证据再下结论，
 //      禁止凭静态代码推测直接改业务逻辑。
-//   3. 中文 + 日期归档：调试产物一律进 Diagnostics/，文档中文命名并带日期前缀。
+//   3. 中文 + 日期归档：调试产物一律进 08-诊断记录/，文档中文命名并带日期前缀。
 //   4. API 先查后写：本项目用 Mojang 官方映射，不是 Yarn。写任何没在现有代码
-//      出现过的 net.minecraft API 之前，先查 Mappings 工具确认它在 26.1.2 真实存在。
+//      出现过的 net.minecraft API 之前，先查 03-映射表/工具 确认它在 26.1.2 真实存在。
 //   5. 分类铁律：代码只能放对分类的目录，新功能必须新建独立英文文件夹（包）。
 //
 // ── 常见违规（请自查，这些都是过去真实发生过的错误）────────────────────────
@@ -50,12 +50,12 @@ package com.example.addon.convention;
 //   ✗ 改了源码赋值就认为可序列化字段已修复 → 必须同时处理 fromTag 读档路径
 //   ✗ 修复后把埋点留在业务代码里 → 必须清理到零残留，含无用 import
 //   ✗ 用英文或拼音命名调试文档 → 用户看不懂，一律中文 + YYYY-MM-DD 前缀
-//   ✗ 把调试文件散落在项目根目录 → 全部收进 Diagnostics/ 对应子目录
+//   ✗ 把调试文件散落在项目根目录 → 全部收进 08-诊断记录/ 对应子目录
 //   ✗ 预先埋一套「通用日志系统」 → 埋点是针对单个 Bug 的一次性工具
 //   ✗ 只依赖 GameJoinedEvent 等一次性事件 → onActivate() 必须检查当前状态
 //      （2026-08-26 修复：ServerDetector 进服后开启不检测）
 //
-// 判断标准很简单：用户下次打开 Diagnostics/ 目录，能不能一眼看懂每个文件
+// 判断标准很简单：用户下次打开 08-诊断记录/ 目录，能不能一眼看懂每个文件
 // 是什么、什么时候修的、修什么问题。看不懂就是你没做对。
 //
 // ════════════════════════════════════════════════════════════════════════════
@@ -115,7 +115,7 @@ package com.example.addon.convention;
 // ── emoji 使用范围（2026-08-28 澄清，重要）────────────────────────────────
 //   · 本 addon 的 Java 源码、注释、游戏内文本：禁止 emoji
 //     （Minecraft 字体渲染器不支持，会导致后续文字无法显示）
-//   · 后台网站代码（backend/worker.js、backend/admin-html.js 的 HTML/CSS/JS）：
+//   · 后台网站代码（06-后端API/worker.js、06-后端API/admin-modern.js 的 HTML/CSS/JS）：
 //     允许使用 emoji，因为网站运行在真实浏览器 / 系统字体中，emoji 渲染正常
 //   · 个人习惯：网站 UI 用 emoji 提升辨识度，个人 Java 代码保持无 emoji
 //   · 禁止使用 emoji 时，用 Unicode 符号代替（▸ ⚠ ✓ ✗ 等）
@@ -175,7 +175,7 @@ package com.example.addon.convention;
 //   ✓ 后台登录账号：admin
 //   ✓ 后台登录密码：fxj010517.（通过 wrangler secret 设置 ADMIN_PASSWORD，禁止写死）
 //
-//   ✓ Workers 源码位于 backend/ 目录（worker.js + admin-html.js + wrangler.toml）
+//   ✓ Workers 源码位于 06-后端API/ 目录（worker.js + admin-modern.js + wrangler.toml）
 //   ✓ 客户端实现：
 //       YiyiaddonWelcomeService（注册）、YiyiaddonHeartbeatService（心跳/延迟/模块）
 //       YiyiaddonTelemetryService（崩溃/异常/远程配置）
@@ -367,20 +367,20 @@ package com.example.addon.convention;
 //
 //   · 所有报告（审计/开发/测试/数据档案等）文件名必须全中文，禁止英文缩写。
 //   · 文件名必须带日期前缀：YYYY-MM-DD-主题名，天然按时间排序。
-//   · 报告必须按主题分类存放：开发报告/ 下的中文分类目录
+//   · 报告必须按主题分类存放：07-开发报告/ 下的中文分类目录
 //     （现有分类：API审查/ 绕过模块/ 自动农场/ 装备附魔），新主题新增中文分类目录，
-//     分类型风格参考 Diagnostics/ 的会话记录分类。
-//   · 资料库自身的报告放 26.1.2-开发参考库/报告/，同样遵守中文名 + 日期前缀。
+//     分类型风格参考 08-诊断记录/ 的会话记录分类。
+//   · 资料库自身的报告放 01-开发参考库/报告/，同样遵守中文名 + 日期前缀。
 //
 // 【5.12 API 开发铁律（2026-09-03 新增，全项目统一，最高优先级）】
 //
 //   · 凡涉及 Minecraft API、Meteor API、运行机制、Event、Module、Packet、Mixin
-//     的代码，必须先查 26.1.2-开发参考库（Meteor/Minecraft 原始源码 +
+//     的代码，必须先查 01-开发参考库（Meteor/Minecraft 原始源码 +
 //     API 中文文档 + 快速索引 + 真实代码示例），再动手写代码。
 //   · 参考优先级：①参考库文档 → ②对应原始源码（冲突以原始源码为准）→
 //     ③当前项目源码 → ④gradle 缓存/其他资料。
 //   · 参考库查不到时，标记「待源码确认」，禁止凭模型记忆猜测 API。
-//   · 开发完成后必须跑 26.1.2-开发参考库/工具/ 下的审计脚本
+//   · 开发完成后必须跑 01-开发参考库/工具/ 下的审计脚本
 //     （import对账 / 负面清单 / mixin注册）自检，确认无漏注入、死配置、旧 API。
 //
 // ════════════════════════════════════════════════════════════════════════════
@@ -396,11 +396,11 @@ package com.example.addon.convention;
 // 【6.2 命名与目录】
 //   · 命名规范：会话名、文档名、日志名、目录名一律中文，禁止英文缩写或拼音。
 //   · 日期前缀：所有会话文档与 .env 必须带 YYYY-MM-DD- 前缀，天然按时间排序。
-//   · 目录规范：所有诊断产物统一收进 Diagnostics/，四个子目录职责固定：
-//       Diagnostics/工具/            通用脚本（调试监听服务.js、日志分析器.js）
-//       Diagnostics/会话记录/进行中/ 正在排查的会话文档 {日期}-{中文名}.md
-//       Diagnostics/会话记录/已修复/ 已结案的会话文档，即历史修复台账
-//       Diagnostics/运行日志/        .env 与 .ndjson 运行时证据（.gitignore 排除）
+//   · 目录规范：所有诊断产物统一收进 08-诊断记录/，四个子目录职责固定：
+//       08-诊断记录/工具/            通用脚本（调试监听服务.js、日志分析器.js）
+//       08-诊断记录/会话记录/进行中/ 正在排查的会话文档 {日期}-{中文名}.md
+//       08-诊断记录/会话记录/已修复/ 已结案的会话文档，即历史修复台账
+//       08-诊断记录/运行日志/        .env 与 .ndjson 运行时证据（.gitignore 排除）
 //   · 会话创建：每个独立 Bug 建一个会话，一个会话只服务一个问题与一轮验证。
 //   · 监听配置：.env 固定包含 DEBUG_SERVER_URL=http://127.0.0.1:7777/event 与
 //     唯一 DEBUG_SESSION_ID={日期}-{中文会话名}。
@@ -421,18 +421,18 @@ package com.example.addon.convention;
 //
 // 【6.5 八步执行流程】
 //   0. 目录布局（固定，勿变）
-//      Diagnostics/
+//      08-诊断记录/
 //      ├─ 工具/               调试监听服务.js
 //      ├─ 会话记录/
 //      │  ├─ 进行中/          {日期}-{中文会话名}.md
 //      │  └─ 已修复/          {日期}-{中文会话名}.md
 //      └─ 运行日志/           {日期}-{会话名}.env + 调试日志-{会话名}.ndjson
-//   1. 创建调试记录文件：Diagnostics/会话记录/进行中/{日期}-{中文会话名}.md
+//   1. 创建调试记录文件：08-诊断记录/会话记录/进行中/{日期}-{中文会话名}.md
 //   2. 选择调试方式：轻量（游戏内 info() 日志+截图）或深度（监听服务+NDJSON）
 //   3. 深度调试配置：写 DEBUG_SERVER_URL 与 DEBUG_SESSION_ID，启动监听服务
 //   4. 按需编写针对性埋点：用 // #region debug-point {会话名} 与 // #endregion 包裹
 //   5. 构建并复现：构建测试版，启动监听服务确认可收事件后让用户复现
-//   6. 分析证据：跑 node Diagnostics/工具/日志分析器.js {会话名}，不要手翻 NDJSON
+//   6. 分析证据：跑 node 08-诊断记录/工具/日志分析器.js {会话名}，不要手翻 NDJSON
 //      （时间线 / 调用栈聚合 / 状态迁移 / 节律分析四类结论）
 //   7. 修复并验证：仅实施日志证明的最小修复，重新构建，runId 切 verify-N
 //   8. 结案归档：改已修复 → 移文档 → 摘埋点 → 重新构建确认无残留
@@ -503,14 +503,14 @@ package com.example.addon.convention;
 //     ✗ new ResourceLocation(ns, path)  ✓ Identifier.fromNamespaceAndPath(ns, path)
 //
 // 【7.3 不确定就查，禁止凭记忆猜】
-//   项目内建好映射速查体系（Mappings/，事实来源是官方映射原文件）：
-//     node Mappings/工具/查API.js Identifier           查类的完整路径与全部方法
-//     node Mappings/工具/查API.js LocalPlayer sendSys  在指定类里搜方法
-//     node Mappings/工具/查API.js --找 sendCommand     不确定在哪个类时全局搜
-//     Mappings/易错对照表-26.1.2.txt   39 个高频 API 新旧对照
-//     Mappings/简名对照-26.1.2.txt     简名 → 完整包路径，写 import 时查
-//     Mappings/分类速查/               按功能域分 15 类，带中文用途注释
-//   Reference/ 放已完成 26.1.2 迁移的第三方源码（只读思路，禁止复制代码或嵌套 JAR）。
+//   项目内建好映射速查体系（03-映射表/，事实来源是官方映射原文件）：
+//     node 03-映射表/工具/查API.js Identifier           查类的完整路径与全部方法
+//     node 03-映射表/工具/查API.js LocalPlayer sendSys  在指定类里搜方法
+//     node 03-映射表/工具/查API.js --找 sendCommand     不确定在哪个类时全局搜
+//     03-映射表/易错对照表-26.1.2.txt   39 个高频 API 新旧对照
+//     03-映射表/简名对照-26.1.2.txt     简名 → 完整包路径，写 import 时查
+//     03-映射表/分类速查/               按功能域分 15 类，带中文用途注释
+//   09-JsMacros脚本/ 放已完成 26.1.2 迁移的第三方源码（只读思路，禁止复制代码或嵌套 JAR）。
 //
 // 【7.4 本项目已验证可用的常用 API】
 //   客户端与玩家（基类已提供 protected 的 mc 字段，直接用）
@@ -550,8 +550,8 @@ package com.example.addon.convention;
 // ════════════════════════════════════════════════════════════════════════════
 //
 //   本项目使用 ProGuard 7.8.1 进行代码混淆，混淆配置在 build.gradle.kts 中。
-//   混淆相关文件统一放 Obfuscation/ 目录：
-//     Obfuscation/
+//   混淆相关文件统一放 04-混淆配置/ 目录：
+//     04-混淆配置/
 //     ├─ 字典/混淆字典.txt                 209 条易混字符（l/I/O/0/1 全排列）
 //     ├─ 工具/还原崩溃日志.js               崩溃日志反混淆工具
 //     └─ 映射存档/                         每个版本的完整映射 + 自动备份
@@ -565,14 +565,14 @@ package com.example.addon.convention;
 //   映射存档/ 目录必须提交 Git（build/ 在 .gitignore 且 clean 会删掉，映射丢失无法还原）。
 //
 //   【还原崩溃日志】
-//     node Obfuscation/工具/还原崩溃日志.js <日志路径> <版本号>
-//     node Obfuscation/工具/还原崩溃日志.js --查 <混淆名>
-//     node Obfuscation/工具/还原崩溃日志.js --列表
+//     node 04-混淆配置/工具/还原崩溃日志.js <日志路径> <版本号>
+//     node 04-混淆配置/工具/还原崩溃日志.js --查 <混淆名>
+//     node 04-混淆配置/工具/还原崩溃日志.js --列表
 //
 //   【发布流程检查清单】
 //   1. libs.versions.toml 中 mod-version 已更新
 //   2. jar 文件名自动跟随版本号（archiveFileName 控制）
-//   3. 映射文件已生成到 Obfuscation/映射存档/
+//   3. 映射文件已生成到 04-混淆配置/映射存档/
 //   4. 映射文件已提交 Git
 //   5. Release 页面已上传 jar 和 SHA256
 //   6. Release notes 已说明混淆配置变化
@@ -608,7 +608,7 @@ package com.example.addon.convention;
 //   【映射文件保护】
 //   映射文件是「还原类名的钥匙」，随 source 分支入库有泄露风险。构建期把
 //   ProGuard 明文映射加密成 Base64 密文再落盘，密钥随机生成存
-//   Obfuscation/映射密钥.txt（.gitignore 排除，不入库）。
+//   04-混淆配置/映射密钥.txt（.gitignore 排除，不入库）。
 //   · 还原崩溃日志.js 读映射时先用同一密钥 XOR 解密；密钥文件丢失则该版本
 //     映射永远无法还原，必须本地备份密钥。
 //   · printmapping 先写 build/ 临时明文，任务 doLast 加密成密文后删除临时明文。

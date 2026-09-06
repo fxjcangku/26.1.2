@@ -21,7 +21,7 @@ const 密钥文件 = path.join(__dirname, '..', '映射密钥.txt');
 /** 读映射密钥（32 字节 hex），不存在则提示先生成 */
 function 读密钥() {
     if (!fs.existsSync(密钥文件)) {
-        console.log('\n找不到映射密钥文件 Obfuscation/映射密钥.txt。');
+        console.log('\n找不到映射密钥文件 04-混淆配置/映射密钥.txt。');
         console.log('跑一次 gradlew buildOfficial 会自动生成（密钥不入库，需本地备份，丢失则映射无法还原）。\n');
         process.exit(1);
     }

@@ -150,7 +150,7 @@ tasks {
 
     register<Exec>("scanMeteorUiText") {
         group = "verification"
-        commandLine("powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts/scan-meteor-ui-text.ps1")
+        commandLine("powershell", "-ExecutionPolicy", "Bypass", "-File", "05-脚本工具/scan-meteor-ui-text.ps1")
     }
 
     // 字符串加密：在 ProGuard 混淆之前，把源码字符串常量替换为运行时解密调用。
@@ -275,10 +275,10 @@ tasks {
         // 保留访问边界，避免改变 Mixin 与第三方类之间的可见性语义。
         // allowaccessmodification()
         
-        // 映射文件加密后写进 Obfuscation/映射存档/：明文只经 build/ 临时文件，加密后删除。
-        // 密文即使随仓库泄露也无法直接还原类名，需 Obfuscation/映射密钥.txt 才能解密。
+        // 映射文件加密后写进 04-混淆配置/映射存档/：明文只经 build/ 临时文件，加密后删除。
+        // 密文即使随仓库泄露也无法直接还原类名，需 04-混淆配置/映射密钥.txt 才能解密。
         // build/ 在 .gitignore 内，且 gradlew clean 会整个删掉——映射一旦丢失，
-        // 该版本的崩溃日志就永远无法还原成真实类名了，所以最终密文必须落在 Obfuscation/。
+        // 该版本的崩溃日志就永远无法还原成真实类名了，所以最终密文必须落在 04-混淆配置/。
         val mappingPlain = layout.buildDirectory.file("obfuscation-mapping-v${libs.versions.mod.version.get()}.txt")
         printmapping(mappingPlain.get().asFile)
 
@@ -286,8 +286,8 @@ tasks {
         doLast {
             val plainFile = mappingPlain.get().asFile
             if (plainFile.exists()) {
-                val key = loadOrCreateMappingKey(file("Obfuscation/映射密钥.txt"))
-                val 目标 = file("Obfuscation/映射存档/混淆映射-v${libs.versions.mod.version.get()}.txt")
+                val key = loadOrCreateMappingKey(file("04-混淆配置/映射密钥.txt"))
+                val 目标 = file("04-混淆配置/映射存档/混淆映射-v${libs.versions.mod.version.get()}.txt")
                 目标.parentFile.mkdirs()
                 目标.writeText(xorEncryptBase64(plainFile.readText(StandardCharsets.UTF_8), key), StandardCharsets.UTF_8)
                 plainFile.delete()
@@ -297,7 +297,7 @@ tasks {
         // 自定义字典：让混淆后的名字更难辨认（O0/l1/I1 这类易混字符）
         // 必须用 file() 传绝对路径，直接传相对路径字符串 ProGuard 找不到文件，
         // 且不会报错——只会静默退回默认的 a/b/c 命名，很容易误判为「已生效」。
-        val 字典 = file("Obfuscation/字典/混淆字典.txt")
+        val 字典 = file("04-混淆配置/字典/混淆字典.txt")
         // 声明为任务输入，确保字典内容改变时会重新混淆，否则 Gradle 会用缓存
         inputs.file(字典)
         obfuscationdictionary(字典)
@@ -735,7 +735,7 @@ abstract class EncryptStringsTask : DefaultTask() {
 
 // ── 映射文件加密辅助（XOR + Base64）────────────────────────────────────────
 // 映射文件是「还原类名的钥匙」，随 source 分支入库有泄露风险。这里把它加密成密文，
-// 密钥随机生成存 Obfuscation/映射密钥.txt（加入 .gitignore，不进仓库）。
+// 密钥随机生成存 04-混淆配置/映射密钥.txt（加入 .gitignore，不进仓库）。
 // 还原崩溃日志.js 用同一密钥解密，密钥文件丢失则该版本映射无法还原。
 
 fun loadOrCreateMappingKey(keyFile: File): ByteArray {

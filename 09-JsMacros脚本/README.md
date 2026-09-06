@@ -6,14 +6,14 @@
 
 ## 为什么需要
 
-26.1.2（内部版本 1.21.11）Mojang 取消混淆并大规模改名，Yarn 映射退役。`Mappings/` 能告诉你某个类是否存在、方法签名长什么样，但回答不了「实际项目怎么组织这段代码」。
+26.1.2（内部版本 1.21.11）Mojang 取消混淆并大规模改名，Yarn 映射退役。`03-映射表/` 能告诉你某个类是否存在、方法签名长什么样，但回答不了「实际项目怎么组织这段代码」。
 
-JsMacros Reloaded 是已经完成 26.1.2 迁移的真实项目，作者在移植 PR 里逐条记录了改名。拿它和 `Mappings/` 交叉验证，比单看映射文件可靠。
+JsMacros Reloaded 是已经完成 26.1.2 迁移的真实项目，作者在移植 PR 里逐条记录了改名。拿它和 `03-映射表/` 交叉验证，比单看映射文件可靠。
 
 ## 当前内容
 
 ```
-Reference/
+09-JsMacros脚本/
 ├─ README.md                                    本文件，入库
 └─ JsMacros-26.1.2/
    ├─ mods/jsmacros-26.1.2-2.0.3-fabric.jar     成品，29.28 MB
@@ -31,14 +31,14 @@ bb8664f2050b070d231653a20e2077fd95abc5a3ab28a8d2f10fe95b8b79fcb9
 ## 重建
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "Reference\JsMacros-26.1.2\mods"
+New-Item -ItemType Directory -Force -Path "09-JsMacros脚本\JsMacros-26.1.2\mods"
 Invoke-WebRequest `
   -Uri "https://github.com/grepsedawk/JSMacros/releases/download/v2.0.3/jsmacros-26.1.2-2.0.3-fabric.jar" `
-  -OutFile "Reference\JsMacros-26.1.2\mods\jsmacros-26.1.2-2.0.3-fabric.jar"
+  -OutFile "09-JsMacros脚本\JsMacros-26.1.2\mods\jsmacros-26.1.2-2.0.3-fabric.jar"
 
 git clone --depth 1 --branch v2.0.3 `
   https://github.com/grepsedawk/JSMacros.git `
-  Reference\JsMacros-26.1.2\source
+  09-JsMacros脚本\JsMacros-26.1.2\source
 ```
 
 ## 怎么查
@@ -65,4 +65,4 @@ git clone --depth 1 --branch v2.0.3 `
 
 ## 新增其他参考项目
 
-同样的结构：`Reference/{项目名}-{版本}/`，源码放 `source/`，成品放 `mods/`，然后在本文件补一条说明和重建命令。
+同样的结构：`09-JsMacros脚本/{项目名}-{版本}/`，源码放 `source/`，成品放 `mods/`，然后在本文件补一条说明和重建命令。

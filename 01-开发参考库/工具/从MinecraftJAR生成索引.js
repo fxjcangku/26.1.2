@@ -1,6 +1,6 @@
 /**
  * 从本地 Minecraft JAR 生成类名索引
- * 用法：node Mappings/工具/从MinecraftJAR生成索引.js
+ * 用法：node 03-映射表/工具/从MinecraftJAR生成索引.js
  * 输出：类名索引-26.1.2.txt、简名对照-26.1.2.txt
  */
 

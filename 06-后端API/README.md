@@ -35,7 +35,7 @@ wrangler login
 ### 第四步：创建 D1 数据库
 
 ```bash
-cd backend
+cd 06-后端API
 wrangler d1 create yiyiaddon-users
 ```
 
