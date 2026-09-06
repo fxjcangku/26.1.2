@@ -1,0 +1,692 @@
+package net.minecraft.client.renderer.chunk;
+
+import com.mojang.blaze3d.GraphicsWorkarounds;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.TlsfAllocator;
+import com.mojang.blaze3d.vertex.UberGpuBuffer;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import java.nio.ByteBuffer;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.minecraft.CrashReport;
+import net.minecraft.TracingExecutor;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.RenderBuffers;
+import net.minecraft.client.renderer.SectionBufferBuilderPack;
+import net.minecraft.client.renderer.SectionBufferBuilderPool;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
+import net.minecraft.util.Util;
+import net.minecraft.util.VisibleForDebug;
+import net.minecraft.util.profiling.Profiler;
+import net.minecraft.util.profiling.Zone;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
+
+@Environment(EnvType.CLIENT)
+public class SectionRenderDispatcher {
+	private final CompileTaskDynamicQueue compileQueue = new CompileTaskDynamicQueue();
+	private final SectionBufferBuilderPack fixedBuffers;
+	private final SectionBufferBuilderPool bufferPool;
+	private volatile boolean closed;
+	private final TracingExecutor executor;
+	private ClientLevel level;
+	private final LevelRenderer renderer;
+	private final AtomicReference<Vec3> cameraPosition = new AtomicReference(Vec3.ZERO);
+	private SectionCompiler sectionCompiler;
+	private final Map<ChunkSectionLayer, SectionRenderDispatcher.SectionUberBuffers> chunkUberBuffers;
+	private final ReentrantLock copyLock = new ReentrantLock();
+
+	public SectionRenderDispatcher(
+		final ClientLevel level,
+		final LevelRenderer renderer,
+		final TracingExecutor executor,
+		final RenderBuffers renderBuffers,
+		final SectionCompiler sectionCompiler
+	) {
+		this.level = level;
+		this.renderer = renderer;
+		this.fixedBuffers = renderBuffers.fixedBufferPack();
+		this.bufferPool = renderBuffers.sectionBufferPool();
+		this.executor = executor;
+		this.sectionCompiler = sectionCompiler;
+		int vertexBufferHeapSize = 134217728;
+		int indexBufferHeapSize = 33554432;
+		int vertexStagingBufferSize = 33554432;
+		int indexStagingBufferSize = 2097152;
+		GpuDevice gpuDevice = RenderSystem.getDevice();
+		GraphicsWorkarounds workarounds = GraphicsWorkarounds.get(gpuDevice);
+		this.chunkUberBuffers = Util.makeEnumMap(
+			ChunkSectionLayer.class,
+			layer -> {
+				VertexFormat vertexFormat = layer.pipeline().getVertexFormat();
+				UberGpuBuffer<SectionMesh> vertexUberBuffer = new UberGpuBuffer<>(
+					layer.label(), 32, 134217728, vertexFormat.getVertexSize(), gpuDevice, 33554432, workarounds
+				);
+				UberGpuBuffer<SectionMesh> indexUberBuffer = layer == ChunkSectionLayer.TRANSLUCENT
+					? new UberGpuBuffer<>(layer.label(), 64, 33554432, 8, gpuDevice, 2097152, workarounds)
+					: null;
+				return new SectionRenderDispatcher.SectionUberBuffers(vertexUberBuffer, indexUberBuffer);
+			}
+		);
+	}
+
+	public void setLevel(final ClientLevel level, final SectionCompiler sectionCompiler) {
+		this.level = level;
+		this.sectionCompiler = sectionCompiler;
+	}
+
+	private void runTask() {
+		if (!this.closed) {
+			SectionRenderDispatcher.RenderSection.CompileTask task = this.compileQueue.poll((Vec3)this.cameraPosition.get());
+			if (task != null && !task.isCompleted.get() && !task.isCancelled.get()) {
+				try {
+					SectionBufferBuilderPack buffer = (SectionBufferBuilderPack)Objects.requireNonNull(this.bufferPool.acquire());
+					SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult result = task.doTask(buffer);
+					task.isCompleted.set(true);
+					if (result == SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.SUCCESSFUL) {
+						buffer.clearAll();
+					} else {
+						buffer.discardAll();
+					}
+
+					this.bufferPool.release(buffer);
+				} catch (NullPointerException var4) {
+					this.compileQueue.add(task);
+				} catch (Exception var5) {
+					Minecraft.getInstance().delayCrash(CrashReport.forThrowable(var5, "Batching sections"));
+				}
+			}
+		}
+	}
+
+	public void setCameraPosition(final Vec3 cameraPosition) {
+		this.cameraPosition.set(cameraPosition);
+	}
+
+	@Nullable
+	public SectionRenderDispatcher.RenderSectionBufferSlice getRenderSectionSlice(final SectionMesh sectionMesh, final ChunkSectionLayer layer) {
+		SectionRenderDispatcher.SectionUberBuffers uberBuffers = (SectionRenderDispatcher.SectionUberBuffers)this.chunkUberBuffers.get(layer);
+		TlsfAllocator.Allocation vertexSlice = uberBuffers.vertexBuffer.getAllocation(sectionMesh);
+		if (vertexSlice == null) {
+			return null;
+		} else {
+			long vertexBufferOffset = vertexSlice.getOffsetFromHeap();
+			TlsfAllocator.Allocation indexSlice = uberBuffers.indexBuffer != null ? uberBuffers.indexBuffer.getAllocation(sectionMesh) : null;
+			long indexBufferOffset = 0L;
+			GpuBuffer indexBuffer = null;
+			if (indexSlice != null) {
+				indexBufferOffset = indexSlice.getOffsetFromHeap();
+				indexBuffer = uberBuffers.indexBuffer.getGpuBuffer(indexSlice);
+			}
+
+			return new SectionRenderDispatcher.RenderSectionBufferSlice(
+				uberBuffers.vertexBuffer.getGpuBuffer(vertexSlice), vertexBufferOffset, indexBuffer, indexBufferOffset
+			);
+		}
+	}
+
+	public void lock() {
+		this.copyLock.lock();
+	}
+
+	public void unlock() {
+		this.copyLock.unlock();
+	}
+
+	public void uploadGlobalGeomBuffersToGPU() {
+		CommandEncoder commandEncoder = RenderSystem.getDevice().createCommandEncoder();
+		boolean performedBufferResize = false;
+
+		for (SectionRenderDispatcher.SectionUberBuffers buffers : this.chunkUberBuffers.values()) {
+			UberGpuBuffer<SectionMesh> vertexBuffer = buffers.vertexBuffer;
+			if (performedBufferResize) {
+				break;
+			}
+
+			performedBufferResize = vertexBuffer.uploadStagedAllocations(RenderSystem.getDevice(), commandEncoder);
+			UberGpuBuffer<SectionMesh> indexBuffer = buffers.indexBuffer;
+			if (indexBuffer != null) {
+				indexBuffer.uploadStagedAllocations(RenderSystem.getDevice(), commandEncoder);
+			}
+		}
+	}
+
+	public void rebuildSectionSync(final SectionRenderDispatcher.RenderSection section, final RenderRegionCache cache) {
+		section.compileSync(cache);
+	}
+
+	public void schedule(final SectionRenderDispatcher.RenderSection.CompileTask task) {
+		if (!this.closed) {
+			this.compileQueue.add(task);
+			this.executor.execute(this::runTask);
+		}
+	}
+
+	public void clearCompileQueue() {
+		this.compileQueue.clear();
+	}
+
+	public boolean isQueueEmpty() {
+		return this.compileQueue.size() == 0;
+	}
+
+	public void dispose() {
+		this.closed = true;
+		this.clearCompileQueue();
+		this.copyLock.lock();
+
+		try {
+			for (SectionRenderDispatcher.SectionUberBuffers buffers : this.chunkUberBuffers.values()) {
+				buffers.vertexBuffer.close();
+				if (buffers.indexBuffer != null) {
+					buffers.indexBuffer.close();
+				}
+			}
+		} finally {
+			this.copyLock.unlock();
+		}
+	}
+
+	@VisibleForDebug
+	public String getStats() {
+		return String.format(Locale.ROOT, "pC: %03d, aB: %02d", this.compileQueue.size(), this.bufferPool.getFreeBufferCount());
+	}
+
+	@VisibleForDebug
+	public int getCompileQueueSize() {
+		return this.compileQueue.size();
+	}
+
+	@VisibleForDebug
+	public int getFreeBufferCount() {
+		return this.bufferPool.getFreeBufferCount();
+	}
+
+	@Environment(EnvType.CLIENT)
+	public class RenderSection {
+		public static final int SIZE = 16;
+		public final int index;
+		public final AtomicReference<SectionMesh> sectionMesh;
+		private SectionRenderDispatcher.RenderSection.RebuildTask lastRebuildTask;
+		private SectionRenderDispatcher.RenderSection.ResortTransparencyTask lastResortTransparencyTask;
+		private AABB bb;
+		private boolean dirty;
+		private volatile long sectionNode;
+		private final BlockPos.MutableBlockPos renderOrigin;
+		private boolean playerChanged;
+		private long uploadedTime;
+		private long fadeDuration;
+		private boolean wasPreviouslyEmpty;
+
+		public RenderSection(final int index, final long sectionNode) {
+			Objects.requireNonNull(SectionRenderDispatcher.this);
+			super();
+			this.sectionMesh = new AtomicReference(CompiledSectionMesh.UNCOMPILED);
+			this.dirty = true;
+			this.sectionNode = SectionPos.asLong(-1, -1, -1);
+			this.renderOrigin = new BlockPos.MutableBlockPos(-1, -1, -1);
+			this.index = index;
+			this.setSectionNode(sectionNode);
+		}
+
+		public float getVisibility(final long now) {
+			long elapsed = now - this.uploadedTime;
+			return elapsed >= this.fadeDuration ? 1.0F : (float)elapsed / (float)this.fadeDuration;
+		}
+
+		public void setFadeDuration(final long fadeDuration) {
+			this.fadeDuration = fadeDuration;
+		}
+
+		public void setWasPreviouslyEmpty(final boolean wasPreviouslyEmpty) {
+			this.wasPreviouslyEmpty = wasPreviouslyEmpty;
+		}
+
+		public boolean wasPreviouslyEmpty() {
+			return this.wasPreviouslyEmpty;
+		}
+
+		private boolean doesChunkExistAt(final long sectionNode) {
+			ChunkAccess chunk = SectionRenderDispatcher.this.level.getChunk(SectionPos.x(sectionNode), SectionPos.z(sectionNode), ChunkStatus.FULL, false);
+			return chunk != null && SectionRenderDispatcher.this.level.getLightEngine().lightOnInColumn(SectionPos.getZeroNode(sectionNode));
+		}
+
+		public boolean hasAllNeighbors() {
+			return this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.WEST))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.NORTH))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.EAST))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.SOUTH))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, -1, 0, -1))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, -1, 0, 1))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, 1, 0, -1))
+				&& this.doesChunkExistAt(SectionPos.offset(this.sectionNode, 1, 0, 1));
+		}
+
+		public AABB getBoundingBox() {
+			return this.bb;
+		}
+
+		public void setSectionNode(final long sectionNode) {
+			this.reset();
+			this.sectionNode = sectionNode;
+			int x = SectionPos.sectionToBlockCoord(SectionPos.x(sectionNode));
+			int y = SectionPos.sectionToBlockCoord(SectionPos.y(sectionNode));
+			int z = SectionPos.sectionToBlockCoord(SectionPos.z(sectionNode));
+			this.renderOrigin.set(x, y, z);
+			this.bb = new AABB(x, y, z, x + 16, y + 16, z + 16);
+		}
+
+		public SectionMesh getSectionMesh() {
+			return (SectionMesh)this.sectionMesh.get();
+		}
+
+		public void reset() {
+			this.cancelTasks();
+			SectionMesh mesh = (SectionMesh)this.sectionMesh.getAndSet(CompiledSectionMesh.UNCOMPILED);
+			SectionRenderDispatcher.this.copyLock.lock();
+
+			try {
+				this.releaseSectionMesh(mesh);
+			} finally {
+				SectionRenderDispatcher.this.copyLock.unlock();
+			}
+
+			this.dirty = true;
+			this.uploadedTime = 0L;
+			this.wasPreviouslyEmpty = false;
+		}
+
+		public BlockPos getRenderOrigin() {
+			return this.renderOrigin;
+		}
+
+		public long getSectionNode() {
+			return this.sectionNode;
+		}
+
+		public void setDirty(final boolean fromPlayer) {
+			boolean wasDirty = this.dirty;
+			this.dirty = true;
+			this.playerChanged = fromPlayer | (wasDirty && this.playerChanged);
+		}
+
+		public void setNotDirty() {
+			this.dirty = false;
+			this.playerChanged = false;
+		}
+
+		public boolean isDirty() {
+			return this.dirty;
+		}
+
+		public boolean isDirtyFromPlayer() {
+			return this.dirty && this.playerChanged;
+		}
+
+		public long getNeighborSectionNode(final Direction direction) {
+			return SectionPos.offset(this.sectionNode, direction);
+		}
+
+		public void resortTransparency(final SectionRenderDispatcher dispatcher) {
+			if (this.getSectionMesh() instanceof CompiledSectionMesh mesh) {
+				this.lastResortTransparencyTask = new SectionRenderDispatcher.RenderSection.ResortTransparencyTask(mesh);
+				dispatcher.schedule(this.lastResortTransparencyTask);
+			}
+		}
+
+		public boolean hasTranslucentGeometry() {
+			return this.getSectionMesh().hasTranslucentGeometry();
+		}
+
+		public boolean transparencyResortingScheduled() {
+			return this.lastResortTransparencyTask != null && !this.lastResortTransparencyTask.isCompleted.get();
+		}
+
+		protected void cancelTasks() {
+			if (this.lastRebuildTask != null) {
+				this.lastRebuildTask.cancel();
+				this.lastRebuildTask = null;
+			}
+
+			if (this.lastResortTransparencyTask != null) {
+				this.lastResortTransparencyTask.cancel();
+				this.lastResortTransparencyTask = null;
+			}
+		}
+
+		public SectionRenderDispatcher.RenderSection.CompileTask createCompileTask(final RenderRegionCache cache) {
+			this.cancelTasks();
+			RenderSectionRegion region = cache.createRegion(SectionRenderDispatcher.this.level, this.sectionNode);
+			boolean isRecompile = this.sectionMesh.get() != CompiledSectionMesh.UNCOMPILED;
+			this.lastRebuildTask = new SectionRenderDispatcher.RenderSection.RebuildTask(region, isRecompile);
+			return this.lastRebuildTask;
+		}
+
+		public void rebuildSectionAsync(final RenderRegionCache cache) {
+			SectionRenderDispatcher.RenderSection.CompileTask task = this.createCompileTask(cache);
+			SectionRenderDispatcher.this.schedule(task);
+		}
+
+		public void compileSync(final RenderRegionCache cache) {
+			SectionRenderDispatcher.RenderSection.CompileTask task = this.createCompileTask(cache);
+			task.doTask(SectionRenderDispatcher.this.fixedBuffers);
+		}
+
+		private SectionMesh setSectionMesh(final SectionMesh sectionMesh) {
+			SectionMesh oldMesh = (SectionMesh)this.sectionMesh.getAndSet(sectionMesh);
+			SectionRenderDispatcher.this.renderer.addRecentlyCompiledSection(this);
+			if (this.uploadedTime == 0L) {
+				this.uploadedTime = Util.getMillis();
+			}
+
+			return oldMesh;
+		}
+
+		private void releaseSectionMesh(final SectionMesh oldMesh) {
+			oldMesh.close();
+
+			for (SectionRenderDispatcher.SectionUberBuffers buffers : SectionRenderDispatcher.this.chunkUberBuffers.values()) {
+				UberGpuBuffer<SectionMesh> vertexBuffer = buffers.vertexBuffer;
+				vertexBuffer.removeAllocation(oldMesh);
+				UberGpuBuffer<SectionMesh> indexBuffer = buffers.indexBuffer;
+				if (indexBuffer != null) {
+					indexBuffer.removeAllocation(oldMesh);
+				}
+			}
+		}
+
+		private VertexSorting createVertexSorting(final SectionPos sectionPos, final Vec3 cameraPos) {
+			return VertexSorting.byDistance(
+				(float)(cameraPos.x - sectionPos.minBlockX()), (float)(cameraPos.y - sectionPos.minBlockY()), (float)(cameraPos.z - sectionPos.minBlockZ())
+			);
+		}
+
+		private void checkSectionMesh(final CompiledSectionMesh compiledSectionMesh) {
+			boolean allBuffersUpdated = true;
+
+			for (ChunkSectionLayer layer : ChunkSectionLayer.values()) {
+				SectionMesh.SectionDraw draw = compiledSectionMesh.getSectionDraw(layer);
+				if (draw != null) {
+					allBuffersUpdated &= compiledSectionMesh.isIndexBufferUploaded(layer);
+					allBuffersUpdated &= compiledSectionMesh.isVertexBufferUploaded(layer);
+				}
+			}
+
+			if (allBuffersUpdated && this.sectionMesh.get() != compiledSectionMesh) {
+				SectionMesh oldMesh = this.setSectionMesh(compiledSectionMesh);
+				this.releaseSectionMesh(oldMesh);
+			}
+		}
+
+		void vertexBufferUploadCallback(final SectionMesh sectionMesh, final ChunkSectionLayer layer) {
+			if (sectionMesh instanceof CompiledSectionMesh compiledSectionMesh) {
+				compiledSectionMesh.setVertexBufferUploaded(layer);
+				this.checkSectionMesh(compiledSectionMesh);
+			}
+		}
+
+		void indexBufferUploadCallback(final SectionMesh sectionMesh, final ChunkSectionLayer layer, final boolean sortedIndexBuffer) {
+			if (sectionMesh instanceof CompiledSectionMesh compiledSectionMesh) {
+				compiledSectionMesh.setIndexBufferUploaded(layer);
+				if (!sortedIndexBuffer) {
+					this.checkSectionMesh(compiledSectionMesh);
+				}
+			}
+		}
+
+		private boolean addSectionBuffersToUberBuffer(
+			final ChunkSectionLayer layer, final CompiledSectionMesh key, @Nullable final ByteBuffer vertexBuffer, @Nullable final ByteBuffer indexBuffer
+		) {
+			boolean success = true;
+			SectionRenderDispatcher.this.copyLock.lock();
+
+			try {
+				SectionMesh.SectionDraw draw = key.getSectionDraw(layer);
+				if (draw != null) {
+					SectionRenderDispatcher.SectionUberBuffers sectionBuffers = (SectionRenderDispatcher.SectionUberBuffers)SectionRenderDispatcher.this.chunkUberBuffers
+						.get(layer);
+
+					assert sectionBuffers != null;
+
+					if (vertexBuffer != null) {
+						UberGpuBuffer.UploadCallback<SectionMesh> callback = mesh -> this.vertexBufferUploadCallback(mesh, layer);
+						success &= sectionBuffers.vertexBuffer.addAllocation(key, callback, vertexBuffer);
+					}
+
+					if (indexBuffer != null) {
+						boolean sortedIndexBuffer = vertexBuffer == null;
+						UberGpuBuffer.UploadCallback<SectionMesh> callback = mesh -> this.indexBufferUploadCallback(mesh, layer, sortedIndexBuffer);
+						success &= sectionBuffers.indexBuffer.addAllocation(key, callback, indexBuffer);
+					} else {
+						key.setIndexBufferUploaded(layer);
+					}
+				}
+
+				if (!success && RenderSystem.isOnRenderThread()) {
+					SectionRenderDispatcher.this.uploadGlobalGeomBuffersToGPU();
+				}
+			} finally {
+				SectionRenderDispatcher.this.copyLock.unlock();
+			}
+
+			return success;
+		}
+
+		@Environment(EnvType.CLIENT)
+		public abstract class CompileTask {
+			protected final AtomicBoolean isCancelled;
+			protected final AtomicBoolean isCompleted;
+			protected final boolean isRecompile;
+
+			public CompileTask(final boolean isRecompile) {
+				Objects.requireNonNull(RenderSection.this);
+				super();
+				this.isCancelled = new AtomicBoolean(false);
+				this.isCompleted = new AtomicBoolean(false);
+				this.isRecompile = isRecompile;
+			}
+
+			public abstract SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult doTask(final SectionBufferBuilderPack buffers);
+
+			public abstract void cancel();
+
+			protected abstract String name();
+
+			public boolean isRecompile() {
+				return this.isRecompile;
+			}
+
+			public BlockPos getRenderOrigin() {
+				return RenderSection.this.renderOrigin;
+			}
+
+			@Environment(EnvType.CLIENT)
+			public static enum SectionTaskResult {
+				SUCCESSFUL,
+				CANCELLED;
+			}
+		}
+
+		@Environment(EnvType.CLIENT)
+		private class RebuildTask extends SectionRenderDispatcher.RenderSection.CompileTask {
+			protected final RenderSectionRegion region;
+
+			public RebuildTask(final RenderSectionRegion region, final boolean isRecompile) {
+				Objects.requireNonNull(RenderSection.this);
+				super(isRecompile);
+				this.region = region;
+			}
+
+			@Override
+			protected String name() {
+				return "rend_chk_rebuild";
+			}
+
+			@Override
+			public SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult doTask(final SectionBufferBuilderPack buffers) {
+				if (this.isCancelled.get()) {
+					return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+				} else {
+					long sectionNode = RenderSection.this.sectionNode;
+					SectionPos sectionPos = SectionPos.of(sectionNode);
+					if (this.isCancelled.get()) {
+						return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+					} else {
+						Vec3 cameraPos = (Vec3)SectionRenderDispatcher.this.cameraPosition.get();
+
+						SectionCompiler.Results results;
+						try (Zone ignored = Profiler.get().zone("Compile Section")) {
+							results = SectionRenderDispatcher.this.sectionCompiler
+								.compile(sectionPos, this.region, RenderSection.this.createVertexSorting(sectionPos, cameraPos), buffers);
+						}
+
+						TranslucencyPointOfView translucencyPointOfView = TranslucencyPointOfView.of(cameraPos, sectionNode);
+						CompiledSectionMesh compiledSectionMesh = new CompiledSectionMesh(translucencyPointOfView, results);
+						if (results.renderedLayers.isEmpty()) {
+							SectionMesh oldMesh = RenderSection.this.setSectionMesh(compiledSectionMesh);
+							SectionRenderDispatcher.this.copyLock.lock();
+
+							try {
+								RenderSection.this.releaseSectionMesh(oldMesh);
+							} finally {
+								SectionRenderDispatcher.this.copyLock.unlock();
+							}
+
+							return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.SUCCESSFUL;
+						} else {
+							for (Entry<ChunkSectionLayer, MeshData> entry : results.renderedLayers.entrySet()) {
+								MeshData meshData = (MeshData)entry.getValue();
+								boolean success = false;
+
+								while (!success) {
+									if (this.isCancelled.get()) {
+										results.release();
+										SectionRenderDispatcher.this.copyLock.lock();
+
+										try {
+											RenderSection.this.releaseSectionMesh(compiledSectionMesh);
+										} finally {
+											SectionRenderDispatcher.this.copyLock.unlock();
+										}
+
+										return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+									}
+
+									success = RenderSection.this.addSectionBuffersToUberBuffer(
+										(ChunkSectionLayer)entry.getKey(), compiledSectionMesh, meshData.vertexBuffer(), meshData.indexBuffer()
+									);
+									if (!success && !RenderSystem.isOnRenderThread()) {
+										Thread.onSpinWait();
+									}
+								}
+
+								meshData.close();
+							}
+
+							return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.SUCCESSFUL;
+						}
+					}
+				}
+			}
+
+			@Override
+			public void cancel() {
+				if (this.isCancelled.compareAndSet(false, true)) {
+					RenderSection.this.setDirty(false);
+				}
+			}
+		}
+
+		@Environment(EnvType.CLIENT)
+		private class ResortTransparencyTask extends SectionRenderDispatcher.RenderSection.CompileTask {
+			private final CompiledSectionMesh compiledSectionMesh;
+
+			public ResortTransparencyTask(final CompiledSectionMesh compiledSectionMesh) {
+				Objects.requireNonNull(RenderSection.this);
+				super(true);
+				this.compiledSectionMesh = compiledSectionMesh;
+			}
+
+			@Override
+			protected String name() {
+				return "rend_chk_sort";
+			}
+
+			@Override
+			public SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult doTask(final SectionBufferBuilderPack buffers) {
+				if (this.isCancelled.get()) {
+					return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+				} else {
+					MeshData.SortState state = this.compiledSectionMesh.getTransparencyState();
+					if (state != null && !this.compiledSectionMesh.isEmpty(ChunkSectionLayer.TRANSLUCENT)) {
+						Vec3 cameraPos = (Vec3)SectionRenderDispatcher.this.cameraPosition.get();
+						long sectionNode = RenderSection.this.sectionNode;
+						VertexSorting vertexSorting = RenderSection.this.createVertexSorting(SectionPos.of(sectionNode), cameraPos);
+						TranslucencyPointOfView translucencyPointOfView = TranslucencyPointOfView.of(cameraPos, sectionNode);
+						if (!this.compiledSectionMesh.isDifferentPointOfView(translucencyPointOfView) && !translucencyPointOfView.isAxisAligned()) {
+							return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+						} else {
+							ByteBufferBuilder.Result indexBuffer = state.buildSortedIndexBuffer(buffers.buffer(ChunkSectionLayer.TRANSLUCENT), vertexSorting);
+							if (indexBuffer == null) {
+								return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+							} else {
+								boolean success = false;
+
+								while (!success) {
+									if (this.isCancelled.get()) {
+										indexBuffer.close();
+										return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+									}
+
+									success = RenderSection.this.addSectionBuffersToUberBuffer(ChunkSectionLayer.TRANSLUCENT, this.compiledSectionMesh, null, indexBuffer.byteBuffer());
+									if (!success && !RenderSystem.isOnRenderThread()) {
+										Thread.onSpinWait();
+									}
+								}
+
+								indexBuffer.close();
+								this.compiledSectionMesh.setTranslucencyPointOfView(translucencyPointOfView);
+								return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.SUCCESSFUL;
+							}
+						}
+					} else {
+						return SectionRenderDispatcher.RenderSection.CompileTask.SectionTaskResult.CANCELLED;
+					}
+				}
+			}
+
+			@Override
+			public void cancel() {
+				this.isCancelled.set(true);
+			}
+		}
+	}
+
+	@Environment(EnvType.CLIENT)
+	public record RenderSectionBufferSlice(GpuBuffer vertexBuffer, long vertexBufferOffset, @Nullable GpuBuffer indexBuffer, long indexBufferOffset) {
+	}
+
+	@Environment(EnvType.CLIENT)
+	private record SectionUberBuffers(UberGpuBuffer<SectionMesh> vertexBuffer, @Nullable UberGpuBuffer<SectionMesh> indexBuffer) {
+	}
+}

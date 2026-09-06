@@ -1,0 +1,54 @@
+# NBT标签
+#
+# 用途：NBT 读写。配置持久化、fromTag/toTag 覆写用。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：43 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.nbt.ByteArrayTag
+net.minecraft.nbt.ByteTag
+net.minecraft.nbt.CollectionTag
+net.minecraft.nbt.CompoundTag
+net.minecraft.nbt.DoubleTag
+net.minecraft.nbt.EndTag
+net.minecraft.nbt.FloatTag
+net.minecraft.nbt.IntArrayTag
+net.minecraft.nbt.IntTag
+net.minecraft.nbt.ListTag
+net.minecraft.nbt.LongArrayTag
+net.minecraft.nbt.LongTag
+net.minecraft.nbt.NbtAccounter
+net.minecraft.nbt.NbtAccounterException
+net.minecraft.nbt.NbtException
+net.minecraft.nbt.NbtFormatException
+net.minecraft.nbt.NbtIo
+net.minecraft.nbt.NbtOps
+net.minecraft.nbt.NbtUtils
+net.minecraft.nbt.NumericTag
+net.minecraft.nbt.PrimitiveTag
+net.minecraft.nbt.ReportedNbtException
+net.minecraft.nbt.ShortTag
+net.minecraft.nbt.SnbtGrammar
+net.minecraft.nbt.SnbtOperations
+net.minecraft.nbt.SnbtPrinterTagVisitor
+net.minecraft.nbt.StreamTagVisitor
+net.minecraft.nbt.StringTag
+net.minecraft.nbt.StringTagVisitor
+net.minecraft.nbt.Tag
+net.minecraft.nbt.TagParser
+net.minecraft.nbt.TagType
+net.minecraft.nbt.TagTypes
+net.minecraft.nbt.TagVisitor
+net.minecraft.nbt.TextComponentTagVisitor
+net.minecraft.nbt.package-info
+net.minecraft.nbt.visitors.CollectFields
+net.minecraft.nbt.visitors.CollectToTag
+net.minecraft.nbt.visitors.FieldSelector
+net.minecraft.nbt.visitors.FieldTree
+net.minecraft.nbt.visitors.SkipAll
+net.minecraft.nbt.visitors.SkipFields
+net.minecraft.nbt.visitors.package-info

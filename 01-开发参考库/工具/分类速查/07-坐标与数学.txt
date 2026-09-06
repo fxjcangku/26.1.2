@@ -1,0 +1,43 @@
+# 坐标与数学
+#
+# 用途：方块坐标、向量、朝向、碰撞箱、射线检测结果。
+# 版本：Minecraft 26.1.2（内部版本号 1.21.11）Mojang 官方映射
+# 数量：32 个类（已排除内部类）
+# 来源：Mappings/官方映射原文件/client-1.21.11.txt
+# 生成：node Mappings/工具/生成分类速查表.js
+#
+# 这些是 26.1.2 里真实存在的类，可直接 import。
+# 如果某个类不在这里，说明它在本版本已改名或移除，不要凭记忆写。
+
+net.minecraft.core.BlockPos
+net.minecraft.core.Direction
+net.minecraft.core.Direction8
+net.minecraft.core.Vec3i
+net.minecraft.util.Mth
+net.minecraft.world.phys.AABB
+net.minecraft.world.phys.BlockHitResult
+net.minecraft.world.phys.EntityHitResult
+net.minecraft.world.phys.HitResult
+net.minecraft.world.phys.Vec2
+net.minecraft.world.phys.Vec3
+net.minecraft.world.phys.package-info
+net.minecraft.world.phys.shapes.ArrayVoxelShape
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape
+net.minecraft.world.phys.shapes.BooleanOp
+net.minecraft.world.phys.shapes.CollisionContext
+net.minecraft.world.phys.shapes.CubePointRange
+net.minecraft.world.phys.shapes.CubeVoxelShape
+net.minecraft.world.phys.shapes.DiscreteCubeMerger
+net.minecraft.world.phys.shapes.DiscreteVoxelShape
+net.minecraft.world.phys.shapes.EntityCollisionContext
+net.minecraft.world.phys.shapes.IdenticalMerger
+net.minecraft.world.phys.shapes.IndexMerger
+net.minecraft.world.phys.shapes.IndirectMerger
+net.minecraft.world.phys.shapes.MinecartCollisionContext
+net.minecraft.world.phys.shapes.NonOverlappingMerger
+net.minecraft.world.phys.shapes.OffsetDoubleList
+net.minecraft.world.phys.shapes.Shapes
+net.minecraft.world.phys.shapes.SliceShape
+net.minecraft.world.phys.shapes.SubShape
+net.minecraft.world.phys.shapes.VoxelShape
+net.minecraft.world.phys.shapes.package-info

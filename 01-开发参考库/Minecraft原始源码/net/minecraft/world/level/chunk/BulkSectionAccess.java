@@ -1,0 +1,62 @@
+package net.minecraft.world.level.chunk;
+
+import it.unimi.dsi.fastutil.longs.Long2ObjectFunction;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import org.jspecify.annotations.Nullable;
+
+public class BulkSectionAccess implements AutoCloseable {
+	private final LevelAccessor level;
+	private final Long2ObjectMap<LevelChunkSection> acquiredSections = new Long2ObjectOpenHashMap<>();
+	@Nullable
+	private LevelChunkSection lastSection;
+	private long lastSectionKey;
+
+	public BulkSectionAccess(final LevelAccessor level) {
+		this.level = level;
+	}
+
+	@Nullable
+	public LevelChunkSection getSection(final BlockPos pos) {
+		int sectionIndex = this.level.getSectionIndex(pos.getY());
+		if (sectionIndex >= 0 && sectionIndex < this.level.getSectionsCount()) {
+			long sectionKey = SectionPos.asLong(pos);
+			if (this.lastSection == null || this.lastSectionKey != sectionKey) {
+				this.lastSection = this.acquiredSections.computeIfAbsent(sectionKey, (Long2ObjectFunction<? extends LevelChunkSection>)(key -> {
+					ChunkAccess chunk = this.level.getChunk(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()));
+					LevelChunkSection result = chunk.getSection(sectionIndex);
+					result.acquire();
+					return result;
+				}));
+				this.lastSectionKey = sectionKey;
+			}
+
+			return this.lastSection;
+		} else {
+			return null;
+		}
+	}
+
+	public BlockState getBlockState(final BlockPos pos) {
+		LevelChunkSection section = this.getSection(pos);
+		if (section == null) {
+			return Blocks.AIR.defaultBlockState();
+		} else {
+			int sectionRelativeX = SectionPos.sectionRelative(pos.getX());
+			int sectionRelativeY = SectionPos.sectionRelative(pos.getY());
+			int sectionRelativeZ = SectionPos.sectionRelative(pos.getZ());
+			return section.getBlockState(sectionRelativeX, sectionRelativeY, sectionRelativeZ);
+		}
+	}
+
+	public void close() {
+		for (LevelChunkSection section : this.acquiredSections.values()) {
+			section.release();
+		}
+	}
+}
