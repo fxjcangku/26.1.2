@@ -78,7 +78,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     //  UI 配置面板（分组折叠）
     // ═══════════════════════════════════════════════════════════════════
 
-    private final SettingGroup sgHelper = settings.createGroup("💡 辅助工具", false);
+    private final SettingGroup sgHelper = settings.createGroup("辅助工具", false);
     private final SettingGroup sgCrops = settings.createGroup("作物选择", true);
     private final SettingGroup sgPerSeed = settings.createGroup("逐作物独立配置", true);
     private final SettingGroup sgLogistics = settings.createGroup("运行参数", false);
@@ -130,7 +130,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动农场",
             "熟一颗收一颗，自动补种拾取，单作物箱/种子补货箱/多作物箱与杂物箱物流自动化。点击按钮查看说明。");
 
-        // ─── 💡 辅助工具 ───
+        // ─── 辅助工具 ───
         antiTrample = sgHelper.add(new BoolSetting.Builder()
             .name("防踩踏")
             .description("农田范围内拦截跳跃键，避免踩坏耕地")
@@ -702,7 +702,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             var waterModule = meteordevelopment.meteorclient.systems.modules.Modules.get()
                 .get(com.example.addon.water.WaterESPModule.class);
             boolean waterActive = waterModule != null && waterModule.isActive();
-            addUniformButton(theme, table, waterActive ? "§a🌊 关闭水源显示" : "§b🌊 打开水源显示",
+            addUniformButton(theme, table, waterActive ? "§a关闭水源显示" : "§b打开水源显示",
                 () -> {
                     if (waterModule != null) {
                         waterModule.toggle();

@@ -26,7 +26,7 @@ public final class YiyiaddonWatermark {
     public static final String LICENSE = "Proprietary. Unauthorized decompilation or redistribution is prohibited.";
     
     public static final String DECOMPILE_WARNING = 
-        "⚠️ WARNING: This software is protected by copyright law. " +
+        "⚠ WARNING: This software is protected by copyright law. " +
         "Decompiling, reverse engineering, or redistributing this software is illegal and shameful. " +
         "You are being monitored. — yiyijia";
 
