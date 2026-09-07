@@ -1,5 +1,7 @@
 package com.example.addon.autofarm;
 
+import com.example.addon.autofarm.adapter.DefaultFarmAdapter;
+import com.example.addon.autofarm.adapter.FarmServerAdapter;
 import com.example.addon.autofarm.command.NongChangCommand;
 import com.example.addon.autofarm.controller.FarmController;
 import com.example.addon.autofarm.controller.FarmDecision;
@@ -12,6 +14,7 @@ import com.example.addon.autofarm.model.FarmState;
 import com.example.addon.autofarm.model.HarvestMode;
 import com.example.addon.autofarm.model.PlantMode;
 import com.example.addon.autofarm.model.SiteType;
+import com.example.addon.autofarm.recognition.VanillaFarmRecognizer;
 import com.example.addon.autofarm.render.FarmRenderer;
 import com.example.addon.autofarm.resource.FarmResourceManager;
 import com.example.addon.autofarm.scan.FarmScanner;

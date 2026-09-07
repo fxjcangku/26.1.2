@@ -2,7 +2,7 @@
 
 > 查询顺序提醒：先查本索引 → 命中后到 原始源码 Grep 复核 → 再看 API参考对应文档
 >
-> 说明：Mixin 是 SpongePowered Mixin + MixinExtras（`com.llamalad7.mixinextras`）对 Minecraft/Meteor 运行时的编译期织入。本项目 addon 的 mixin 目录：`d:\mcaddon\26.1.2\src\main\java\com\example\addon\mixin\`，注册清单 `d:\mcaddon\26.1.2\src\main\resources\addon-template.mixins.json`。
+> 说明：Mixin 是 SpongePowered Mixin + MixinExtras（`com.llamalad7.mixinextras`）对 Minecraft/Meteor 运行时的编译期织入。本项目 addon 的 mixin 目录：`src/main/java/com/example/addon/mixin/`，注册清单 `src/main/resources/addon-template.mixins.json`。
 
 ## 一、Mixin 注解速查（Fabric Mixin 库）
 

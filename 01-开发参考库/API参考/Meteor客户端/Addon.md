@@ -113,7 +113,7 @@ public static void init()
 
 ## addon 注册机制（fabric.mod.json 必须项）
 
-本项目实际 `fabric.mod.json`（`d:\mcaddon\26.1.2\src\main\resources\fabric.mod.json`）关键片段：
+本项目实际 `fabric.mod.json`（`src/main/resources/fabric.mod.json`）关键片段：
 
 ```json
 {
@@ -150,7 +150,7 @@ public static void init()
 
 ## 本项目实际用法（AddonTemplate.java 对照）
 
-文件：`d:\mcaddon\26.1.2\src\main\java\com\example\addon\core\AddonTemplate.java`（已用源码核实存在）。
+文件：`src/main/java/com/example/addon/core/AddonTemplate.java`（已用源码核实存在）。
 
 ```java
 public class AddonTemplate extends MeteorAddon {

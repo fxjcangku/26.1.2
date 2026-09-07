@@ -37,6 +37,9 @@ public class WaterESPModule extends YiyiaddonModule {
     /** 建议放水点重算间隔（tick），低频重算避免每帧跑覆盖算法 */
     private static final int SUGGEST_INTERVAL = 40;
 
+    /** 向下扫描的竖直范围，覆盖飞起来 / 站在高处也能看到下方农田的水 */
+    private static final int SCAN_DOWN = 12;
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgWaterRange = settings.createGroup("灌溉范围显示");
     private final SettingGroup sgSuggestion = settings.createGroup("建议放水点");
@@ -50,6 +53,7 @@ public class WaterESPModule extends YiyiaddonModule {
     
     private final Setting<Boolean> renderSuggestion;
     private final Setting<SettingColor> suggestionColor;
+    private final Setting<ShapeMode> suggestionShapeMode;
     
     private final Setting<Boolean> renderSource;
     private final Setting<SettingColor> sourceColor;
@@ -67,6 +71,8 @@ public class WaterESPModule extends YiyiaddonModule {
     private BlockPos lastCenter;
     private int lastRadius = -1;
     private int suggestTimer;
+    /** 本 tick 是否发生了扫描区域重置，用于触发建议点立即重算 */
+    private boolean regionChanged;
 
     public WaterESPModule() {
         super(AddonTemplate.CATEGORY, "水源显示",
@@ -117,6 +123,13 @@ public class WaterESPModule extends YiyiaddonModule {
             .visible(renderSuggestion::get)
             .build());
 
+        suggestionShapeMode = sgSuggestion.add(new EnumSetting.Builder<ShapeMode>()
+            .name("建议点样式")
+            .description("Lines 线框 / Sides 面 / Both 两者")
+            .defaultValue(ShapeMode.Both)
+            .visible(renderSuggestion::get)
+            .build());
+
         // === 高级选项 ===
         renderSource = sgAdvanced.add(new BoolSetting.Builder()
             .name("显示水源方块")
@@ -126,7 +139,7 @@ public class WaterESPModule extends YiyiaddonModule {
 
         sourceColor = sgAdvanced.add(new ColorSetting.Builder()
             .name("水源方块颜色")
-            .defaultValue(new SettingColor(30, 144, 255, 180))
+            .defaultValue(new SettingColor(0, 0, 139, 180))
             .visible(renderSource::get)
             .build());
 
@@ -143,6 +156,8 @@ public class WaterESPModule extends YiyiaddonModule {
         lastCenter = null;
         lastRadius = -1;
         suggestTimer = 0;
+        regionChanged = false;
+        cursorX = cursorY = cursorZ = 0;
         waterBlocks.clear();
         suggestedSpots.clear();
     }
@@ -151,14 +166,14 @@ public class WaterESPModule extends YiyiaddonModule {
     private void onTick(TickEvent.Post event) {
         if (mc.player == null || mc.level == null) return;
         scan();
-        // 低频重算建议放水点
-        if (renderSuggestion.get() && ++suggestTimer >= SUGGEST_INTERVAL) {
-            suggestTimer = 0;
-            computeSuggestions();
-        }
-        // 首次扫描完成后立即计算一次建议点
-        if (suggestTimer == 1 && !waterBlocks.isEmpty()) {
-            computeSuggestions();
+        // 建议点重算：扫描区域变化时立即重算，否则低频重算，避免移动后红色建议框消失闪烁
+        if (renderSuggestion.get()) {
+            suggestTimer++;
+            if (regionChanged || suggestTimer >= SUGGEST_INTERVAL) {
+                regionChanged = false;
+                suggestTimer = 0;
+                computeSuggestions();
+            }
         }
     }
 
@@ -198,18 +213,26 @@ public class WaterESPModule extends YiyiaddonModule {
             }
         }
 
-        // 建议放水点：红色框
+        // 建议放水点：红色放置框（线框 / 面 / 两者，默认两者）
         if (doSuggestion) {
+            ShapeMode suggestionMode = suggestionShapeMode.get();
             for (BlockPos spot : suggestedSpots) {
                 double dx = spot.getX() + 0.5 - px;
                 double dz = spot.getZ() + 0.5 - pz;
                 if (dx * dx + dz * dz > renderDist2) continue;
-                event.renderer.box(spot, sug, sug, ShapeMode.Both, 0);
+                event.renderer.box(spot, sug, sug, suggestionMode, 0);
             }
         }
     }
 
-    /** 分帧扫描玩家周围立方体内的水源，玩家移动超过 1 格或半径变化时重启游标 */
+    /**
+     * 分帧扫描玩家周围「地表水层」的水源。
+     *
+     * 只扫玩家脚下两层（脚下一格 + 脚下），不扫整条竖直立方体，避免把海底 / 地下
+     * 连片水体全部纳入导致渲染卡死；同时只保留四周都是非水源的「孤立灌溉水源」，
+     * 过滤掉海、湖、河等连片水体。玩家移动或半径变化时只剪掉移出范围的缓存块，
+     * 不清空，避免已放水框一闪一闪。
+     */
     private void scan() {
         BlockPos c = mc.player.blockPosition();
         int r = radius.get();
@@ -223,17 +246,39 @@ public class WaterESPModule extends YiyiaddonModule {
         if (moved) {
             lastCenter = c;
             lastRadius = r;
-            waterBlocks.clear();
-            suggestedSpots.clear();
-            scanMinX = c.getX() - r;
-            scanMinY = c.getY() - r;
-            scanMinZ = c.getZ() - r;
-            scanMaxX = c.getX() + r;
-            scanMaxY = c.getY() + r;
-            scanMaxZ = c.getZ() + r;
-            cursorX = scanMinX;
-            cursorY = scanMinY;
-            cursorZ = scanMinZ;
+
+            int newMinX = c.getX() - r;
+            int newMaxX = c.getX() + r;
+            int newMinZ = c.getZ() - r;
+            int newMaxZ = c.getZ() + r;
+            // 向下多扫几格，飞起来 / 站在高处也能看到下方农田的水；
+            // 连片的海 / 湖 / 河由「孤立水源」过滤兜底，不会渲染卡死
+            int newMinY = c.getY() - SCAN_DOWN;
+            int newMaxY = c.getY();
+
+            // 只剪掉移出扫描范围的缓存块，不清空，避免玩家移动时已放水框一闪一闪
+            if (!waterBlocks.isEmpty()) {
+                waterBlocks.removeIf(p ->
+                    p.getX() < newMinX || p.getX() > newMaxX
+                    || p.getY() < newMinY || p.getY() > newMaxY
+                    || p.getZ() < newMinZ || p.getZ() > newMaxZ);
+            }
+
+            scanMinX = newMinX;
+            scanMinY = newMinY;
+            scanMinZ = newMinZ;
+            scanMaxX = newMaxX;
+            scanMaxY = newMaxY;
+            scanMaxZ = newMaxZ;
+
+            // 移动时保留游标进度，只把越界游标钳制回新范围，
+            // 避免每次移动都从角落重扫导致「走动时水框消失、停下才出现」
+            cursorX = Math.max(scanMinX, Math.min(cursorX, scanMaxX));
+            cursorY = Math.max(scanMinY, Math.min(cursorY, scanMaxY));
+            cursorZ = Math.max(scanMinZ, Math.min(cursorZ, scanMaxZ));
+
+            // 区域重置后触发建议点立即重算
+            regionChanged = true;
         }
 
         ClientLevel level = mc.level;
@@ -242,14 +287,31 @@ public class WaterESPModule extends YiyiaddonModule {
         for (int i = 0; i < BUDGET_PER_TICK; i++) {
             cursor.set(cursorX, cursorY, cursorZ);
             BlockState state = level.getBlockState(cursor);
-            // 只记录静止水源（level=0），过滤流动水避免卡顿
-            if (state.is(Blocks.WATER) && state.getFluidState().isSource()) {
+            // 只记录「静止且孤立」的水源：过滤流动水，也过滤海 / 湖 / 河等连片水体
+            if (state.is(Blocks.WATER) && state.getFluidState().isSource() && isIsolatedSource(level, cursor)) {
                 waterBlocks.add(cursor.immutable());
             } else {
                 waterBlocks.remove(cursor);
             }
             advance();
         }
+    }
+
+    /** 判断某格是否为静止水源方块 */
+    private boolean isSourceWater(ClientLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return state.is(Blocks.WATER) && state.getFluidState().isSource();
+    }
+
+    /**
+     * 判断该水源是否为「孤立灌溉水源」：四周（东 / 南 / 西 / 北）没有其它静止水源。
+     * 用于过滤掉连片的海、湖、河水体，只保留耕地上一格一坑的灌溉水源。
+     */
+    private boolean isIsolatedSource(ClientLevel level, BlockPos pos) {
+        return !isSourceWater(level, pos.offset(1, 0, 0))   // 东
+            && !isSourceWater(level, pos.offset(-1, 0, 0))  // 西
+            && !isSourceWater(level, pos.offset(0, 0, 1))   // 南
+            && !isSourceWater(level, pos.offset(0, 0, -1)); // 北
     }
 
     /**
@@ -279,9 +341,10 @@ public class WaterESPModule extends YiyiaddonModule {
                 // 检查该位置是否已在建议列表中
                 if (suggestedSpots.contains(candidate)) continue;
                 
-                // 只要该位置可以放水（空气、水或者可以用水桶替换的方块）就显示建议
-                BlockState stateAt = level.getBlockState(candidate);
-                if (stateAt.isAir() || stateAt.is(Blocks.WATER) || stateAt.canBeReplaced()) {
+                // 只要该位置是「地表」（上方是空气/水/可替换）就能挖坑放水；
+                // 耕地/泥土/草方块上方是空气，同样显示建议，不再要求该格本身是空气
+                BlockState stateAbove = level.getBlockState(candidate.above());
+                if (stateAbove.isAir() || stateAbove.is(Blocks.WATER) || stateAbove.canBeReplaced()) {
                     suggestedSpots.add(candidate);
                 }
             }

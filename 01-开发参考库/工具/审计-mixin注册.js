@@ -1,8 +1,9 @@
 // 检查 addon-template.mixins.json 注册项与 mixin 目录 java 文件一一对应（漏注入检查）
 const fs = require('fs');
 const path = require('path');
-const json = JSON.parse(fs.readFileSync('d:/mcaddon/26.1.2/src/main/resources/addon-template.mixins.json', 'utf8'));
-const 目录 = 'd:/mcaddon/26.1.2/src/main/java/com/example/addon/mixin';
+const 项目根 = path.resolve(__dirname, '..', '..');
+const json = JSON.parse(fs.readFileSync(path.join(项目根, 'src/main/resources/addon-template.mixins.json'), 'utf8'));
+const 目录 = path.join(项目根, 'src/main/java/com/example/addon/mixin');
 const 声明 = new Set(json.client || []);
 const 文件 = fs.readdirSync(目录).filter(f => f.endsWith('.java')).map(f => f.replace('.java', ''));
 console.log('json client 声明数:', 声明.size);

@@ -1,4 +1,4 @@
-﻿﻿# 一次性数据生成脚本：依据 Minecraft 26.1.2 反编译源码与游戏数据包标签，
+﻿# 一次性数据生成脚本：依据 Minecraft 26.1.2 反编译源码与游戏数据包标签，
 # 精确计算 30 级附魔台候选池 / 互斥对 / 宝藏清单，固化为静态 JSON。
 # 对应游戏算法：
 #   - EnchantmentMenu.slotsChanged：槽位2等级 = max(selected, 书架数*2) = 30（15 书架恒定）
@@ -9,7 +9,8 @@
 #     过滤条件 isPrimaryItem(item) || 书本
 #   - Cost.calculate(level) = base + perLevel * (level - 1)
 $ErrorActionPreference = 'Stop'
-$root = 'd:\mcaddon\26.1.2\src\main\resources\enchantment\vanilla'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$root = Join-Path (Split-Path -Parent $scriptDir) 'src\main\resources\enchantment\vanilla'
 foreach ($d in @('meta','items','enchantments','conflicts','candidates\level30','profiles')) {
   New-Item -ItemType Directory -Force -Path "$root\$d" | Out-Null
 }

@@ -1,4 +1,4 @@
-# AutoChest 辅助体系 · 第三阶段开发报告（ID配置管理 + AutoChest选择器联动）
+﻿# AutoChest 辅助体系 · 第三阶段开发报告（ID配置管理 + AutoChest选择器联动）
 
 > 日期：2026-08-31
 > 阶段：ID配置管理 GUI + AutoChest 目标选择器实时联动（已完成并编译通过）
@@ -10,8 +10,8 @@
 
 接手继续开发前，**必须完整读完以下两个个人开发习惯文件**，不得跳读：
 
-1. `d:\mcaddon\26.1.2\AGENTS.md`（五条铁律 + 关键速查）
-2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
+1. `<项目根>/AGENTS.md`（五条铁律 + 关键速查）
+2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
 
 关键铁律提醒（下一步开发前逐条对照）：
 - 规范注释只增不删；证据驱动排查（Bug 先埋点取证据）；中文 + 日期归档。
@@ -122,8 +122,8 @@ BUILD SUCCESSFUL in 3s
 ## 7. 下一阶段（第四阶段）待办
 
 > 下一阶段开工前，**必须先完整读完以下两个个人开发习惯文件**（与第 0 节相同，不得跳读）：
-> 1. `d:\mcaddon\26.1.2\AGENTS.md`
-> 2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
+> 1. `<项目根>/AGENTS.md`
+> 2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
 
 1. **消费层接线**：`ItemIdentityMatcher` / `AutoChestModule` 按选择器勾选结果过滤——
    用 `targetItems.selectedIdentities()` 替代「全部 ID 匹配」，让选择器真正驱动取物。

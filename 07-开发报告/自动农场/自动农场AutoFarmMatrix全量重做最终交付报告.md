@@ -1,4 +1,4 @@
-# 自动农场 AutoFarmMatrix 全量重做 — 最终交付报告
+﻿# 自动农场 AutoFarmMatrix 全量重做 — 最终交付报告
 
 > 项目：Minecraft 26.1.2 / Fabric / Meteor Client / Java / Mojang 官方映射
 > 模块：自动农场（AutoFarmMatrix）

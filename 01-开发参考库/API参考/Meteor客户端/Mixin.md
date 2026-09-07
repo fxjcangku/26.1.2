@@ -189,7 +189,7 @@ Meteor 自身配置：`meteor-client.mixins.json`
 }
 ```
 
-本项目 addon 配置：`d:\mcaddon\26.1.2\src\main\resources\addon-template.mixins.json`
+本项目 addon 配置：`src/main/resources/addon-template.mixins.json`
 ```json
 {
   "required": true,
@@ -212,7 +212,7 @@ Meteor 自身配置：`meteor-client.mixins.json`
 
 ## 本项目 addon 完整 mixin 类骨架（ExampleMixin.java）
 
-文件：`d:\mcaddon\26.1.2\src\main\java\com\example\addon\mixin\ExampleMixin.java`
+文件：`src/main/java/com/example/addon/mixin/ExampleMixin.java`
 
 ```java
 package com.example.addon.mixin;
@@ -234,7 +234,7 @@ public abstract class ExampleMixin {
 }
 ```
 
-本项目 addon 的 mixin 目录：`d:\mcaddon\26.1.2\src\main\java\com\example\addon\mixin\`（含 `ExampleMixin`、`MultiPlayerGameModeFastBreakMixin`、`ClientLevelPredictionAccessor`、`KeyboardInvoker` 等 37 个，已在 `addon-template.mixins.json` 的 `client` 数组登记）。
+本项目 addon 的 mixin 目录：`src/main/java/com/example/addon/mixin/`（含 `ExampleMixin`、`MultiPlayerGameModeFastBreakMixin`、`ClientLevelPredictionAccessor`、`KeyboardInvoker` 等 37 个，已在 `addon-template.mixins.json` 的 `client` 数组登记）。
 
 ---
 

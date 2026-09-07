@@ -16,7 +16,9 @@
 src/main/java/com/example/addon/convention/YiyiaddonConvention.java
 ```
 
-该文件包含十章：AI 声明与铁律、对话偏好、代码分类铁律、后台 API 与账号、模块开发规范、运行时缺陷排查协议、26.1.2 API 规范、混淆发布规范、构建命令、GitHub 仓库结构与 Release 模板。
+该文件包含十章：AI 声明与铁律、对话偏好、代码分类铁律、后台 API 与账号、模块开发规范（含企业级架构标准）、运行时缺陷排查协议、26.1.2 API 规范、混淆发布规范、构建命令、GitHub 仓库结构与 Release 模板。
+
+**重点**：第五章「模块开发规范」新增 5.0 节「模块架构标准」（2026-09-08），所有新模块必须遵循企业级分层架构（recognition + adapter + task），禁止硬编码识别逻辑。
 
 ## 关键速查
 

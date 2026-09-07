@@ -3,10 +3,11 @@
 #       读取每个类的常量池 UTF8 条目，找出仍含中文字符串的类。
 #       用于验证字符串加密是否彻底——正常应只剩枚举类（枚举 name 必须明文保留）。
 # 用法：.\scan-zh.ps1 [解压根目录]
-#       不传参默认扫描 d:\mcaddon\yiyiaddon1.3-unpacked
+#       必须传入解压根目录参数
 
 param(
-    [string]$Root = "d:\mcaddon\yiyiaddon1.3-unpacked"
+    [Parameter(Mandatory=$true)]
+    [string]$Root
 )
 
 # 待扫描的类目录：只关心本 addon 的 com/example/addon 命名空间

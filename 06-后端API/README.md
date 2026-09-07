@@ -1,4 +1,4 @@
-# Yiyiaddon 用户统计系统部署指南
+﻿# Yiyiaddon 用户统计系统部署指南
 
 ## 📊 系统概述
 
@@ -267,6 +267,6 @@ Cloudflare Workers 免费额度：
 
 ## 📞 技术支持
 
-- GitHub Issues: https://github.com/fxjcangku/26.1.2/issues
+- GitHub Issues: <项目仓库>/issues
 - Cloudflare Workers 文档: https://developers.cloudflare.com/workers/
 - Cloudflare D1 文档: https://developers.cloudflare.com/d1/

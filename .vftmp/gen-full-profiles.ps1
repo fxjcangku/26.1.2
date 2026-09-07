@@ -1,4 +1,4 @@
-﻿﻿# 生成完整 75 件装备的极品 Profile（gear-enchants.json）。
+﻿# 生成完整 75 件装备的极品 Profile（gear-enchants.json）。
 # 附魔规则按「装备类型」决定（与材质无关），故低端材质复用同类型高档材质的极品方案。
 # 唯一差异是 enchantability（影响附魔台可达等级），但不改变极品目标等级。
 $ErrorActionPreference = 'Stop'
@@ -146,5 +146,7 @@ AddGear 'minecraft:turtle_helmet' '海龟壳' 'armor' (HelmetProfiles)
 
 $root = [pscustomobject]@{ gears = $gears.ToArray() }
 $json = $root | ConvertTo-Json -Depth 12
-[System.IO.File]::WriteAllText('d:\mcaddon\26.1.2\src\main\resources\assets\yiyiaddon\gear-enchants.json', $json, (New-Object System.Text.UTF8Encoding($false)))
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$outputPath = Join-Path (Split-Path -Parent $scriptDir) 'src\main\resources\assets\yiyiaddon\gear-enchants.json'
+[System.IO.File]::WriteAllText($outputPath, $json, (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "OK: gears = $($gears.Count)"

@@ -1,4 +1,4 @@
-# AutoChest 辅助体系 · 第一阶段架构设计报告
+﻿# AutoChest 辅助体系 · 第一阶段架构设计报告
 
 > 日期：2026-08-31
 > 阶段：仓库审查 + 辅助模块归类 + 三功能架构 + 数据流 + 类职责 + 集成方案（已完成并编译通过）
@@ -9,8 +9,8 @@
 
 接手继续开发前，**必须完整读完以下两个个人开发习惯文件**，不得跳读：
 
-1. `d:\mcaddon\26.1.2\AGENTS.md`（五条铁律 + 关键速查）
-2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
+1. `<项目根>/AGENTS.md`（五条铁律 + 关键速查）
+2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
 
 关键铁律提醒（第二步开发前逐条对照）：
 - 规范注释只增不删；证据驱动排查（Bug 先埋点取证据）；中文 + 日期归档。
@@ -162,8 +162,8 @@ BUILD SUCCESSFUL in 3s
 ## 9. 下一阶段（第二步）待办
 
 > 下一阶段开工前，**必须先完整读完以下两个个人开发习惯文件**（与第 0 节相同，不得跳读）：
-> 1. `d:\mcaddon\26.1.2\AGENTS.md`
-> 2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
+> 1. `<项目根>/AGENTS.md`
+> 2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
 
 1. `AutoChestStateMachine.tick()` 实现完整状态转换（含按 ScanMode 分派）。
 2. `AutoChestModule.onTick` 按三模式接线（玩家控制/寻路/标点）。

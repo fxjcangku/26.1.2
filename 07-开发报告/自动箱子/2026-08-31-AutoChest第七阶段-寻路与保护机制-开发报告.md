@@ -1,4 +1,4 @@
-# AutoChest 辅助体系 · 第七阶段开发报告（寻路与保护机制）
+﻿# AutoChest 辅助体系 · 第七阶段开发报告（寻路与保护机制）
 
 > 日期：2026-08-31
 > 阶段：AutoChest 寻路（真实安全站位）、后台挂机、多人保护、目标锁、有限重试、临时冷却
@@ -11,8 +11,8 @@
 
 接手继续开发前，**必须完整读完以下两个个人开发习惯文件**，不得跳读：
 
-1. `d:\mcaddon\26.1.2\AGENTS.md`（五条铁律 + 关键速查）
-2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
+1. `<项目根>/AGENTS.md`（五条铁律 + 关键速查）
+2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
 
 关键铁律提醒（下一步开发前逐条对照）：
 - 规范注释只增不删；证据驱动排查（Bug 先埋点取证据）；中文 + 日期归档。
@@ -81,8 +81,8 @@ BUILD SUCCESSFUL in 1s
 ## 5. 下一阶段（第八阶段）待办
 
 > 下一阶段开工前，**必须先完整读完以下两个个人开发习惯文件**（与第 0 节相同，不得跳读）：
-> 1. `d:\mcaddon\26.1.2\AGENTS.md`
-> 2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
+> 1. `<项目根>/AGENTS.md`
+> 2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
 
 1. **真机验证**：三模式寻路站位准确性、多人保护触发距离、有限重试/冷却节奏、后台挂机稳定性，按第六章协议埋点取证据修正。
 2. **多人并发抢箱细化**：精确取物会话中途其他玩家操作容器导致 stateId 剧烈变化的放弃判定与冷却联动。

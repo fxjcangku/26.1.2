@@ -1,4 +1,4 @@
-# AutoChest 辅助体系 · 第四阶段开发报告（AutoChest 配置页面 GUI）
+﻿# AutoChest 辅助体系 · 第四阶段开发报告（AutoChest 配置页面 GUI）
 
 > 日期：2026-08-31
 > 阶段：AutoChest 配置页面（模式下拉 + 当前模式实时显示 + 模式专属配置 + 容器选择器 + 检测范围 + 触发距离 + 目标物品选择器 + 三种取物模式 + 每种物品独立数量）
@@ -11,8 +11,8 @@
 
 接手继续开发前，**必须完整读完以下两个个人开发习惯文件**，不得跳读：
 
-1. `d:\mcaddon\26.1.2\AGENTS.md`（五条铁律 + 关键速查）
-2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
+1. `<项目根>/AGENTS.md`（五条铁律 + 关键速查）
+2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`（十章规范唯一正本）
 
 关键铁律提醒（下一步开发前逐条对照）：
 - 规范注释只增不删；证据驱动排查（Bug 先埋点取证据）；中文 + 日期归档。
@@ -124,8 +124,8 @@ BUILD SUCCESSFUL in 2s
 ## 6. 下一阶段（第五阶段）待办
 
 > 下一阶段开工前，**必须先完整读完以下两个个人开发习惯文件**（与第 0 节相同，不得跳读）：
-> 1. `d:\mcaddon\26.1.2\AGENTS.md`
-> 2. `d:\mcaddon\26.1.2\src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
+> 1. `<项目根>/AGENTS.md`
+> 2. `<项目根>/src\main\java\com\example\addon\convention\YiyiaddonConvention.java`
 
 1. **消费层接线**：状态机按 `scanMode` 分派（玩家控制 / 寻路 / 标点），用
    `containerTypes.enabledTypes()` 过滤扫描结果，用 `scanRadius` / `triggerDistance` / `arriveDistance`

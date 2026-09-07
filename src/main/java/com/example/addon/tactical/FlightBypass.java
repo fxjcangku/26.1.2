@@ -20,6 +20,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -144,6 +145,9 @@ public class FlightBypass extends YiyiaddonModule {
     /** 空中开伞请求去重：一次离地只发一条 START_FALL_FLYING */
     private boolean glideDeployRequested = false;
 
+    /** 发包飞行是否由本模块置位了飞行态（关闭/重置时需还原，避免关模块后仍悬空） */
+    private boolean packetFlyEnabled = false;
+
     /** 缺鞘翅提示节流（5 秒一次，防每 tick 刷屏） */
     private long lastGlideHintAt = 0L;
 
@@ -178,9 +182,9 @@ public class FlightBypass extends YiyiaddonModule {
             new com.example.addon.ui.HelpScreen.HelpSection("飞行模式（26.1.2 官方机制依据）",
                 "§8├─ §e发包飞行 §8- §7需服务端授予飞行能力（/fly/创造/旁观）",
                 "§8│   §7协调器校验 abilities 后放行，未授权自动拒绝",
-                "§8│   §7零注入原版飞行：速度由服务端权威计算，无法客户端加速",
+                "§8│   §7自动置位飞行态并同步服务端，速度由服务端权威计算",
                 "§8│",
-                "§8├─ §e原版模拟 §8- §7落地即真实起跳",
+                "§8├─ §e原版模拟 §8- §7落地即真实起跳 + 朝前兔子跳",
                 "§8│   §7地面接触由原版物理重置浮空计时，全服合法",
                 "§8│",
                 "§8├─ §e安全滑翔 §8- §7自动换鞘翅 + 官方起伞",
@@ -232,6 +236,8 @@ public class FlightBypass extends YiyiaddonModule {
             destroyScaffoldBlock(pendingDestroyPos);
             pendingDestroyPos = null;
         }
+        // 还原本模块置位的飞行态：仅在非创造/非旁观时收回，避免干扰原版飞行
+        releasePacketFly();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -250,10 +256,27 @@ public class FlightBypass extends YiyiaddonModule {
         pendingDestroyPos = null;
         pendingDestroyAt = 0L;
         glideDeployRequested = false;
+        packetFlyEnabled = false;
         lastGlideHintAt = 0L;
         lastNotifiedReason = null;
         lastNotifiedMode = null;
         wasBlocked = false;
+    }
+
+    /**
+     * 还原发包飞行置位的飞行态。
+     * 仅当本模块确实置位过（packetFlyEnabled）才动作；创造/旁观下原版飞行本就合法，
+     * 不回收以免打断原版操作。
+     */
+    private void releasePacketFly() {
+        if (!packetFlyEnabled || mc.player == null) return;
+        packetFlyEnabled = false;
+
+        Abilities abilities = mc.player.getAbilities();
+        if (abilities.flying && !abilities.instabuild && !mc.player.isSpectator()) {
+            abilities.flying = false;
+            mc.player.connection.send(new ServerboundPlayerAbilitiesPacket(abilities));
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -338,11 +361,19 @@ public class FlightBypass extends YiyiaddonModule {
      * 乘服务端 getFlyingSpeed() 属性权威计算水平速度，客户端 setDeltaMovement
      * 的水平分量完全不参与；垂直方向服务端也只对自己内部的 Y 速度做 0.6 衰减。
      * 因此客户端注入任何速度都只改本地预测、与服务端轨迹漂移（触发距离校验），
-     * 还无法加速。本模式不注入任何移动：悬停/上升/下降/水平全由原版飞行输入完成，
-     * 这就是服务端规则内发包飞行的最高合法速度。
+     * 还无法加速。本模式只负责「起飞」这一步：把客户端置为飞行态并同步给服务端，
+     * 之后悬停/上升/下降/水平全由原版飞行输入完成，速度由服务端权威计算。
      */
     private void handlePacketFly() {
-        // 零注入：原版飞行本身即最快合法形态，速度由服务端规则决定
+        // 协调器准入已校验服务端授予了飞行能力（mayfly/flying）。这里把客户端
+        // 置为飞行态并回发 abilities 包：26.1.2 服务端 handlePlayerAbilities 只在
+        // 自身 mayfly 为真时才接受 flying 标志，因此这一步是「合法起飞」而非发包伪造。
+        Abilities abilities = mc.player.getAbilities();
+        if (!abilities.flying) {
+            abilities.flying = true;
+            packetFlyEnabled = true;
+            mc.player.connection.send(new ServerboundPlayerAbilitiesPacket(abilities));
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -354,6 +385,16 @@ public class FlightBypass extends YiyiaddonModule {
         if (tickCounter % vanillaJumpInterval.get() != 0) return;
         if (!mc.player.onGround()) return;
         mc.player.jumpFromGround();
+
+        // 起跳瞬间叠加朝前水平推力，形成「兔子跳」式前进，让本模式具备实际位移
+        // 而非原地上下跳动；推力落在原版疾跑跳跃的正常速度范围内，不触发移动校验
+        Vec3 forward = mc.player.getForward();
+        Vec3 motion = mc.player.getDeltaMovement();
+        mc.player.setDeltaMovement(
+            motion.x + forward.x * 0.28,
+            motion.y,
+            motion.z + forward.z * 0.28
+        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

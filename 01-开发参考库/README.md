@@ -71,9 +71,9 @@
 - 命令行速查工具（整合自 03-映射表/）：
 
 ```powershell
-node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" LocalPlayer          # 查类全路径+字段+方法
-node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" LocalPlayer sendSys  # 类内搜方法
-node "d:\mcaddon\26.1.2\01-开发参考库\工具\查JARAPI.js" --找 sendCommand     # 全局搜方法
+node "01-开发参考库/工具/查JARAPI.js" LocalPlayer          # 查类全路径+字段+方法
+node "01-开发参考库/工具/查JARAPI.js" LocalPlayer sendSys  # 类内搜方法
+node "01-开发参考库/工具/查JARAPI.js" --找 sendCommand     # 全局搜方法
 ```
 
 ---

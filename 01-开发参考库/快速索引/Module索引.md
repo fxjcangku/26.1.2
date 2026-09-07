@@ -2,7 +2,7 @@
 
 > 查询顺序提醒：先查本索引 → 命中后到 原始源码 Grep 复核 → 再看 API参考对应文档
 >
-> 说明：模块 = `Module` 子类，由 `Modules` 管理器统一注册/分类/启停/序列化。Meteor 侧源码相对路径相对 `Meteor原始源码\`；本项目 addon 源码在 `d:\mcaddon\26.1.2\src\main\java\com\example\addon\`。
+> 说明：模块 = `Module` 子类，由 `Modules` 管理器统一注册/分类/启停/序列化。Meteor 侧源码相对路径相对 `Meteor原始源码\`；本项目 addon 源码在 `src/main/java/com/example/addon/`。
 
 ## 一、Meteor 模块体系
 

@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const mixin目录 = 'd:/mcaddon/26.1.2/src/main/java/com/example/addon/mixin';
+const mixin目录 = path.resolve(__dirname, '..', '..', 'src/main/java/com/example/addon/mixin');
 const 结果 = [];
 for (const f of fs.readdirSync(mixin目录)) {
     if (!f.endsWith('.java')) continue;

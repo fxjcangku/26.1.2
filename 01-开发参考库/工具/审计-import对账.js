@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const 库 = 'd:/mcaddon/26.1.2/01-开发参考库';
+const 库 = path.resolve(__dirname, '..');
 const MC源 = path.join(库, 'Minecraft原始源码');
 const Meteor源 = path.join(库, 'Meteor原始源码');
 const 类名索引 = fs.readFileSync(path.join(库, '生成的索引文件', '类名索引-26.1.2.txt'), 'utf8')
@@ -33,7 +33,8 @@ function 主体名(全名) { return 全名.split('$')[0]; }
 
 // com.mojang 依赖库（随合并 JAR 打包，但不在源码 jar 中）：先用 javap 验证存在性
 const { execSync } = require('child_process');
-const 合并Jar = 'd:/mcaddon/26.1.2/.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-83e224879c/26.1.2/minecraft-merged-83e224879c-26.1.2.jar';
+const 项目根 = path.resolve(__dirname, '..', '..');
+const 合并Jar = path.join(项目根, '.gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-83e224879c/26.1.2/minecraft-merged-83e224879c-26.1.2.jar');
 const 缓存已验证 = new Map();
 function jar中存在(类名) {
     if (缓存已验证.has(类名)) return 缓存已验证.get(类名);

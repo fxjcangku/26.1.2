@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const 项目根 = 'd:/mcaddon/26.1.2/src/main/java';
+const 项目根 = path.resolve(__dirname, '..', '..', 'src/main/java');
 
 // 模式列表：{ 模式: 正则, 说明: 中文说明, 依据: 参考库依据 }
 const 模式表 = [

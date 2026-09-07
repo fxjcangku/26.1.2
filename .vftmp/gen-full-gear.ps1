@@ -1,8 +1,9 @@
-﻿﻿# 一次性生成脚本：依据 Minecraft 26.1.2 官方 Item Registry / ToolMaterial / ArmorMaterials
+﻿# 一次性生成脚本：依据 Minecraft 26.1.2 官方 Item Registry / ToolMaterial / ArmorMaterials
 # 生成「原版装备极品附魔」完整装备全集（75 件）的 gears.json 与 30 级候选池。
 # 严格以官方数据为准：铜工具/铜护甲/矛/重锤等 26.1.2 真实 Item 才加入，绝不虚构。
 $ErrorActionPreference = 'Stop'
-$root = 'd:\mcaddon\26.1.2\src\main\resources\enchantment\vanilla'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$root = Join-Path (Split-Path -Parent $scriptDir) 'src\main\resources\enchantment\vanilla'
 New-Item -ItemType Directory -Force -Path "$root\items" | Out-Null
 New-Item -ItemType Directory -Force -Path "$root\candidates\level30" | Out-Null
 
