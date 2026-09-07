@@ -18,6 +18,8 @@ import com.example.addon.librarian.AutoLibrarianModule;
 import com.example.addon.modules.AdminDetectorModule;
 import com.example.addon.modules.AutoBoneMeal;
 import com.example.addon.autofarm.AutoFarmMatrix;
+import com.example.addon.stardew.StardewFarmModule;
+import com.example.addon.stardew.command.StardewCommand;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.AutoVillagerTradeModule;
 import com.example.addon.modules.BaritoneCommandGuideModule;
@@ -155,6 +157,10 @@ public class AddonTemplate extends MeteorAddon {
         Modules.get().add(new AutoChestModule(itemIdManager));
         Commands.add(new AutoChestCommand());
         Commands.add(new IdCommand(itemIdManager, entityIdManager));
+
+        // 星露谷农场：与原版自动农场平级，复用同一 ItemIdManager（ID 三件套唯一数据源）
+        Modules.get().add(new StardewFarmModule(itemIdManager));
+        Commands.add(new StardewCommand());
 
         // ── 反作弊绕过模块 ──
         // FlightBypass：飞行绕过
