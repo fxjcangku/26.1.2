@@ -18,6 +18,7 @@ import com.example.addon.librarian.AutoLibrarianModule;
 import com.example.addon.modules.AdminDetectorModule;
 import com.example.addon.modules.AutoBoneMeal;
 import com.example.addon.autofarm.AutoFarmMatrix;
+import com.example.addon.stardew.StardewFarmModule;
 import com.example.addon.stardew.command.StardewCommand;
 import com.example.addon.modules.AutoMinerModule;
 import com.example.addon.modules.AutoVillagerTradeModule;
@@ -106,6 +107,10 @@ public class AddonTemplate extends MeteorAddon {
         userStatsModule.enable();
 
         // ── 自动化模块 ──
+        // 农场矩阵：自动种植和收割作物
+        AutoFarmMatrix autoFarmMatrix = new AutoFarmMatrix();
+        Modules.get().add(autoFarmMatrix);
+
         // 自动挖矿：使用 Baritone 自动挖矿并管理背包
         AutoMinerModule autoMinerModule = new AutoMinerModule();
         Modules.get().add(autoMinerModule);
@@ -153,8 +158,8 @@ public class AddonTemplate extends MeteorAddon {
         Commands.add(new AutoChestCommand());
         Commands.add(new IdCommand(itemIdManager, entityIdManager));
 
-        // 自动农场：唯一入口，内部通过「模式」下拉在原版/星露谷间切换，复用同一 ItemIdManager
-        Modules.get().add(new AutoFarmMatrix(itemIdManager));
+        // 星露谷农场：与原版自动农场平级，复用同一 ItemIdManager（ID 三件套唯一数据源）
+        Modules.get().add(new StardewFarmModule(itemIdManager));
         Commands.add(new StardewCommand());
 
         // ── 反作弊绕过模块 ──

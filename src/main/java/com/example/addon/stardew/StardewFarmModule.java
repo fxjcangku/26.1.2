@@ -1,11 +1,12 @@
 package com.example.addon.stardew;
 
-import com.example.addon.autofarm.AutoFarmMatrix;
 import com.example.addon.autofarm.model.FarmSite;
 import com.example.addon.autofarm.navigation.FarmNav;
 import com.example.addon.autofarm.task.FarmTask;
 import com.example.addon.autofarm.task.TaskResult;
 import com.example.addon.autofarm.task.UnloadTask;
+import com.example.addon.core.AddonTemplate;
+import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.farm.ContainerBroker;
 import com.example.addon.itemid.ItemIdManager;
 import com.example.addon.itemid.ItemIdentity;
@@ -51,14 +52,20 @@ import com.example.addon.stardew.ui.StardewSeedSelector;
 import com.example.addon.stardew.watering.WateringPlanner;
 import com.example.addon.stardew.watering.WateringService;
 import com.example.addon.ui.HelpScreen;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.StringSetting;
-import net.minecraft.client.Minecraft;
+import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -67,20 +74,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 /**
- * 星露谷农场策略：承载星露谷模式的全部核心逻辑（识别/规划/任务/状态机），
- * 但不再作为独立 Meteor 模块注册，而是由「自动农场」模块在 mode=STARDEW 时驱动。
+ * 星露谷农场：与原版自动农场平级的自动化模式，共享 Observe → Decide → Act → Verify → Replan 思路，
+ * 复用现有 TaskResult / FarmTask / ContainerBroker / UnloadTask / ID 三件套 / 卸货补货体系。
  *
- * <p>资源包为增强层，当前无资源包也能基于运行时物品 ID + 手动配置运行；
- * 卸货/补货/移动/验证复用现有公共基础设施，不另造一套。</p>
+ * <p>星露谷逻辑独立在本包，绝不侵入原版自动农场；资源包为增强层，当前无资源包也能基于
+ * 运行时物品 ID + 手动配置运行。</p>
  */
-public final class StardewFarmStrategy {
-
-    /** 宿主模块：用于消息输出 / 高亮 / 自检 / 模块状态等统一能力 */
-    private final AutoFarmMatrix host;
-    private final Minecraft mc = Minecraft.getInstance();
+public final class StardewFarmModule extends YiyiaddonModule {
 
     // ── 服务实例 ──
     private final ItemIdManager idManager;
@@ -101,7 +103,13 @@ public final class StardewFarmStrategy {
     private String lastNotifiedState = "";
     private Boolean prevPauseOnLostFocus = null;
 
-    // ── UI 配置（挂在宿主模块的 group 上，仅星露谷模式可见） ──
+    // ═══════════════════════════════════════════════════════════════════
+    //  UI 配置
+    // ═══════════════════════════════════════════════════════════════════
+
+    private final SettingGroup sgAuto = settings.createGroup("自动化开关", true);
+    private final SettingGroup sgRun = settings.createGroup("运行参数", false);
+
     private final Setting<Boolean> autoHarvest;
     private final Setting<Boolean> autoPlant;
     private final Setting<Boolean> autoWater;
@@ -121,55 +129,43 @@ public final class StardewFarmStrategy {
     private final Setting<String> siteSeed;
     private final Setting<String> siteHarvest;
 
-    public StardewFarmStrategy(AutoFarmMatrix host, ItemIdManager idManager,
-                               SettingGroup sgAuto, SettingGroup sgRun) {
-        this.host = host;
+    public StardewFarmModule(ItemIdManager idManager) {
+        super(AddonTemplate.CATEGORY_AUTOMATION, "星露谷农场",
+            "适配不同 Minecraft 星露谷服务器的自动农场：种子/作物/成熟/浇水/施肥/洒水器全部配置化，复用现有 ID 与卸货补货体系。");
+
         this.idManager = idManager;
-        this.debug = new StardewDebugLogger(host::notify);
+        this.debug = new StardewDebugLogger(this::notify);
 
         // ── 自动化开关 ──
         autoHarvest = sgAuto.add(new BoolSetting.Builder()
-            .name("自动收割").description("发现确定成熟的作物时自动收割").defaultValue(true)
-            .visible(host::isStardewMode).build());
+            .name("自动收割").description("发现确定成熟的作物时自动收割").defaultValue(true).build());
         autoPlant = sgAuto.add(new BoolSetting.Builder()
-            .name("自动种植").description("发现空地时自动种植选中的种子").defaultValue(true)
-            .visible(host::isStardewMode).build());
+            .name("自动种植").description("发现空地时自动种植选中的种子").defaultValue(true).build());
         autoWater = sgAuto.add(new BoolSetting.Builder()
-            .name("自动浇水").description("发现干旱土地时自动浇水（需服务器浇水规则）").defaultValue(false)
-            .visible(host::isStardewMode).build());
+            .name("自动浇水").description("发现干旱土地时自动浇水（需服务器浇水规则）").defaultValue(false).build());
         autoFertilize = sgAuto.add(new BoolSetting.Builder()
-            .name("自动施肥").description("发现未施肥土地时自动施肥（需服务器施肥规则）").defaultValue(false)
-            .visible(host::isStardewMode).build());
+            .name("自动施肥").description("发现未施肥土地时自动施肥（需服务器施肥规则）").defaultValue(false).build());
         autoRestock = sgAuto.add(new BoolSetting.Builder()
-            .name("自动补货").description("种子低于安全库存时自动从种子箱补货").defaultValue(true)
-            .visible(host::isStardewMode).build());
+            .name("自动补货").description("种子低于安全库存时自动从种子箱补货").defaultValue(true).build());
         autoUnload = sgAuto.add(new BoolSetting.Builder()
-            .name("自动卸货").description("种子超过安全库存时自动卸回种子箱").defaultValue(true)
-            .visible(host::isStardewMode).build());
+            .name("自动卸货").description("种子超过安全库存时自动卸回种子箱").defaultValue(true).build());
         debugLog = sgAuto.add(new BoolSetting.Builder()
             .name("调试日志").description("记录未知种子/作物/农田/成熟状态，帮助定位缺配项").defaultValue(false)
-            .visible(host::isStardewMode).onChanged(debug::setEnabled).build());
+            .onChanged(debug::setEnabled).build());
 
         // ── 运行参数 ──
         reachDistance = sgRun.add(new IntSetting.Builder()
-            .name("操作距离").description("能操作多远的方块").defaultValue(4).min(3).max(8).noSlider()
-            .visible(host::isStardewMode).build());
+            .name("操作距离").description("能操作多远的方块").defaultValue(4).min(3).max(8).noSlider().build());
         bpt = sgRun.add(new IntSetting.Builder()
-            .name("发包速率(BPT)").description("每 tick 最多发送多少个交互/容器操作包").defaultValue(10).min(1).max(30).noSlider()
-            .visible(host::isStardewMode).build());
+            .name("发包速率(BPT)").description("每 tick 最多发送多少个交互/容器操作包").defaultValue(10).min(1).max(30).noSlider().build());
         restockGroups = sgRun.add(new IntSetting.Builder()
-            .name("补货种子数量(组)").description("种子低于此组数自动补货，卸货时始终保留")
-            .defaultValue(StardewConfig.DEFAULT_RESTOCK_GROUPS).min(1).max(10).noSlider()
-            .visible(host::isStardewMode).build());
+            .name("补货种子数量(组)").description("种子低于此组数自动补货，卸货时始终保留").defaultValue(StardewConfig.DEFAULT_RESTOCK_GROUPS).min(1).max(10).noSlider().build());
         unloadGroups = sgRun.add(new IntSetting.Builder()
-            .name("卸货数量(组)").description("种子超过此组数才卸回种子箱")
-            .defaultValue(StardewConfig.DEFAULT_UNLOAD_GROUPS).min(1).max(36).noSlider()
-            .visible(host::isStardewMode).build());
+            .name("卸货数量(组)").description("种子超过此组数才卸回种子箱").defaultValue(StardewConfig.DEFAULT_UNLOAD_GROUPS).min(1).max(36).noSlider().build());
 
         // ── 种子选择（由种子选择器按钮联动） ──
         selectedSeed = sgRun.add(new StringSetting.Builder()
-            .name("当前种子").description("自动种植时使用的种子 ID（点击「种子选择器」选择）").defaultValue("")
-            .visible(host::isStardewMode).build());
+            .name("当前种子").description("自动种植时使用的种子 ID（点击「种子选择器」选择）").defaultValue("").build());
 
         // ── 四点位（隐藏，由指令管理） ──
         siteStart = hiddenAnchor("_stardew_start", "农场点位1");
@@ -178,7 +174,7 @@ public final class StardewFarmStrategy {
         siteHarvest = hiddenAnchor("_stardew_harvest", "收获箱");
 
         // ── 构建识别与规划服务 ──
-        Supplier<StardewServerProfile> profileSupplier = this::currentProfile;
+        java.util.function.Supplier<StardewServerProfile> profileSupplier = this::currentProfile;
         SeedRecognizer seedRecognizer = new RuntimeSeedRecognizer(profileSupplier, idManager);
         CropRecognizer cropRecognizer = new RuntimeCropRecognizer(profileSupplier);
         GrowthStageRecognizer growthRecognizer = new RuntimeGrowthStageRecognizer(profileSupplier);
@@ -197,7 +193,7 @@ public final class StardewFarmStrategy {
     }
 
     private Setting<String> hiddenAnchor(String name, String desc) {
-        return host.settings.getDefaultGroup().add(new StringSetting.Builder()
+        return settings.getDefaultGroup().add(new StringSetting.Builder()
             .name(name).description("内部使用：" + desc).defaultValue(FarmSite.UNBOUND).visible(() -> false).build());
     }
 
@@ -219,30 +215,30 @@ public final class StardewFarmStrategy {
 
     public void selectSeed(String seedId) {
         selectedSeed.set(seedId);
-        host.notify("已选择种子 §a" + seedId);
+        notify("已选择种子 §a" + seedId);
     }
 
     public void addSeedFromHeld() {
         if (mc.player == null) {
-            host.notifyError("必须在游戏内操作。");
+            notifyError("必须在游戏内操作。");
             return;
         }
         ItemStack held = mc.player.getMainHandItem();
         if (held.isEmpty()) {
-            host.notifyError("主手未持有物品，请手持服务器种子后再添加。");
+            notifyError("主手未持有物品，请手持服务器种子后再添加。");
             return;
         }
 
         ItemIdentity identity = idIntegration.registerFromStack(held);
         if (identity == null) {
-            host.notifyError("无法识别该物品，请确认物品有效。");
+            notifyError("无法识别该物品，请确认物品有效。");
             return;
         }
 
         StardewServerProfile p = ensureProfile();
         for (StardewSeedProfile seed : p.seeds()) {
             if (seed.minecraftItemId().equals(identity.itemId())) {
-                host.notify("该物品已添加为种子 §a" + seed.displayName());
+                notify("该物品已添加为种子 §a" + seed.displayName());
                 return;
             }
         }
@@ -260,7 +256,7 @@ public final class StardewFarmStrategy {
         repo.save(p);
         selectedSeed.set(seedId);
 
-        host.notify("§a✓ 已添加种子 " + seed.displayName() + " §8▸ 需在档案 JSON 配置作物方块/成熟规则后方可识别");
+        notify("§a✓ 已添加种子 " + seed.displayName() + " §8▸ 需在档案 JSON 配置作物方块/成熟规则后方可识别");
     }
 
     public void removeSeed(String seedId) {
@@ -271,29 +267,29 @@ public final class StardewFarmStrategy {
         StardewCropProfile crop = p.cropById(seed.cropId());
         if (crop != null) p.crops().remove(crop);
         repo.save(p);
-        host.notify("已删除种子 §a" + seed.displayName());
+        notify("已删除种子 §a" + seed.displayName());
     }
 
     /** 把准星命中的方块登记为星露谷农田底盘（供无资源包手动配置） */
     public void addSoilFromCrosshair() {
         if (mc.level == null) {
-            host.notifyError("当前不在游戏世界。");
+            notifyError("当前不在游戏世界。");
             return;
         }
         BlockPos target = targetBlock();
         if (target == null) {
-            host.notifyError("准星未对准方块。");
+            notifyError("准星未对准方块。");
             return;
         }
         StardewServerProfile p = ensureProfile();
         String blockId = com.example.addon.stardew.recognition.RecognizerSupport.blockId(target);
         if (p.soilBlockIds().contains(blockId)) {
-            host.notify("该方块已是农田底盘 §a" + blockId);
+            notify("该方块已是农田底盘 §a" + blockId);
             return;
         }
         p.soilBlockIds().add(blockId);
         repo.save(p);
-        host.notify("§a✓ 已登记农田底盘 " + blockId);
+        notify("§a✓ 已登记农田底盘 " + blockId);
     }
 
     private StardewServerProfile ensureProfile() {
@@ -307,13 +303,14 @@ public final class StardewFarmStrategy {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  生命周期（由宿主 AutoFarmMatrix 在 mode=STARDEW 时调用）
+    //  模块生命周期
     // ═══════════════════════════════════════════════════════════════════
 
-    public void activate() {
+    @Override
+    public void onActivate() {
         if (mc.player == null || mc.level == null) {
-            host.notifyError("必须在进入世界后才能启动模块。");
-            mc.execute(host::toggle);
+            notifyError("必须在进入世界后才能启动模块。");
+            mc.execute(this::toggle);
             return;
         }
 
@@ -323,7 +320,7 @@ public final class StardewFarmStrategy {
             if (profile == null) ensureProfile();
         }
 
-        if (!host.reportSelfCheck(selfCheck())) return;
+        if (!reportSelfCheck(selfCheck())) return;
 
         if (prevPauseOnLostFocus == null) prevPauseOnLostFocus = mc.options.pauseOnLostFocus;
         mc.options.pauseOnLostFocus = false;
@@ -338,7 +335,8 @@ public final class StardewFarmStrategy {
         reportStartupInfo();
     }
 
-    public void deactivate() {
+    @Override
+    public void onDeactivate() {
         if (currentTask != null) {
             currentTask.cancel();
             currentTask = null;
@@ -383,17 +381,18 @@ public final class StardewFarmStrategy {
         int seeds = p == null ? 0 : (int) p.seeds().stream().filter(StardewSeedProfile::enabled).count();
         int crops = p == null ? 0 : (int) p.crops().stream().filter(c -> !c.cropBlockIds().isEmpty()).count();
         int soils = p == null ? 0 : p.soilBlockIds().size();
-        host.notify("§a§l✓ 星露谷农场 · 启动报告\n"
-            + "§7种子 §8▸ " + host.highlightNumber(String.valueOf(seeds))
-            + " §8│ §7作物 §8▸ " + host.highlightNumber(String.valueOf(crops))
-            + " §8│ §7农田方块 §8▸ " + host.highlightNumber(String.valueOf(soils)));
+        notify("§a§l✓ 星露谷农场 · 启动报告\n"
+            + "§7种子 §8▸ " + highlightNumber(String.valueOf(seeds))
+            + " §8│ §7作物 §8▸ " + highlightNumber(String.valueOf(crops))
+            + " §8│ §7农田方块 §8▸ " + highlightNumber(String.valueOf(soils)));
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  状态机（每 tick 由宿主转发调用）
+    //  事件处理（状态机）
     // ═══════════════════════════════════════════════════════════════════
 
-    public void tick() {
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
         if (mc.player == null || mc.level == null) return;
 
         if (!worldReady() || !playerAlive()) {
@@ -436,11 +435,6 @@ public final class StardewFarmStrategy {
             }
         }
         setState(StardewFarmState.OBSERVE);
-    }
-
-    /** 是否正在执行独占物流任务（供宿主静默容器判断） */
-    public boolean isLogisticsRunning() {
-        return currentTask != null && currentTask.exclusive();
     }
 
     private boolean worldReady() {
@@ -524,12 +518,12 @@ public final class StardewFarmStrategy {
         } else if (task instanceof StardewPlantTask plant) {
             memory.remove(plant.soilPos());
         } else if (task instanceof StardewRestockTask restock) {
-            if (result == TaskResult.CONTAINER_EMPTY) host.notify("§e⚠ 种子箱无货 §8▸ 已跳过补货");
-            else if (result.ok()) host.notify("§a✓ 补货完成");
-            else host.notify("§c✗ 补货失败");
+            if (result == TaskResult.CONTAINER_EMPTY) notify("§e⚠ 种子箱无货 §8▸ 已跳过补货");
+            else if (result.ok()) notify("§a✓ 补货完成");
+            else notify("§c✗ 补货失败");
         } else if (task instanceof UnloadTask) {
-            if (result.ok()) host.notify("§a✓ 卸货完成");
-            else if (result != TaskResult.CONTAINER_FULL) host.notify("§c✗ 卸货失败");
+            if (result.ok()) notify("§a✓ 卸货完成");
+            else if (result != TaskResult.CONTAINER_FULL) notify("§c✗ 卸货失败");
         }
         setState(StardewFarmState.OBSERVE);
     }
@@ -546,6 +540,23 @@ public final class StardewFarmStrategy {
 
     private void setState(StardewFarmState newState) {
         this.state = newState;
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        if (isActive()) toggle();
+    }
+
+    @EventHandler
+    private void onOpenScreen(OpenScreenEvent event) {
+        if (mc.player == null) return;
+        FarmTask task = currentTask;
+        boolean logisticsRunning = task != null && task.exclusive();
+        if (isActive() && logisticsRunning
+            && event.screen instanceof AbstractContainerScreen<?>
+            && !(event.screen instanceof InventoryScreen)) {
+            event.setCancelled(true);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -600,23 +611,24 @@ public final class StardewFarmStrategy {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  配置面板（由宿主在 mode=STARDEW 时返回）
+    //  配置面板
     // ═══════════════════════════════════════════════════════════════════
 
-    public WWidget buildWidget(GuiTheme theme) {
-        return host.buildInfoWidget(theme, table -> {
-            table.add(theme.label("§b§l星露谷农场 §r§8▸ §f自动农场下的通用模式")).expandX();
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        return buildInfoWidget(theme, table -> {
+            table.add(theme.label("§b§l星露谷农场 §r§8▸ §f与原版自动农场平级的通用模式")).expandX();
             table.row();
             table.add(theme.label(statusSummary())).expandX();
             table.row();
             table.add(theme.label(" ")).expandX();
             table.row();
 
-            host.addUniformButton(theme, table, "§a种子选择器",
+            addUniformButton(theme, table, "§a种子选择器",
                 () -> mc.setScreen(new StardewSeedSelector(theme, this)));
             table.row();
-            host.addUniformButton(theme, table, "§e查看使用说明",
-                () -> mc.setScreen(new HelpScreen(theme, host, buildHelpContent())));
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new HelpScreen(theme, this, buildHelpContent())));
         });
     }
 
@@ -624,9 +636,9 @@ public final class StardewFarmStrategy {
         StardewServerProfile p = currentProfile();
         int seeds = p == null ? 0 : p.seeds().size();
         int soils = p == null ? 0 : p.soilBlockIds().size();
-        return "§7种子 §8▸ " + host.highlightNumber(String.valueOf(seeds))
-            + " §8│ §7农田方块 §8▸ " + host.highlightNumber(String.valueOf(soils))
-            + " §8│ §7状态 §8▸ " + host.highlightFunction(state.cn());
+        return "§7种子 §8▸ " + highlightNumber(String.valueOf(seeds))
+            + " §8│ §7农田方块 §8▸ " + highlightNumber(String.valueOf(soils))
+            + " §8│ §7状态 §8▸ " + highlightFunction(state.cn());
     }
 
     private String[] buildHelpContent() {

@@ -8,7 +8,6 @@ import com.example.addon.autofarm.controller.FarmSelfCheck;
 import com.example.addon.autofarm.controller.FarmVerifier;
 import com.example.addon.autofarm.model.CropProfile;
 import com.example.addon.autofarm.model.FarmSite;
-import com.example.addon.autofarm.model.FarmMode;
 import com.example.addon.autofarm.model.FarmState;
 import com.example.addon.autofarm.model.HarvestMode;
 import com.example.addon.autofarm.model.PlantMode;
@@ -22,8 +21,6 @@ import com.example.addon.autofarm.task.PlantTask;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.farm.ContainerBroker;
-import com.example.addon.itemid.ItemIdManager;
-import com.example.addon.stardew.StardewFarmStrategy;
 import com.example.addon.ui.HelpScreen;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
@@ -76,7 +73,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final FarmSelfCheck selfCheck = new FarmSelfCheck();
     private final FarmDecision decision;
     private final FarmController controller;
-    private final StardewFarmStrategy stardew;
 
     // ═══════════════════════════════════════════════════════════════════
     //  UI 配置面板（分组折叠）
@@ -87,12 +83,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     private final SettingGroup sgPerSeed = settings.createGroup("逐作物独立配置", true);
     private final SettingGroup sgLogistics = settings.createGroup("运行参数", false);
     private final SettingGroup sgRender = settings.createGroup("渲染显示", false);
-    private final SettingGroup sgMode = settings.createGroup("模式", true);
-    private final SettingGroup sgStardewAuto = settings.createGroup("星露谷·自动化开关", false);
-    private final SettingGroup sgStardewRun = settings.createGroup("星露谷·运行参数", false);
-
-    // ─── 模式选择 ───
-    private final Setting<FarmMode> mode;
 
     // ─── 作物分类选择器 ───
     private final Setting<List<Block>> cropsDouble;
@@ -136,30 +126,21 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     /** 启动前记录的「失焦暂停」原值，关闭模块时还原（后台挂机时鼠标失焦不应暂停游戏） */
     private Boolean prevPauseOnLostFocus = null;
 
-    public AutoFarmMatrix(ItemIdManager idManager) {
+    public AutoFarmMatrix() {
         super(AddonTemplate.CATEGORY_AUTOMATION, "自动农场",
             "熟一颗收一颗，自动补种拾取，单作物箱/种子补货箱/多作物箱与杂物箱物流自动化。点击按钮查看说明。");
-
-        // ─── 模式选择（决定原版或星露谷逻辑，onActivate/onTick 按此分流） ───
-        mode = sgMode.add(new EnumSetting.Builder<FarmMode>()
-            .name("模式")
-            .description("选择自动农场运行模式：原版自动农场 或 星露谷农场")
-            .defaultValue(FarmMode.VANILLA)
-            .build());
 
         // ─── 辅助工具 ───
         antiTrample = sgHelper.add(new BoolSetting.Builder()
             .name("防踩踏")
             .description("农田范围内拦截跳跃键，避免踩坏耕地")
             .defaultValue(true)
-            .visible(this::isVanillaMode)
             .build());
 
         autoTill = sgHelper.add(new BoolSetting.Builder()
             .name("自动锄地")
             .description("农田范围内发现草方块/泥土时，自动拿锄头锄成耕地；背包无锄头则跳过")
             .defaultValue(true)
-            .visible(this::isVanillaMode)
             .build());
 
         // ─── 作物分类选择器 ───
@@ -168,7 +149,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("种子与产物分离：小麦、甜菜根")
             .defaultValue(List.of())
             .filter(this::isDoubleCrop)
-            .visible(this::isVanillaMode)
             .build());
 
         cropsSingle = sgCrops.add(new BlockListSetting.Builder()
@@ -176,7 +156,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("产物即种子：胡萝卜、马铃薯、下界疣")
             .defaultValue(List.of())
             .filter(this::isSingleCrop)
-            .visible(this::isVanillaMode)
             .build());
 
         cropsPillar = sgCrops.add(new BlockListSetting.Builder()
@@ -184,7 +163,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("切根部上方：竹子、甘蔗、仙人掌")
             .defaultValue(List.of())
             .filter(this::isPillar)
-            .visible(this::isVanillaMode)
             .build());
 
         cropsVine = sgCrops.add(new BlockListSetting.Builder()
@@ -192,7 +170,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("只砍果实：南瓜、西瓜")
             .defaultValue(List.of())
             .filter(this::isFruit)
-            .visible(this::isVanillaMode)
             .build());
 
         // ─── 单种子独立配置页：跟随「作物选择」联动，启用几种作物就显示几种配置 ───
@@ -211,7 +188,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                 .description(unloadDesc)
                 .defaultValue(FarmResourceManager.DEFAULT_UNLOAD_GROUPS)
                 .min(1).max(36).noSlider()
-                .visible(() -> isVanillaMode() && getEnabledCrops().contains(profile))
+                .visible(() -> getEnabledCrops().contains(profile))
                 .build());
             perCropUnload.put(profile, unload);
 
@@ -222,7 +199,7 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
                     .description("该作物种植材料低于多少组时自动去作物箱补货，卸货时始终保留这批材料")
                     .defaultValue(FarmResourceManager.DEFAULT_RESTOCK_GROUPS)
                     .min(1).max(10).noSlider()
-                    .visible(() -> isVanillaMode() && getEnabledCrops().contains(profile))
+                    .visible(() -> getEnabledCrops().contains(profile))
                     .build());
                 perCropRestock.put(profile, restock);
             }
@@ -234,35 +211,31 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .description("单个收割：每次只处理一个成熟目标；批量收割：一次性锁定全部成熟目标瞬间暴力破坏")
             .defaultValue(HarvestMode.SINGLE)
             .onChanged(this::onHarvestModeChanged)
-            .visible(this::isVanillaMode)
             .build());
 
         plantMode = sgLogistics.add(new EnumSetting.Builder<PlantMode>()
             .name("补种模式")
             .description("顺序优先：按作物枚举顺序种满一种再种下一种；均匀轮转：启用作物轮流种保持均衡；就近跟随：空耕地种回周围已有作物的同类，保持混种分区")
             .defaultValue(PlantMode.SEQUENTIAL)
-            .visible(this::isVanillaMode)
             .build());
 
         poisonUnloadThreshold = sgLogistics.add(new IntSetting.Builder()
             .name("杂物卸货")
             .description("杂物（毒马铃薯 + 仙人掌花）攒够多少个才卸货一次，避免捡一个就跑一次")
             .defaultValue(64).min(1).max(64).noSlider()
-            .visible(() -> isVanillaMode() && getEnabledCrops().stream().anyMatch(p -> !p.extraLoot().isEmpty() || p.junk()))
+            .visible(() -> getEnabledCrops().stream().anyMatch(p -> !p.extraLoot().isEmpty() || p.junk()))
             .build());
 
         bpt = sgLogistics.add(new IntSetting.Builder()
             .name("发包速率(BPT)")
             .description("每 tick 最多发送多少个破坏/播种/容器操作包")
             .defaultValue(10).min(1).max(30).noSlider()
-            .visible(this::isVanillaMode)
             .build());
 
         reachDistance = sgLogistics.add(new IntSetting.Builder()
             .name("收割距离")
             .description("能操作多远的方块，原版上限约 4.5 格，低于 3 会导致寻路卡住")
             .defaultValue(4).min(3).max(8).noSlider()
-            .visible(this::isVanillaMode)
             .build());
 
         // ─── 渲染辅助 ───
@@ -270,33 +243,30 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .name("农田边界")
             .description("只渲染农场范围的外框一圈（不填面），大农场也不卡")
             .defaultValue(true)
-            .visible(this::isVanillaMode)
             .build());
 
         boundsColor = sgRender.add(new ColorSetting.Builder()
             .name("边界框颜色")
             .defaultValue(new SettingColor(255, 255, 255, 50))
-            .visible(() -> isVanillaMode() && renderBounds.get())
+            .visible(() -> renderBounds.get())
             .build());
 
         renderTarget = sgRender.add(new BoolSetting.Builder()
             .name("目标显示")
             .description("高亮当前正在作业的目标方块")
             .defaultValue(true)
-            .visible(this::isVanillaMode)
             .build());
 
         targetColor = sgRender.add(new ColorSetting.Builder()
             .name("目标颜色")
             .defaultValue(new SettingColor(0, 255, 100, 75))
-            .visible(() -> isVanillaMode() && renderTarget.get())
+            .visible(() -> renderTarget.get())
             .build());
 
         renderLabels = sgRender.add(new BoolSetting.Builder()
             .name("点位字牌")
             .description("各绑定箱头顶显示防呆标签")
             .defaultValue(true)
-            .visible(this::isVanillaMode)
             .build());
 
         // ─── 六点位（隐藏设置，由指令管理） ───
@@ -312,9 +282,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             poisonUnloadThreshold.get(), bpt.get(), reachDistance.get());
         controller = new FarmController(scanner, resources, observer, verifier, broker, decision);
         controller.setLogger(this::notify);
-
-        // 星露谷策略：承载星露谷模式的配置与状态机，仅在 mode=STARDEW 时驱动，不注册为独立模块
-        stardew = new StardewFarmStrategy(this, idManager, sgStardewAuto, sgStardewRun);
     }
 
     /** 创建隐藏的锚点 StringSetting */
@@ -327,32 +294,12 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
             .build());
     }
 
-    /** 是否为原版自动农场模式 */
-    public boolean isVanillaMode() {
-        return mode.get() == FarmMode.VANILLA;
-    }
-
-    /** 是否为星露谷农场模式 */
-    public boolean isStardewMode() {
-        return mode.get() == FarmMode.STARDEW;
-    }
-
-    /** 星露谷策略实例（供指令/配置页访问） */
-    public StardewFarmStrategy stardew() {
-        return stardew;
-    }
-
     // ═══════════════════════════════════════════════════════════════════
     //  模块生命周期
     // ═══════════════════════════════════════════════════════════════════
 
     @Override
     public void onActivate() {
-        if (isStardewMode()) {
-            stardew.activate();
-            return;
-        }
-
         if (mc.player == null || mc.level == null) {
             notifyError("必须在进入世界后才能启动模块。");
             mc.execute(this::toggle);
@@ -463,11 +410,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     @Override
     public void onDeactivate() {
-        if (isStardewMode()) {
-            stardew.deactivate();
-            return;
-        }
-
         controller.reset();
         ContainerBroker.closeContainer();
         lastNotifiedState = "";
@@ -495,11 +437,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
     @EventHandler
     private void onTick(TickEvent.Post event) {
         if (mc.player == null || mc.level == null) return;
-
-        if (isStardewMode()) {
-            stardew.tick();
-            return;
-        }
 
         // 防踩踏：农田范围内拦截跳跃
         if (antiTrample.get() && scanner.contains(mc.player.blockPosition())) {
@@ -563,7 +500,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     @EventHandler
     private void onRender2D(Render2DEvent event) {
-        if (isStardewMode()) return;
         if (!renderLabels.get()) return;
         renderLabel(event, SiteType.START, "§a农场点位1");
         renderLabel(event, SiteType.END, "§e农场点位2");
@@ -591,13 +527,8 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
         // 静默容器：仅在物流任务（卸货/补货/毒马铃薯，exclusive=true）执行期间取消箱子界面显示，
         // 避免自动化开箱时抢鼠标/焦点。玩家手动开箱（模块空闲/观察/收割/补种/拾取阶段）必须放行，
         // 否则模块开启时玩家无法打开箱子，也无法在后台挂机时切回前台手动开箱。
-        boolean logisticsRunning;
-        if (isStardewMode()) {
-            logisticsRunning = stardew.isLogisticsRunning();
-        } else {
-            FarmTask task = controller.currentTask();
-            logisticsRunning = task != null && task.exclusive();
-        }
+        FarmTask task = controller.currentTask();
+        boolean logisticsRunning = task != null && task.exclusive();
         if (isActive() && logisticsRunning
             && event.screen instanceof AbstractContainerScreen<?>
             && !(event.screen instanceof InventoryScreen)) {
@@ -755,10 +686,6 @@ public final class AutoFarmMatrix extends YiyiaddonModule {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        if (isStardewMode()) {
-            return stardew.buildWidget(theme);
-        }
-
         return buildInfoWidget(theme, table -> {
             table.add(theme.label("§b§l自动农场 §r§8▸ §f全自动农业系统")).expandX();
             table.row();

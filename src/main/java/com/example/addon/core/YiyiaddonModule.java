@@ -114,7 +114,7 @@ public abstract class YiyiaddonModule extends Module {
      * 普通消息（白色）
      * 格式：§c§l[yiyiaddon]§r§f§l[模块名]§r§f消息
      */
-    public void notify(String message) {
+    protected void notify(String message) {
         if (mc.player == null) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§f" + message)));
     }
@@ -123,7 +123,7 @@ public abstract class YiyiaddonModule extends Module {
      * 错误消息（橙色加粗）
      * 格式：§c§l[yiyiaddon]§r§f§l[模块名]§r§6§l错误消息
      */
-    public void notifyError(String message) {
+    protected void notifyError(String message) {
         if (mc.player == null) return;
         mc.player.sendSystemMessage(Component.literal(formatMessage(title, "§6§l" + message)));
     }
@@ -144,7 +144,7 @@ public abstract class YiyiaddonModule extends Module {
      * @param missing 缺项清单，为空表示自检通过
      * @return true 表示自检通过可以继续启动，false 表示已中止
      */
-    public boolean reportSelfCheck(java.util.List<String> missing) {
+    protected boolean reportSelfCheck(java.util.List<String> missing) {
         if (missing.isEmpty()) return true;
 
         chatFeedback = false;
@@ -165,32 +165,32 @@ public abstract class YiyiaddonModule extends Module {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** 物品/文本高亮（亮绿色粗体） - 用于物品名、目标矿物、成功值 */
-    public String highlightText(String text) {
+    protected String highlightText(String text) {
         return "§a§l" + text + "§r§f§l";
     }
 
     /** 功能/模式高亮（亮青色粗体） - 用于功能名、模式名、状态名 */
-    public String highlightFunction(String text) {
+    protected String highlightFunction(String text) {
         return "§b§l" + text + "§r§f§l";
     }
 
     /** 数值/阈值高亮（黄色粗体） - 用于数量、阈值、百分比等数字 */
-    public String highlightNumber(String text) {
+    protected String highlightNumber(String text) {
         return "§e§l" + text + "§r§f§l";
     }
 
     /** 服务器高亮（金色粗体） - 用于服务器名 */
-    public String highlightServer(String text) {
+    protected String highlightServer(String text) {
         return "§6§l" + text + "§r§f§l";
     }
 
     /** 位置高亮（紫粉色粗体） - 用于地点坐标 */
-    public String highlightLocation(String text) {
+    protected String highlightLocation(String text) {
         return "§d§l" + text + "§r§f§l";
     }
 
     /** 指令高亮（黄色粗体） - 用于指令示例 */
-    public String highlightCommand(String text) {
+    protected String highlightCommand(String text) {
         return "§e§l" + text + "§r§f§l";
     }
 
@@ -205,7 +205,7 @@ public abstract class YiyiaddonModule extends Module {
      * @param sections 章节数组，第一个是标题，后续是段落
      * @return WWidget 面板控件
      */
-    public WWidget buildInfoWidget(GuiTheme theme, String[]... sections) {
+    protected WWidget buildInfoWidget(GuiTheme theme, String[]... sections) {
         WTable t = theme.table();
         boolean firstSection = true;
 
@@ -238,7 +238,7 @@ public abstract class YiyiaddonModule extends Module {
      * @param sections 章节数组
      * @return WWidget 面板控件
      */
-    public WWidget buildInfoWidget(GuiTheme theme, Consumer<WTable> headerWidgets, String[]... sections) {
+    protected WWidget buildInfoWidget(GuiTheme theme, Consumer<WTable> headerWidgets, String[]... sections) {
         WTable t = theme.table();
 
         // 先添加头部控件
@@ -277,7 +277,7 @@ public abstract class YiyiaddonModule extends Module {
      * 吃掉整行剩余空间，expandWidgetX 再让按钮填满单元格，二者缺一不可。
      * minWidth 仅兜底最小宽度；禁止 group("uniform")（独占一行无意义）。
      */
-    public void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
+    protected void addUniformButton(GuiTheme theme, WTable table, String title, Runnable action) {
         WButton button = theme.button(title);
         button.action = action;
         table.add(button).expandX().minWidth(BUTTON_MIN_WIDTH);
