@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $jar = Get-ChildItem "$env:USERPROFILE\.gradle\caches\modules-2\files-2.1\meteordevelopment\meteor-client\26.1.2-SNAPSHOT" -Recurse -Filter '*.jar' |
+    Where-Object { $_.Name -notmatch '-(javadoc|sources)\.jar$' } |
     Select-Object -First 1 -ExpandProperty FullName
 
 if (-not $jar) {
@@ -8,10 +9,12 @@ if (-not $jar) {
 }
 
 $classes = & jar tf $jar |
-    Where-Object { $_ -match '^meteordevelopment/meteorclient/(gui/screens|systems/modules)/.+\.class$' } |
+    Where-Object { $_ -match '^meteordevelopment/meteorclient/(gui/(screens|themes/meteor/widgets)|systems/(modules|hud|config|proxies|waypoints|accounts|friends|macros))/.*\.class$' } |
     ForEach-Object { $_.Replace('/', '.') -replace '\.class$', '' }
 
-$output = & javap -classpath $jar -p -c $classes 2>$null |
+$output = $classes | ForEach-Object {
+    & javap -classpath $jar -p -c $_ 2>$null
+} |
     Select-String '// String ' |
     ForEach-Object { $_.Line -replace '^.*// String ', '' }
 
@@ -25,7 +28,7 @@ $output |
     Sort-Object -Unique |
     Set-Content -Encoding utf8 build/meteor-ui-text-candidates.txt
 
-$translator = Get-Content src/main/java/com/example/addon/YiyiaddonTranslator.java -Raw
+$translator = Get-Content src/main/java/com/example/addon/translations/YiyiaddonTranslator.java -Raw
 $json = Get-Content src/main/resources/assets/yalu/lang/zh_cn.json -Raw
 $covered = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 

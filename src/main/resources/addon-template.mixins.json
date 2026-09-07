@@ -20,6 +20,7 @@
     "TextTranslationMixin",
     "ButtonBuilderTranslationMixin",
     "JoinMultiplayerScreenTranslationMixin",
+    "GuiGraphicsTextTranslationMixin",
     "BaritoneHelperTranslationMixin",
     "BaritoneHelpCommandMixin",
     "BaritoneCommandLongDescMixin",
