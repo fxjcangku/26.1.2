@@ -161,7 +161,7 @@ public class AutoLoginModule extends YiyiaddonModule {
     }
 
     @Override
-    protected void notify(String message) {
+    public void notify(String message) {
         super.notify(message != null && message.startsWith("自动登入：") ? message.substring(5) : message);
     }
 

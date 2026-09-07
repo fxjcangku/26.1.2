@@ -9,8 +9,6 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.Minecraft;
@@ -147,9 +145,10 @@ public class ServerDetector extends YiyiaddonModule {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         return buildInfoWidget(theme, table -> {
-            WButton helpBtn = theme.button("§e查看使用说明");
-            helpBtn.action = () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent()));
-            table.add(helpBtn).expandX().minWidth(200);
+            addUniformButton(theme, table, "§e查看使用说明",
+                () -> mc.setScreen(new com.example.addon.ui.HelpScreen(theme, this, buildHelpContent())));
+            table.row();
+            addUniformButton(theme, table, "§b查看下载资源包", this::openResourcePackFolder);
             table.row();
         }, new String[0]);
     }
@@ -527,15 +526,13 @@ public class ServerDetector extends YiyiaddonModule {
                     }
                 } catch (Exception e) {
                     if (attempt >= retries) {
-                        sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
-                        asyncNotifyError("资源包下载失败（已重试 " + retries + " 次）：" + e.getMessage());
+                        failDownload(packId, "资源包下载失败（已重试 " + retries + " 次）：" + e.getMessage());
                         return;
                     }
                 }
             }
 
-            sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
-            asyncNotifyError("资源包下载失败（已达重试上限 " + retries + " 次）");
+            failDownload(packId, "资源包下载失败（已达重试上限 " + retries + " 次）");
         });
     }
 
@@ -657,9 +654,18 @@ public class ServerDetector extends YiyiaddonModule {
         mc.execute(() -> notify(message));
     }
 
-    /** 下载线程里发错误提示：投递回主线程 */
-    private void asyncNotifyError(String message) {
-        mc.execute(() -> notifyError(message));
+    /**
+     * 下载失败收尾：回主线程先播报失败、再回 FAILED_DOWNLOAD。
+     *
+     * 二者必须在同一次主线程投递里按顺序执行——若先发包再播报，服务端收到
+     * FAILED_DOWNLOAD 后可能立即断开，把 mc.player 清空，导致 notifyError 里
+     * mc.player == null 直接 return，玩家就看不到失败提示。
+     */
+    private void failDownload(UUID packId, String message) {
+        mc.execute(() -> {
+            notifyError(message);
+            sendPackAction(packId, ServerboundResourcePackPacket.Action.FAILED_DOWNLOAD);
+        });
     }
 
     /** 计算文件 SHA-1 十六进制摘要，用于资源包完整性校验 */
@@ -682,17 +688,36 @@ public class ServerDetector extends YiyiaddonModule {
         Thread opener = new Thread(() -> {
             try {
                 if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                    // 首选 AWT Desktop：Windows 开资源管理器 / Mac 开 Finder / 有桌面的 Linux 开文件管理器
                     Desktop.getDesktop().open(RESOURCE_PACK_DIR);
                 } else {
-                    // Windows 路径含空格需用 /select 避免解析错误
-                    new ProcessBuilder("explorer.exe", "/select," + RESOURCE_PACK_DIR.getAbsolutePath()).start();
+                    openWithSystemCommand(RESOURCE_PACK_DIR);
                 }
             } catch (Exception e) {
-                mc.execute(() -> notifyError("打开资源库失败：" + e.getMessage()));
+                // Desktop.open 在无桌面环境（部分 Linux/服务器）会失败，回退到系统命令兜底
+                try {
+                    openWithSystemCommand(RESOURCE_PACK_DIR);
+                } catch (Exception ex) {
+                    mc.execute(() -> notifyError("打开资源库失败：" + ex.getMessage()));
+                }
             }
         }, "yiyiaddon-OpenFolder");
         opener.setDaemon(true);
         opener.start();
+    }
+
+    /** 按操作系统调用系统命令打开目录，兜底无 AWT Desktop 或 Desktop.open 失败的环境。 */
+    private void openWithSystemCommand(File dir) throws Exception {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) {
+            // Windows：/select 让资源管理器选中目标，路径含空格也能正确解析
+            new ProcessBuilder("explorer.exe", "/select," + dir.getAbsolutePath()).start();
+        } else if (os.contains("mac")) {
+            new ProcessBuilder("open", dir.getAbsolutePath()).start();
+        } else {
+            // Linux / 其他 Unix：xdg-open 是主流桌面环境的通用打开命令
+            new ProcessBuilder("xdg-open", dir.getAbsolutePath()).start();
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

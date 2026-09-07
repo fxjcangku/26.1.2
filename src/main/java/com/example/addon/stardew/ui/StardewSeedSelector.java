@@ -1,6 +1,6 @@
 package com.example.addon.stardew.ui;
 
-import com.example.addon.stardew.StardewFarmModule;
+import com.example.addon.stardew.StardewFarmStrategy;
 import com.example.addon.stardew.model.StardewSeedProfile;
 import com.example.addon.stardew.model.StardewServerProfile;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -17,18 +17,18 @@ import net.minecraft.client.Minecraft;
  */
 public final class StardewSeedSelector extends WindowScreen {
 
-    private final StardewFarmModule module;
+    private final StardewFarmStrategy strategy;
 
-    public StardewSeedSelector(GuiTheme theme, StardewFarmModule module) {
+    public StardewSeedSelector(GuiTheme theme, StardewFarmStrategy strategy) {
         super(theme, "星露谷 · 种子选择器");
-        this.module = module;
+        this.strategy = strategy;
     }
 
     @Override
     public void initWidgets() {
         WVerticalList list = add(theme.verticalList()).expandX().widget();
 
-        StardewServerProfile profile = module.currentProfile();
+        StardewServerProfile profile = strategy.currentProfile();
         if (profile == null || profile.seeds().isEmpty()) {
             list.add(theme.label("§8暂未添加种子")).expandX();
         } else {
@@ -37,16 +37,16 @@ public final class StardewSeedSelector extends WindowScreen {
                 row.add(theme.label((seed.enabled() ? "§a" : "§8") + seed.displayName()
                     + " §8▸ §7" + seed.minecraftItemId())).expandX();
 
-                WButton select = row.add(theme.button(module.selectedSeedId() != null
-                    && module.selectedSeedId().equals(seed.seedId()) ? "§a已选" : "§7选择")).widget();
+                WButton select = row.add(theme.button(strategy.selectedSeedId() != null
+                    && strategy.selectedSeedId().equals(seed.seedId()) ? "§a已选" : "§7选择")).widget();
                 select.action = () -> {
-                    module.selectSeed(seed.seedId());
+                    strategy.selectSeed(seed.seedId());
                     Minecraft.getInstance().setScreen(null);
                 };
 
                 WButton delete = row.add(theme.button("§c删除")).widget();
                 delete.action = () -> {
-                    module.removeSeed(seed.seedId());
+                    strategy.removeSeed(seed.seedId());
                     Minecraft.getInstance().setScreen(null);
                 };
             }
@@ -56,7 +56,7 @@ public final class StardewSeedSelector extends WindowScreen {
 
         WButton add = list.add(theme.button("§a添加当前手持物品为种子")).expandX().widget();
         add.action = () -> {
-            module.addSeedFromHeld();
+            strategy.addSeedFromHeld();
             Minecraft.getInstance().setScreen(null);
         };
 

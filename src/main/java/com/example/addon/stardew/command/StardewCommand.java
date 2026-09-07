@@ -1,7 +1,8 @@
 package com.example.addon.stardew.command;
 
+import com.example.addon.autofarm.AutoFarmMatrix;
 import com.example.addon.core.YiyiaddonModule;
-import com.example.addon.stardew.StardewFarmModule;
+import com.example.addon.stardew.StardewFarmStrategy;
 import com.example.addon.stardew.config.StardewSiteType;
 import com.example.addon.stardew.model.StardewSeedProfile;
 import com.example.addon.stardew.model.StardewServerProfile;
@@ -18,6 +19,7 @@ import net.minecraft.world.phys.HitResult;
 
 /**
  * 星露谷农场指令：锚点绑定 / 添加种子 / 登记农田方块 / 查看档案。
+ * 归属「自动农场」模块的星露谷模式，非独立顶级模块。
  */
 public class StardewCommand extends Command {
 
@@ -46,15 +48,15 @@ public class StardewCommand extends Command {
     }
 
     private int showStatus() {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
 
         info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         info("§b§l         星露谷农场 ▸ 锚点绑定");
         info("§b§l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         for (StardewSiteType type : StardewSiteType.values()) {
-            var site = module.site(type);
+            var site = strategy.site(type);
             if (site == null) {
                 info("  " + color(type) + "■ §f§l" + type.cn() + " §8▸ §c未绑定");
             } else {
@@ -66,9 +68,9 @@ public class StardewCommand extends Command {
     }
 
     private int list() {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
-        StardewServerProfile p = module.currentProfile();
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
+        StardewServerProfile p = strategy.currentProfile();
         if (p == null) {
             info("§8暂无档案，先添加种子。");
             return SINGLE_SUCCESS;
@@ -86,17 +88,18 @@ public class StardewCommand extends Command {
     }
 
     private int bind(StardewSiteType type) {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
+        StardewFarmStrategy strategy = strategy();
+        AutoFarmMatrix autoFarm = autoFarm();
+        if (strategy == null || autoFarm == null) return SINGLE_SUCCESS;
         if (mc.level == null) {
             error("当前不在游戏世界。");
             return SINGLE_SUCCESS;
         }
-        if (module.isActive()) {
+        if (autoFarm.isActive()) {
             error("模块运行中无法修改锚点，请先关闭模块");
             return SINGLE_SUCCESS;
         }
-        if (module.site(type) != null) {
+        if (strategy.site(type) != null) {
             error(type.cn() + "已绑定，请先 remove");
             return SINGLE_SUCCESS;
         }
@@ -116,42 +119,42 @@ public class StardewCommand extends Command {
             error("无法获取当前维度。");
             return SINGLE_SUCCESS;
         }
-        module.bindSite(type, site);
+        strategy.bindSite(type, site);
         info("§a§l✓ 绑定成功 §8▸ " + site.describe("§a"));
         return SINGLE_SUCCESS;
     }
 
     private int unbind(StardewSiteType type) {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
-        if (module.site(type) == null) {
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
+        if (strategy.site(type) == null) {
             error(type.cn() + "本来就没有绑定。");
             return SINGLE_SUCCESS;
         }
-        module.clearSite(type);
+        strategy.clearSite(type);
         info("§c§l✗ 已解绑 " + type.cn());
         return SINGLE_SUCCESS;
     }
 
     private int clearAll() {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
-        module.clearAllSites();
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
+        strategy.clearAllSites();
         info("§e已清空全部锚点。");
         return SINGLE_SUCCESS;
     }
 
     private int addSeed() {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
-        module.addSeedFromHeld();
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
+        strategy.addSeedFromHeld();
         return SINGLE_SUCCESS;
     }
 
     private int addSoil() {
-        StardewFarmModule module = module();
-        if (module == null) return SINGLE_SUCCESS;
-        module.addSoilFromCrosshair();
+        StardewFarmStrategy strategy = strategy();
+        if (strategy == null) return SINGLE_SUCCESS;
+        strategy.addSoilFromCrosshair();
         return SINGLE_SUCCESS;
     }
 
@@ -178,17 +181,24 @@ public class StardewCommand extends Command {
 
     private void info(String message) {
         if (mc.player == null || message == null) return;
-        mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("星露谷农场", message)));
+        mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("自动农场", message)));
     }
 
     private void error(String message) {
         if (mc.player == null || message == null) return;
-        mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("星露谷农场", "§6§l" + message)));
+        mc.player.sendSystemMessage(Component.literal(YiyiaddonModule.formatMessage("自动农场", "§6§l" + message)));
     }
 
-    private StardewFarmModule module() {
-        StardewFarmModule module = Modules.get().get(StardewFarmModule.class);
-        if (module == null) error("星露谷农场模块未注册。");
-        return module;
+    private AutoFarmMatrix autoFarm() {
+        return Modules.get().get(AutoFarmMatrix.class);
+    }
+
+    private StardewFarmStrategy strategy() {
+        AutoFarmMatrix m = autoFarm();
+        if (m == null) {
+            error("自动农场模块未注册。");
+            return null;
+        }
+        return m.stardew();
     }
 }
