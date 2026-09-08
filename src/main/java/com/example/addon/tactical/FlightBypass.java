@@ -18,6 +18,7 @@ import net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.*;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Abilities;
@@ -135,6 +136,9 @@ public class FlightBypass extends YiyiaddonModule {
     /** tick 计数：驱动跳跃间隔与烟花周期 */
     private int tickCounter = 0;
 
+    /** 原版模拟最近一次起跳的 tick：落地判定抖动时保证两次起跳之间的最小间隔 */
+    private int lastJumpTick = 0;
+
     /** 垫脚已放置计数：每 5 次留一块不拆，模拟手动失误 */
     private int scaffoldCounter = 0;
 
@@ -181,10 +185,11 @@ public class FlightBypass extends YiyiaddonModule {
         return com.example.addon.ui.HelpScreen.buildHelpContent(
             new com.example.addon.ui.HelpScreen.HelpSection("飞行模式（26.1.2 官方机制依据）",
                 "§8├─ §e发包飞行 §8- §7需服务端授予飞行能力（/fly/创造/旁观）",
-                "§8│   §7协调器校验 abilities 后放行，未授权自动拒绝",
-                "§8│   §7自动置位飞行态并同步服务端，速度由服务端权威计算",
+                "§8│   §7协调器校验 abilities 后放行，置位飞行态并同步服务端",
+                "§8│   §7未授权自动切换对应的降级模式，不会停摆",
+                "§8│   §7起飞后按跳跃键上升、潜行键下降（原版飞行操作）",
                 "§8│",
-                "§8├─ §e原版模拟 §8- §7落地即真实起跳 + 朝前兔子跳",
+                "§8├─ §e原版模拟 §8- §7落地即跳的连续兔子跳 + 疾跑推进",
                 "§8│   §7地面接触由原版物理重置浮空计时，全服合法",
                 "§8│",
                 "§8├─ §e安全滑翔 §8- §7自动换鞘翅 + 官方起伞",
@@ -252,6 +257,7 @@ public class FlightBypass extends YiyiaddonModule {
 
     private void resetLocalState() {
         tickCounter = 0;
+        lastJumpTick = 0;
         scaffoldCounter = 0;
         pendingDestroyPos = null;
         pendingDestroyAt = 0L;
@@ -282,9 +288,15 @@ public class FlightBypass extends YiyiaddonModule {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  主循环：请求决策 → 播报状态变化 → 按决策执行
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //
+    // 挂在 TickEvent.Post 而非 Pre 的原因：原版模拟的速度注入在 Pre 会被
+    // 当 tick 的 move/travel 摩擦系数（0.6~0.91）当场衰减，落地帧的起跳
+    // 推力几乎被吃光，表现为「跳一下顿一下」；Post 阶段 travel 已结束，
+    // 注入的速度完整保留到下一帧，跳跃弧线平滑且前进速度稳定。
+    // 其余模式（发包/滑翔/烟花/垫脚）不受事件相位影响，统一移到 Post。
 
     @EventHandler
-    private void onTick(TickEvent.Pre event) {
+    private void onTick(TickEvent.Post event) {
         if (!isActive() || mc.player == null || mc.level == null) return;
 
         tickCounter++;
@@ -332,8 +344,8 @@ public class FlightBypass extends YiyiaddonModule {
             }
             case NO_FLY_ABILITY -> {
                 wasBlocked = true;
-                notify("§c✗ 服务器未授予飞行能力 §8▸ " + highlightFunction("发包飞行") + " 不可执行，请改用"
-                    + highlightFunction("原版模拟 / 安全滑翔 / 序列垫脚"));
+                notify("§e⚠ 服务器未授予飞行能力 §8▸ " + highlightFunction("发包飞行") + " 不可用，已自动切换 "
+                    + highlightFunction(d.mode().displayName));
             }
             case HIGH_RISK_AC -> {
                 wasBlocked = true;
@@ -380,21 +392,37 @@ public class FlightBypass extends YiyiaddonModule {
     //  模式 2：原版模拟 —— 落地即真实起跳，地面接触重置浮空计时
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 落地即跳的连续兔子跳。
+     *
+     * Post 阶段 onGround 是「本 tick 移动后」的准确落地状态：落地帧立即起跳，
+     * 不再有固定相位闸门带来的「跳一下顿一下」；推力方向取身体朝向 yaw
+     * 而非视线向量（视线含俯仰，低头时水平推力会被吃掉，造成忽快忽慢的乱跳感）。
+     * 每跳弧线约 12~14 tick，远低于服务端 80 tick 浮空上限，全程合法。
+     */
     private void handleVanillaMimic() {
-        // 真实跳跃弧线：每一跳都由地面接触发起，服务端看到的完全是原版物理
-        if (tickCounter % vanillaJumpInterval.get() != 0) return;
+        // 落地帧才起跳：空中 onGround 恒假，每一跳都由真实地面接触发起
         if (!mc.player.onGround()) return;
+
+        // 最小起跳间隔（间隔档位-1 tick）：防止落地判定抖动导致的同帧连跳
+        if (tickCounter - lastJumpTick < Math.max(1, vanillaJumpInterval.get() - 1)) return;
+
+        // 起跳前置为疾跑：凑足原版疾跑跳的 +0.2 冲刺推力，前进速度更接近连续飞行
+        if (!mc.player.isSprinting()) {
+            mc.player.setSprinting(true);
+        }
+
         mc.player.jumpFromGround();
 
-        // 起跳瞬间叠加朝前水平推力，形成「兔子跳」式前进，让本模式具备实际位移
-        // 而非原地上下跳动；推力落在原版疾跑跳跃的正常速度范围内，不触发移动校验
-        Vec3 forward = mc.player.getForward();
+        // 水平推进沿身体朝向（yaw），与镜头俯仰无关；Post 注入不受本帧摩擦衰减
+        float yawRad = mc.player.getYRot() * Mth.DEG_TO_RAD;
         Vec3 motion = mc.player.getDeltaMovement();
         mc.player.setDeltaMovement(
-            motion.x + forward.x * 0.28,
+            motion.x - Mth.sin(yawRad) * 0.28,
             motion.y,
-            motion.z + forward.z * 0.28
+            motion.z + Mth.cos(yawRad) * 0.28
         );
+        lastJumpTick = tickCounter;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

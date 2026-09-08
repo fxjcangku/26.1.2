@@ -62,7 +62,7 @@ public final class FlightPolicy {
         /** 高风险反作弊 + 发包飞行：直接拒绝执行（服务器浮空踢无法豁免） */
         HIGH_RISK_AC,
 
-        /** 发包飞行未获服务端飞行权限：拒绝执行 */
+        /** 发包飞行未获服务端飞行权限：决策携带沿降级链落下的替代模式（安全滑翔/原版模拟），执行器执行替代模式而非停摆 */
         NO_FLY_ABILITY,
 
         /** 连续拉回触发自适应降级：按降级链执行更保守的模式 */
@@ -77,9 +77,14 @@ public final class FlightPolicy {
      */
     public record FlightDecision(FlightMode mode, FlightReason reason) {
 
-        /** 是否允许执行移动注入（降级也算允许，只是换模式执行） */
+        /**
+         * 是否允许执行移动注入。
+         * 降级与无权限回落都算允许（只是换模式执行），只有高风险拒绝与拉回冷却停摆。
+         */
         public boolean granted() {
-            return reason == FlightReason.GRANTED || reason == FlightReason.DEGRADED;
+            return reason == FlightReason.GRANTED
+                || reason == FlightReason.DEGRADED
+                || reason == FlightReason.NO_FLY_ABILITY;
         }
     }
 }

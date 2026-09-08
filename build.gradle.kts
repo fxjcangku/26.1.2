@@ -571,7 +571,11 @@ abstract class EncryptStringsTask : DefaultTask() {
         // 普通类（非 Mixin、非 Crypto）额外做数字常量加密，隐藏魔法数字
         val bytesAfterStringEncrypt = encryptNumbers(cw.toByteArray(), P, Q)
         // 控制流混淆：注入不透明谓词和虚假分支（仅业务类，不影响Mixin）
-        return if (shouldObfuscateControlFlow(cr.className)) {
+        val shouldObf = shouldObfuscateControlFlow(cr.className)
+        if (shouldObf) {
+            System.err.println("[控制流] 处理类: ${cr.className}")
+        }
+        return if (shouldObf) {
             obfuscateControlFlow(bytesAfterStringEncrypt)
         } else {
             bytesAfterStringEncrypt
@@ -748,6 +752,139 @@ abstract class EncryptStringsTask : DefaultTask() {
     // double 加密：清除 exponent 位（bit 52..62），保证 XOR 结果不是 NaN，避免 longBitsToDouble 规范化
     private fun encryptDouble(v: Double, P: IntArray, Q: IntArray): Double =
         Double.fromBits(v.toRawBits() xor (keyLong(P, Q) and 0x7FF0000000000000L.inv()))
+
+    // ── 控制流混淆（Opaque Predicate + Dead Code Injection）────────────────────
+    /** 判断类是否需要控制流混淆（排除core/mixin/utils，保留所有业务类） */
+    private fun shouldObfuscateControlFlow(className: String): Boolean {
+        // 排除框架核心类、Mixin类、工具类
+        return !className.startsWith("com/example/addon/core/") &&
+               !className.startsWith("com/example/addon/mixin/") &&
+               !className.startsWith("com/example/addon/utils/")
+    }
+
+    /** 控制流混淆主入口 */
+    private fun obfuscateControlFlow(classBytes: ByteArray): ByteArray {
+        val cn = ClassNode()
+        ClassReader(classBytes).accept(cn, 0)
+        
+        var totalInjected = 0
+        var totalMethods = 0
+        // 为每个非构造方法注入不透明谓词
+        for (method in cn.methods) {
+            if (method.name == "<init>" || method.name == "<clinit>") continue
+            if ((method.access and Opcodes.ACC_ABSTRACT) != 0) continue
+            if ((method.access and Opcodes.ACC_NATIVE) != 0) continue
+            
+            totalMethods++
+            val before = method.instructions.size()
+            injectOpaquePredicates(method)
+            val after = method.instructions.size()
+            if (after > before) totalInjected++
+        }
+        
+        if (totalInjected > 0) {
+            System.err.println("[控制流] ✓ 类完成: $totalInjected/$totalMethods 个方法已注入")
+        }
+        
+        // 使用COMPUTE_MAXS而非COMPUTE_FRAMES，避免类型验证失败
+        // 关键：传入ClassReader以便重用常量池
+        val cw = ClassWriter(ClassReader(classBytes), ClassWriter.COMPUTE_MAXS)
+        cn.accept(cw)
+        return cw.toByteArray()
+    }
+
+    /** 注入不透明谓词：插入恒真条件（但静态分析难以判断）和虚假分支 */
+    private fun injectOpaquePredicates(method: MethodNode) {
+        val insns = method.instructions
+        if (insns.size() < 10) return // 太短的方法不值得混淆
+        
+        val insertPoints = mutableListOf<AbstractInsnNode>()
+        
+        // 在方法的关键位置（每隔5-10条指令）插入混淆点
+        var count = 0
+        for (insn in insns.toArray()) {
+            count++
+            if (count % 8 == 0 && insn.opcode >= 0) {
+                insertPoints.add(insn)
+            }
+        }
+        
+        if (insertPoints.isEmpty()) return
+        
+        // 限制插入数量，避免过度膨胀（最多5个混淆点）
+        val maxInserts = minOf(5, insertPoints.size)
+        val random = Random(method.name.hashCode().toLong())
+        
+        try {
+            for (i in 0 until maxInserts) {
+                val anchor = insertPoints[random.nextInt(insertPoints.size)]
+                insertOpaquePredicateAt(insns, anchor, random)
+            }
+        } catch (e: Exception) {
+            System.err.println("[控制流] ⚠ 注入失败 (${method.name}): ${e.javaClass.simpleName} - ${e.message}")
+            e.printStackTrace(System.err)
+        }
+    }
+
+    /** 在指定位置插入不透明谓词 */
+    private fun insertOpaquePredicateAt(insns: org.objectweb.asm.tree.InsnList, anchor: AbstractInsnNode, random: Random) {
+        val labelTrue = LabelNode()
+        val labelEnd = LabelNode()
+        
+        // 选择不透明谓词类型
+        // 注意：使用恒假条件（ProGuard难以分析为死代码）
+        when (random.nextInt(3)) {
+            0 -> {
+                // 模式1：(x * 2) % 2 != 0 恒假（但ProGuard看不出来）
+                insns.insertBefore(anchor, InsnNode(Opcodes.ICONST_5))
+                insns.insertBefore(anchor, InsnNode(Opcodes.ICONST_2))
+                insns.insertBefore(anchor, InsnNode(Opcodes.IMUL))
+                insns.insertBefore(anchor, InsnNode(Opcodes.ICONST_2))
+                insns.insertBefore(anchor, InsnNode(Opcodes.IREM))
+                // 使用IFEQ（如果==0跳转），结果永远==0，所以永远跳转到真实路径
+                insns.insertBefore(anchor, JumpInsnNode(Opcodes.IFEQ, labelEnd))
+            }
+            1 -> {
+                // 模式2：(x ^ x) != 0 恒假
+                insns.insertBefore(anchor, InsnNode(Opcodes.ICONST_3))
+                insns.insertBefore(anchor, InsnNode(Opcodes.ICONST_3))
+                insns.insertBefore(anchor, InsnNode(Opcodes.IXOR))
+                // 结果==0，所以IFEQ永远跳转
+                insns.insertBefore(anchor, JumpInsnNode(Opcodes.IFEQ, labelEnd))
+            }
+            else -> {
+                // 模式3：System.currentTimeMillis() <= 0 恒假
+                insns.insertBefore(anchor, MethodInsnNode(
+                    Opcodes.INVOKESTATIC,
+                    "java/lang/System",
+                    "currentTimeMillis",
+                    "()J",
+                    false
+                ))
+                insns.insertBefore(anchor, InsnNode(Opcodes.LCONST_0))
+                insns.insertBefore(anchor, InsnNode(Opcodes.LCMP))
+                // IFGT：如果>0跳转，currentTimeMillis永远>0
+                insns.insertBefore(anchor, JumpInsnNode(Opcodes.IFGT, labelEnd))
+            }
+        }
+        
+        // 虚假分支：插入看起来有用的代码（防止被ProGuard删除）
+        insns.insertBefore(anchor, labelTrue)
+        // 使用静态方法调用而非常量，ProGuard不敢删
+        insns.insertBefore(anchor, MethodInsnNode(
+            Opcodes.INVOKESTATIC,
+            "java/lang/System",
+            "nanoTime",
+            "()J",
+            false
+        ))
+        insns.insertBefore(anchor, InsnNode(Opcodes.POP2))
+        
+        // 真实路径标签
+        insns.insertBefore(anchor, labelEnd)
+        
+        System.err.println("[控制流] ✓ 成功注入混淆到偏移 ${insns.indexOf(anchor)}")
+    }
 }
 
 // ── 映射文件加密辅助（AES-256-GCM）────────────────────────────────────────

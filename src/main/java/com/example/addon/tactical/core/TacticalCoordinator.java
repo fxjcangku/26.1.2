@@ -237,15 +237,17 @@ public final class TacticalCoordinator {
 
         // 发包飞行准入：26.1.2 官方 ServerGamePacketListenerImpl.handleMovePlayer
         // 的浮空判定只认物理支撑 + allowFlight/mayfly/鞘翅/悬浮等合法状态
-        // （sources.jar L1137-1145），发包无法豁免；只有服务端真正授予飞行能力
-        // （/fly、创造、旁观）才允许执行，permission 由服务端侧 abilities 决定
+        // （sources.jar L1137-1145），发包无法豁免。只有服务端真正授予飞行能力
+        // （/fly、创造、旁观）才允许执行；未授权时不再停摆，改为沿降级链
+        // 自动落到可执行模式（安全滑翔/原版模拟），执行器拿到 NO_FLY_ABILITY
+        // 决策时执行降级目标模式
         if (requested == FlightPolicy.FlightMode.PACKET_FLY) {
             if (highRiskAntiCheat) {
                 return new FlightPolicy.FlightDecision(requested, FlightPolicy.FlightReason.HIGH_RISK_AC);
             }
             Player player = mc.player;
             if (player == null || (!player.getAbilities().flying && !player.getAbilities().mayfly)) {
-                return new FlightPolicy.FlightDecision(requested, FlightPolicy.FlightReason.NO_FLY_ABILITY);
+                return new FlightPolicy.FlightDecision(degradeStep(requested), FlightPolicy.FlightReason.NO_FLY_ABILITY);
             }
         }
 
