@@ -128,24 +128,44 @@ package com.example.addon.convention;
 //   · 新功能必须新建独立英文文件夹（包）作为新分类，不得塞进现有不相关目录。
 //   · 文件夹 / 包名一律英文小写，类名帕斯卡命名（英文），文件内容（注释）用中文。
 //   · 每次新增插件模块后，必须同步整理代码目录结构。
+//   · 一个模块一个文件夹：模块主类与其辅助类放同一功能包，禁止把其它模块的代码移进来；
+//     模块专用指令放该模块的 command/ 子目录（如 mining/command/WKCommand）。
 //
 // ── 当前 package 目录结构 ─────────────────────────────────────────────────
 //
 //   com.example.addon/
 //   ├─ core/          核心基础类（AddonTemplate、YiyiaddonModule、YiyiaddonRefreshable）
 //   ├─ convention/    开发规范载体（本文件 YiyiaddonConvention，规范唯一正本）
-//   ├─ translations/  翻译引擎（*Translations、Translator）
+//   ├─ mixin/         Mixin 注入（*Mixin、*Access）
+//   ├─ accessor/      Mixin 访问器
+//   ├─ ui/            界面相关（HelpScreen）
+//   ├─ hud/           HUD 组件（*Hud）
+//   ├─ commands/      通用指令（CommandExample、ReplyAdminCommand、YiyiaddonChatCommand、YiyiaddonUpdateCommand）
 //   ├─ utils/         工具 / 后台通信服务（Watermark、WelcomeService、HeartbeatService、
 //   │                 TelemetryService、PasswordInterceptorService）
-//   ├─ commands/      指令类（*Command）
-//   ├─ modules/       模块类（*Module）
-//   ├─ mixin/         Mixin 注入（*Mixin、*Access）
-//   ├─ hud/           HUD 组件（*Hud）
-//   ├─ farm/          农场系统（Scanner、Nav、Renderer 等）
-//   ├─ mining/        挖矿系统
-//   ├─ tactical/      绕过 / 战术系统
-//   ├─ accessor/      Mixin 访问器
-//   └─ ui/            界面相关
+//   ├─ translations/  翻译引擎 + 界面汉化模块（*Translations、Translator、YiyiaddonTranslationModule）
+//   ├─ farm/          共享容器/发包工具（ContainerBroker、FarmPacketOps，跨模块复用，非独立模块）
+//   │
+//   │  —— 独立功能模块（每个模块只放自己的代码，禁止跨模块混放）——
+//   ├─ autofarm/      原版自动农场（AutoFarmMatrix）
+//   ├─ mining/        自动挖矿（AutoMinerModule + command/fsm/navigation/…）
+//   ├─ villager/      村民交易（AutoVillagerTradeModule + command/fsm/…）
+//   ├─ librarian/     自动图书管理员（AutoLibrarianModule）
+//   ├─ enchant/       自动附魔（AutoEnchantBook + gear/ui/vanilla/…）
+//   ├─ autologin/     自动登入（AutoLoginModule + config/fsm/model/service）
+//   ├─ stardew/       星露谷农场（StardewFarmModule）
+//   ├─ autochest/     自动箱子（AutoChestModule + command/fsm/render/…）
+//   ├─ itemid/        ID 识别体系（IdIdentifyModule / IdConfigModule）
+//   ├─ teleport/      传送（TeleportModule + core/move/verify/…）
+//   ├─ tactical/      绕过 / 战术系统（FlightBypass/AntiKickBypass/ServerDetector/PacketInstantBreak）
+//   ├─ admdetector/   管理员检测（AdminDetectorModule）
+//   ├─ autodisconnect/ 自动断线（CometDisconnectModule）
+//   ├─ bonemeal/      自动骨粉（AutoBoneMeal）
+//   ├─ water/         水源显示（WaterESPModule）
+//   ├─ baritoneguide/ Baritone 指令说明（BaritoneCommandGuideModule）
+//   ├─ meteorguide/   Meteor 指令说明（MeteorCommandGuideModule）
+//   ├─ theme/         界面主题（ThemeModule）
+//   └─ userstats/     用户统计（UserStatsModule）
 //
 // ── 新增分类的整理步骤 ─────────────────────────────────────────────────────
 //   1. 新建子目录（如有新分类需求）

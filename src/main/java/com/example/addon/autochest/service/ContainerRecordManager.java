@@ -1,6 +1,6 @@
 package com.example.addon.autochest.service;
 
-import com.example.addon.autochest.WorldIdentity;
+import com.example.addon.autochest.model.WorldIdentity;
 import com.example.addon.autochest.model.ContainerRecord;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;

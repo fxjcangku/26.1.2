@@ -29,7 +29,7 @@ public final class YiyiaddonTranslator {
     public static boolean enabled() {
         Modules modules = Modules.get();
         if (modules == null) return true;
-        return modules.getOptional(com.example.addon.modules.YiyiaddonTranslationModule.class)
+        return modules.getOptional(com.example.addon.translations.YiyiaddonTranslationModule.class)
             .map(module -> module.isActive() && module.simplifiedChinese.get())
             .orElse(true);
     }

@@ -1,8 +1,8 @@
 // 自动图书管理员 调试日志服务
 package com.example.addon.librarian.service;
 
-import com.example.addon.librarian.AutoLibrarianContext;
-import com.example.addon.librarian.AutoLibrarianState;
+import com.example.addon.librarian.model.AutoLibrarianContext;
+import com.example.addon.librarian.fsm.AutoLibrarianState;
 
 public interface DebugLoggerService {
     /** 状态机状态变化播报 */

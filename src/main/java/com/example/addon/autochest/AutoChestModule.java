@@ -1,16 +1,21 @@
 package com.example.addon.autochest;
 
+import com.example.addon.autochest.config.AutoChestSettings;
+import com.example.addon.autochest.fsm.AutoChestStateMachine;
 import com.example.addon.autochest.model.ChestTarget;
 import com.example.addon.autochest.model.ContainerType;
 import com.example.addon.autochest.model.ContainerTypeRegistry;
 import com.example.addon.autochest.model.ScanMode;
 import com.example.addon.autochest.model.WithdrawMode;
+import com.example.addon.autochest.model.WorldIdentity;
+import com.example.addon.autochest.render.AutoChestRenderer;
 import com.example.addon.autochest.scan.ContainerScanner;
 import com.example.addon.autochest.scan.ContainerSelector;
 import com.example.addon.autochest.service.ChestInteractionService;
 import com.example.addon.autochest.service.ChestPointManager;
 import com.example.addon.autochest.service.ContainerRecordManager;
 import com.example.addon.autochest.service.PathingService;
+import com.example.addon.autochest.ui.ConfirmScreen;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.itemid.ItemIdManager;
@@ -43,21 +48,21 @@ import java.util.Set;
  */
 public final class AutoChestModule extends YiyiaddonModule {
 
-    // ── 设置（渲染器 / 状态机需要访问，故用包可见） ──
-    final AutoChestSettings moduleSettings;
+    // ── 设置（渲染器 / 状态机跨子包访问，故用 public） ──
+    public final AutoChestSettings moduleSettings;
 
     // ── 数据（消费 ID 配置管理） ──
     private final ItemIdManager idManager;
 
     // ── 扫描与选择 ──
-    final ContainerScanner scanner;
-    final ContainerSelector selector;
+    public final ContainerScanner scanner;
+    public final ContainerSelector selector;
 
     // ── 服务层 ──
-    final ContainerRecordManager recordManager;
-    final ChestPointManager pointManager;
-    final ChestInteractionService interactionService;
-    final PathingService pathingService;
+    public final ContainerRecordManager recordManager;
+    public final ChestPointManager pointManager;
+    public final ChestInteractionService interactionService;
+    public final PathingService pathingService;
 
     // ── 状态机与渲染 ──
     private final AutoChestStateMachine stateMachine;
@@ -103,12 +108,12 @@ public final class AutoChestModule extends YiyiaddonModule {
     }
 
     /** 当前正在处理的容器（供渲染器区分「处理中」态） */
-    ChestTarget processingTarget() {
+    public ChestTarget processingTarget() {
         return stateMachine.processingTarget();
     }
 
-    /** 状态机播报入口（包可见，供状态机调用统一前缀消息） */
-    void notifyStatus(String message) {
+    /** 状态机播报入口（public，供状态机跨子包调用统一前缀消息） */
+    public void notifyStatus(String message) {
         notify(message);
     }
 
@@ -118,7 +123,7 @@ public final class AutoChestModule extends YiyiaddonModule {
      * <p>背包满等场景下继续取物无意义，关闭容器后停止模块，等玩家清理背包再手动开启。
      * 关闭走 mc.execute 延后到下一帧，避免在状态机 tick 内直接 toggle() 造成重入。</p>
      */
-    void stopAutomation(String reason) {
+    public void stopAutomation(String reason) {
         notifyStatus("§c✗ " + reason + "，已停止自动箱子");
         chatFeedback = false;
         mc.execute(() -> {

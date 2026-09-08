@@ -1,6 +1,6 @@
 package com.example.addon.mixin;
 
-import com.example.addon.modules.AutoMinerModule;
+import com.example.addon.mining.AutoMinerModule;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;

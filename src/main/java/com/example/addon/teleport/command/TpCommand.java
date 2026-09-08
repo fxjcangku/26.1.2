@@ -1,6 +1,6 @@
 package com.example.addon.teleport.command;
 
-import com.example.addon.modules.TeleportModule;
+import com.example.addon.teleport.TeleportModule;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;

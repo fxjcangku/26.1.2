@@ -1,6 +1,6 @@
 package com.example.addon.autochest.scan;
 
-import com.example.addon.autochest.WorldIdentity;
+import com.example.addon.autochest.model.WorldIdentity;
 import com.example.addon.autochest.model.ChestTarget;
 import com.example.addon.autochest.model.ContainerType;
 import com.example.addon.autochest.model.ContainerTypeRegistry;

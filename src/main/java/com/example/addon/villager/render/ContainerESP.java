@@ -1,6 +1,6 @@
 package com.example.addon.villager.render;
 
-import com.example.addon.commands.CunminCommand;
+import com.example.addon.villager.command.CunminCommand;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.utils.render.color.Color;

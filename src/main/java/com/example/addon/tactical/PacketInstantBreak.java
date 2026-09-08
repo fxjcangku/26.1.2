@@ -3,7 +3,7 @@ package com.example.addon.tactical;
 import com.example.addon.core.YiyiaddonModule;
 import com.example.addon.mixin.ClientLevelPredictionAccessor;
 import com.example.addon.tactical.core.TacticalCoordinator;
-import com.example.addon.modules.AutoMinerModule;
+import com.example.addon.mining.AutoMinerModule;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;

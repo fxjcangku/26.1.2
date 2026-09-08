@@ -1,6 +1,6 @@
 package com.example.addon.itemid;
 
-import com.example.addon.autochest.InfoTextSetting;
+import com.example.addon.autochest.config.InfoTextSetting;
 import com.example.addon.core.AddonTemplate;
 import com.example.addon.core.YiyiaddonModule;
 import meteordevelopment.meteorclient.gui.GuiThemes;

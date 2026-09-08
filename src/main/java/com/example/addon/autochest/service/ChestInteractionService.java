@@ -1,6 +1,6 @@
 package com.example.addon.autochest.service;
 
-import com.example.addon.autochest.AutoChestSettings;
+import com.example.addon.autochest.config.AutoChestSettings;
 import com.example.addon.autochest.model.WithdrawMode;
 import com.example.addon.farm.ContainerBroker;
 import com.example.addon.farm.FarmPacketOps;

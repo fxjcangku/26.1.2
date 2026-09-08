@@ -1,6 +1,6 @@
 package com.example.addon.villager.fsm;
 
-import com.example.addon.commands.CunminCommand;
+import com.example.addon.villager.command.CunminCommand;
 import com.example.addon.farm.ContainerBroker;
 import com.example.addon.farm.FarmPacketOps;
 import com.example.addon.villager.data.VillagerProfessionRegistry;
