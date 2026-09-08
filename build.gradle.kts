@@ -6,7 +6,10 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.IntInsnNode
+import org.objectweb.asm.tree.JumpInsnNode
+import org.objectweb.asm.tree.LabelNode
 import org.objectweb.asm.tree.LdcInsnNode
 import org.objectweb.asm.tree.LookupSwitchInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
@@ -22,14 +25,16 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.LinkedHashMap
+import java.util.Random
+import java.util.jar.JarEntry
+import java.util.jar.JarFile
+import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
 
 buildscript {
     repositories {
@@ -232,9 +237,15 @@ tasks {
         // 保留字符串解密工具类与方法名：构建期加密任务注入的调用引用这个原始类名/方法名，
         // 若被 repackageclasses 移动或重命名，运行时解密调用会找不到方法导致功能异常。
         keep("public class com.example.addon.utils.StringCrypto { public static java.lang.String d(java.lang.String); public static int di(int); public static long dl(long); public static float df(float); public static double dd(double); }")
-        // 不额外 keep 密钥字段：dontshrink 已保证字段不被删除，P/Q 既被 <clinit> 写入
-        // 又被 d() 读取，optimize 也不会内联可变数组字段。字段名交给 ProGuard 混淆，
-        // 让「密钥源 + 掩码」的两个 int[] 字段也变成 l/I 这类无语义名，进一步隐藏重组逻辑。
+        // 关键修复：必须保留密钥字段名 P、Q、K，因为 ASM 注入的 <clinit> 字节码硬编码了这些字段名。
+        // 如果让 ProGuard 混淆字段名（P→I, Q→l），ASM 注入的 PUTSTATIC 指令会找不到字段，
+        // 导致密钥注入失败，所有加密字符串解密失败，功能全部失效。
+        keepclassmembers("class com.example.addon.utils.StringCrypto { private static final int[] P; private static final int[] Q; }")
+        // 保留 ResourceCrypto 类名和密钥字段 K（运行时资源解密需要）
+        keep("public class com.example.addon.utils.ResourceCrypto { public static byte[] d(byte[]); public static boolean isEncrypted(byte[]); }")
+        keepclassmembers("class com.example.addon.utils.ResourceCrypto { private static final int[] K; }")
+        // 保留 DataPack 类名和公共方法（运行时资源包加载需要）
+        keep("public class com.example.addon.utils.DataPack { public static byte[] get(java.lang.String); }")
         
         // Mixin 类必须完整保留：类名 + 所有成员（方法签名、参数都不能被 optimize 改）。
         // 铁律：不能用 keepnames。keepnames 只保名字不保结构，optimize 会删除
@@ -289,7 +300,7 @@ tasks {
                 val key = loadOrCreateMappingKey(file("04-混淆配置/映射密钥.txt"))
                 val 目标 = file("04-混淆配置/映射存档/混淆映射-v${libs.versions.mod.version.get()}.txt")
                 目标.parentFile.mkdirs()
-                目标.writeText(xorEncryptBase64(plainFile.readText(StandardCharsets.UTF_8), key), StandardCharsets.UTF_8)
+                目标.writeText(aesGcmEncryptBase64(plainFile.readText(StandardCharsets.UTF_8), key), StandardCharsets.UTF_8)
                 plainFile.delete()
             }
         }
@@ -558,7 +569,13 @@ abstract class EncryptStringsTask : DefaultTask() {
         }
         cr.accept(cv, 0)
         // 普通类（非 Mixin、非 Crypto）额外做数字常量加密，隐藏魔法数字
-        return encryptNumbers(cw.toByteArray(), P, Q)
+        val bytesAfterStringEncrypt = encryptNumbers(cw.toByteArray(), P, Q)
+        // 控制流混淆：注入不透明谓词和虚假分支（仅业务类，不影响Mixin）
+        return if (shouldObfuscateControlFlow(cr.className)) {
+            obfuscateControlFlow(bytesAfterStringEncrypt)
+        } else {
+            bytesAfterStringEncrypt
+        }
     }
 
     // ── 枚举类字符串加密（Tree API）────────────────────────────────────────
@@ -733,10 +750,16 @@ abstract class EncryptStringsTask : DefaultTask() {
         Double.fromBits(v.toRawBits() xor (keyLong(P, Q) and 0x7FF0000000000000L.inv()))
 }
 
-// ── 映射文件加密辅助（XOR + Base64）────────────────────────────────────────
+// ── 映射文件加密辅助（AES-256-GCM）────────────────────────────────────────
 // 映射文件是「还原类名的钥匙」，随 source 分支入库有泄露风险。这里把它加密成密文，
 // 密钥随机生成存 04-混淆配置/映射密钥.txt（加入 .gitignore，不进仓库）。
 // 还原崩溃日志.js 用同一密钥解密，密钥文件丢失则该版本映射无法还原。
+//
+// 加密方案：AES-256-GCM（工业级认证加密）
+//   - 密钥：32字节随机生成
+//   - IV：12字节随机（每次加密不同）
+//   - 认证标签：16字节（防篡改）
+//   - 输出格式：Base64(IV || 密文 || 标签)
 
 fun loadOrCreateMappingKey(keyFile: File): ByteArray {
     if (keyFile.exists()) {
@@ -749,13 +772,23 @@ fun loadOrCreateMappingKey(keyFile: File): ByteArray {
     return key
 }
 
-fun xorEncryptBase64(plain: String, key: ByteArray): String {
-    val data = plain.toByteArray(StandardCharsets.UTF_8)
-    val out = ByteArray(data.size)
-    for (i in data.indices) {
-        out[i] = (data[i].toInt() xor (key[i % key.size].toInt() and 0xFF)).toByte()
-    }
-    return Base64.getEncoder().encodeToString(out)
+fun aesGcmEncryptBase64(plain: String, key: ByteArray): String {
+    val plainBytes = plain.toByteArray(StandardCharsets.UTF_8)
+    val iv = ByteArray(12)
+    SecureRandom().nextBytes(iv)
+    
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    val keySpec = SecretKeySpec(key, "AES")
+    val gcmSpec = GCMParameterSpec(128, iv)
+    cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec)
+    
+    val ciphertext = cipher.doFinal(plainBytes)
+    // 输出：IV(12) + 密文+标签(N+16)
+    val output = ByteArray(iv.size + ciphertext.size)
+    System.arraycopy(iv, 0, output, 0, iv.size)
+    System.arraycopy(ciphertext, 0, output, iv.size, ciphertext.size)
+    
+    return Base64.getEncoder().encodeToString(output)
 }
 
 fun bytesToHex(bytes: ByteArray): String =
@@ -763,3 +796,110 @@ fun bytesToHex(bytes: ByteArray): String =
 
 fun hexToBytes(hex: String): ByteArray =
     ByteArray(hex.length / 2) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+
+// ── 控制流混淆（Opaque Predicate + Dead Code Injection）────────────────────
+// 通过ASM注入不透明谓词和虚假分支，增加逆向分析难度，但不影响实际执行逻辑。
+
+/** 判断类是否需要控制流混淆（仅业务类x包，不影响core/mixin/utils） */
+private fun shouldObfuscateControlFlow(className: String): Boolean {
+    return className.startsWith("com/example/addon/x/")
+}
+
+/** 控制流混淆主入口 */
+private fun obfuscateControlFlow(classBytes: ByteArray): ByteArray {
+    val cn = ClassNode()
+    ClassReader(classBytes).accept(cn, 0)
+    
+    // 为每个非构造方法注入不透明谓词
+    for (method in cn.methods) {
+        if (method.name == "<init>" || method.name == "<clinit>") continue
+        if ((method.access and Opcodes.ACC_ABSTRACT) != 0) continue
+        if ((method.access and Opcodes.ACC_NATIVE) != 0) continue
+        
+        injectOpaquePredicates(method)
+    }
+    
+    val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS)
+    cn.accept(cw)
+    return cw.toByteArray()
+}
+
+/** 注入不透明谓词：插入恒真条件（但静态分析难以判断）和虚假分支 */
+private fun injectOpaquePredicates(method: MethodNode) {
+    val insns = method.instructions
+    if (insns.size() < 10) return // 太短的方法不值得混淆
+    
+    val insertPoints = mutableListOf<AbstractInsnNode>()
+    
+    // 在方法的关键位置（每隔5-10条指令）插入混淆点
+    var count = 0
+    for (insn in insns.toArray()) {
+        count++
+        if (count % 8 == 0 && insn.opcode >= 0) {
+            insertPoints.add(insn)
+        }
+    }
+    
+    // 限制插入数量，避免过度膨胀（最多5个混淆点）
+    val maxInserts = minOf(5, insertPoints.size)
+    val random = Random(method.name.hashCode().toLong())
+    
+    for (i in 0 until maxInserts) {
+        val anchor = insertPoints[random.nextInt(insertPoints.size)]
+        insertOpaquePredicateAt(insns, anchor, random)
+    }
+}
+
+/** 在指定位置插入不透明谓词 */
+private fun insertOpaquePredicateAt(insns: org.objectweb.asm.tree.InsnList, anchor: AbstractInsnNode, random: Random) {
+    val labelTrue = org.objectweb.asm.tree.LabelNode()
+    val labelEnd = org.objectweb.asm.tree.LabelNode()
+    
+    // 选择不透明谓词类型（多种模式，增加分析难度）
+    when (random.nextInt(3)) {
+        0 -> {
+            // 模式1：(x * 2) % 2 == 0 恒真
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_5))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_2))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.IMUL))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_2))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.IREM))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.JumpInsnNode(Opcodes.IFNE, labelTrue))
+        }
+        1 -> {
+            // 模式2：(x ^ x) == 0 恒真
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_3))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_3))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.IXOR))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.JumpInsnNode(Opcodes.IFNE, labelTrue))
+        }
+        else -> {
+            // 模式3：System.currentTimeMillis() > 0 恒真
+            insns.insertBefore(anchor, org.objectweb.asm.tree.MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                "java/lang/System",
+                "currentTimeMillis",
+                "()J",
+                false
+            ))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.LCONST_0))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.LCMP))
+            insns.insertBefore(anchor, org.objectweb.asm.tree.JumpInsnNode(Opcodes.IFLE, labelTrue))
+        }
+    }
+    
+    // 真实路径：直接跳转到结束（什么都不做）
+    insns.insertBefore(anchor, org.objectweb.asm.tree.JumpInsnNode(Opcodes.GOTO, labelEnd))
+    
+    // 虚假分支：插入永不执行的垃圾代码
+    insns.insertBefore(anchor, labelTrue)
+    // 插入无意义操作：压栈、弹栈、NOP等
+    insns.insertBefore(anchor, org.objectweb.asm.tree.LdcInsnNode("obfuscated"))
+    insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.POP))
+    insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_M1))
+    insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.POP))
+    insns.insertBefore(anchor, org.objectweb.asm.tree.InsnNode(Opcodes.NOP))
+    
+    // 结束标签
+    insns.insertBefore(anchor, labelEnd)
+}
