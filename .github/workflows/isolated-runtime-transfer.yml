@@ -1,0 +1,104 @@
+name: Public runtime dependency transfer
+on:
+  push:
+    branches: [ci/isolated-runtime-transfer-20261016]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch only public runtime files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-export
+          python3 - <<'PY'
+          import concurrent.futures, hashlib, json, pathlib, time, urllib.request
+          root=pathlib.Path('runtime-export')
+          def get(url):
+              for attempt in range(4):
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'Minecraft-isolated-test/1.0'})
+                      with urllib.request.urlopen(req,timeout=120) as r: return r.read()
+                  except Exception:
+                      if attempt==3: raise
+                      time.sleep(2+attempt)
+          def js(url): return json.loads(get(url))
+          jobs={}
+          def add(path,url,sha=None): jobs[str(path)]=(url,sha)
+          manifest=js('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
+          for ver,api in [('26.1.2','0.155.2+26.1.2'),('26.2','0.161.0+26.2')]:
+              entry=next(e for e in manifest['versions'] if e['id']==ver)
+              meta=js(entry['url'])
+              assert meta['javaVersion']['majorVersion']==25
+              (root/ver).mkdir(parents=True,exist_ok=True)
+              (root/ver/'version.json').write_text(json.dumps(meta))
+              add(root/ver/'client.jar',meta['downloads']['client']['url'],meta['downloads']['client']['sha1'])
+              add(root/ver/'server.jar',meta['downloads']['server']['url'],meta['downloads']['server']['sha1'])
+              profile=js(f'https://meta.fabricmc.net/v2/versions/loader/{ver}/0.19.5/profile/json')
+              (root/ver/'fabric-profile.json').write_text(json.dumps(profile))
+              for lib in meta['libraries']:
+                  dl=lib.get('downloads',{})
+                  for a in [dl.get('artifact')]+list(dl.get('classifiers',{}).values()):
+                      if a: add(root/'libraries'/a['path'],a['url'],a.get('sha1'))
+              for lib in profile['libraries']:
+                  g,a,v=lib['name'].split(':')[:3]
+                  p=f'{g.replace(".","/")}/{a}/{v}/{a}-{v}.jar'
+                  add(root/'libraries'/p,lib.get('url','https://maven.fabricmc.net/')+p)
+              idx=js(meta['assetIndex']['url'])
+              (root/'assets'/'indexes').mkdir(parents=True,exist_ok=True)
+              (root/'assets'/'indexes'/(meta['assetIndex']['id']+'.json')).write_text(json.dumps(idx))
+              for name,obj in idx['objects'].items():
+                  if '/sounds/' in name or name.endswith('.ogg'): continue
+                  h=obj['hash']; add(root/'assets'/'objects'/h[:2]/h,'https://resources.download.minecraft.net/'+h[:2]+'/'+h,h)
+              add(root/ver/'fabric-api.jar',f'https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/{api}/fabric-api-{api}.jar')
+          for artifact,version in [('skija-shared','0.143.16'),('skija-linux-x64','0.143.16'),('types','0.2.0')]:
+              add(root/'extra'/(artifact+'.jar'),f'https://repo.maven.apache.org/maven2/io/github/humbleui/{artifact}/{version}/{artifact}-{version}.jar')
+          def fetch(job):
+              path,(url,sha)=job; p=pathlib.Path(path)
+              data=get(url)
+              if sha and hashlib.sha1(data).hexdigest()!=sha: raise RuntimeError('SHA1 mismatch: '+str(p))
+              p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data)
+              return str(p),len(data),hashlib.sha256(data).hexdigest()
+          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool: result=list(pool.map(fetch,jobs.items()))
+          (root/'manifest.json').write_text(json.dumps(result,indent=2))
+          (root/'README.txt').write_text('Public Java/Minecraft/Fabric dependencies only. No private repository, application source, tokens, or accounts. Audio objects intentionally omitted; do not use for audio testing.\n')
+          print('Downloaded',len(result),'files;',sum(r[1] for r in result),'bytes')
+          PY
+      - name: Package portable files
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee runtime-export/java-version.txt
+          mkdir -p packages
+          tar -C "$JAVA_HOME" -czf packages/java25.tar.gz .
+          tar -czf packages/minecraft-runtime.tar.gz runtime-export
+          sha256sum packages/* | tee packages/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java25-public-runtime
+          path: packages/java25.tar.gz
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-public-runtime
+          path: packages/minecraft-runtime.tar.gz
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-transfer-manifest
+          path: |
+            packages/SHA256SUMS
+            runtime-export/manifest.json
+            runtime-export/java-version.txt
+            runtime-export/README.txt
+          retention-days: 1
