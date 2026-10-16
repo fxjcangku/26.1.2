@@ -203,7 +203,7 @@ jobs:
               scrot "$GITHUB_WORKSPACE/singleplayer-screen.png" 2>/dev/null || true
             fi
             if grep -qiE 'Starting integrated minecraft server' "$GITHUB_WORKSPACE/combined-client.log" \
-              && grep -qiE 'SmokeTester.*(logged in with entity id|joined the game)|Saving and pausing game|ServerLevel\[SmokeWorld\]' "$GITHUB_WORKSPACE/combined-client.log"; then
+              && grep -qiE 'SmokeTester.*(logged in with entity id|joined the game)' "$GITHUB_WORKSPACE/combined-client.log"; then
               success=1
               echo 'WORLD_ENTERED=YES' > "$RESULT"
               echo "WORLD_LOAD_SECONDS=$((i * 5))" >> "$RESULT"
@@ -215,6 +215,9 @@ jobs:
             fi
           done
 
+          if [ "$success" = 1 ]; then
+            sleep 12
+          fi
           window=$(xdotool search --name 'Minecraft' 2>/dev/null | tail -1 || true)
           if [ -n "$window" ]; then
             xdotool windowactivate --sync "$window" 2>/dev/null || true
@@ -252,7 +255,7 @@ jobs:
             cat java25-version.txt 2>/dev/null || true
             cat server-result.txt 2>/dev/null || true
             cat singleplayer-result.txt 2>/dev/null || true
-            echo 'Pass condition: the client started its integrated server and logged the local player entering SmokeWorld.'
+            echo 'Pass condition: the client started its integrated server and explicitly logged SmokeTester entering SmokeWorld.'
           } | tee final-report.txt
 
       - name: Upload logs and screenshot
