@@ -1,77 +1,51 @@
-name: Public runtime download for offline singleplayer
+name: Split existing public runtime for offline tests
 on:
   push:
     branches: [ci/java25-singleplayer-smoke-20261016]
   workflow_dispatch:
 permissions:
   contents: read
+  actions: write
 jobs:
-  runtime-download:
+  split-runtime:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - name: Install Java 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-      - name: Download public runtime only
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/offline-runtime"
-          mkdir -p "$ROOT/java25" "$ROOT/game" "$ROOT/work" "$ROOT/extra" "$ROOT/python"
-          cp -a "$JAVA_HOME"/. "$ROOT/java25/"
-          java -version 2>&1 | tee "$ROOT/java-version.txt"
-          python3 -m venv "$RUNNER_TEMP/pmc"
-          "$RUNNER_TEMP/pmc/bin/pip" install 'portablemc[certifi]==4.4.1'
-          "$RUNNER_TEMP/pmc/bin/portablemc" --main-dir "$ROOT/game" --work-dir "$ROOT/work" start --dry --jvm "$JAVA_HOME/bin/java" -u LocalTester 26.1.2
-          cp -a "$RUNNER_TEMP/pmc/lib/"python*/site-packages/portablemc "$ROOT/python/"
-          cp -a "$RUNNER_TEMP/pmc/lib/"python*/site-packages/certifi "$ROOT/python/"
-          export ROOT
-          python3 - <<'PY'
-          import os, pathlib, urllib.request, json, hashlib
-          root=pathlib.Path(os.environ['ROOT'])
-          def download(url,path):
-              data=urllib.request.urlopen(url,timeout=180).read()
-              path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(data)
-              return data
-          profile=json.loads(download('https://meta.fabricmc.net/v2/versions/loader/26.1.2/0.19.5/profile/json',root/'fabric-profile.json'))
-          for lib in profile['libraries']:
-              parts=lib['name'].split(':'); g,a,v=parts[:3]
-              classifier='-'+parts[3] if len(parts)>3 else ''
-              path=g.replace('.','/')+'/'+a+'/'+v+'/'+a+'-'+v+classifier+'.jar'
-              download(lib.get('url','https://maven.fabricmc.net/')+path,root/'game/libraries'/path)
-          for group,artifact,version,base in [
-              ('net.fabricmc.fabric-api','fabric-api','0.155.2+26.1.2','https://maven.fabricmc.net/'),
-              ('io.github.humbleui','skija-linux-x64','0.143.16','https://repo.maven.apache.org/maven2/'),
-              ('io.github.humbleui','skija-shared','0.143.16','https://repo.maven.apache.org/maven2/'),
-              ('io.github.humbleui','types','0.2.0','https://repo.maven.apache.org/maven2/')]:
-              path=group.replace('.','/')+'/'+artifact+'/'+version+'/'+artifact+'-'+version+'.jar'
-              download(base+path,root/'extra'/(artifact+'-'+version+'.jar'))
-          manifest=json.loads(urllib.request.urlopen('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',timeout=60).read())
-          entry=next(x for x in manifest['versions'] if x['id']=='26.1.2')
-          meta=json.loads(urllib.request.urlopen(entry['url'],timeout=60).read())
-          data=download(meta['downloads']['server']['url'],root/'server.jar')
-          assert hashlib.sha1(data).hexdigest()==meta['downloads']['server']['sha1']
-          (root/'metadata.json').write_text(json.dumps(meta,indent=2))
-          with (root/'SHA256SUMS').open('w') as out:
-              for p in sorted(root.rglob('*')):
-                  if p.is_file() and p.name!='SHA256SUMS':
-                      out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
-          print('PUBLIC_RUNTIME_DOWNLOAD=PASS')
-          PY
-      - name: Archive runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p parts
-          tar -C "$RUNNER_TEMP/offline-runtime" -czf - . | split -b 180M -d - parts/public-runtime.tar.gz.part-
-          sha256sum parts/* | tee parts/SHA256SUMS
-      - name: Upload runtime parts
-        uses: actions/upload-artifact@v4
+      - name: Retrieve already downloaded public runtime
+        uses: actions/download-artifact@v5
         with:
           name: public-runtime-offline
-          path: parts/
+          run-id: 38855492683
+          github-token: ${{ github.token }}
+          path: parts
+      - name: Verify parts
+        shell: bash
+        run: sha256sum -c parts/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-runtime-part-00
+          path: parts/public-runtime.tar.gz.part-00
           compression-level: 0
           retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-runtime-part-01
+          path: parts/public-runtime.tar.gz.part-01
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-runtime-part-02
+          path: parts/public-runtime.tar.gz.part-02
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-runtime-part-03
+          path: parts/public-runtime.tar.gz.part-03
+          compression-level: 0
+          retention-days: 1
+      - name: Remove only the superseded combined artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE repos/fxjcangku/26.1.2/actions/artifacts/12026772049
