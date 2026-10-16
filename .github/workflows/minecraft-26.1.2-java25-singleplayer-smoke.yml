@@ -1,51 +1,136 @@
-name: Split existing public runtime for offline tests
+name: Download public Gradle and Minecraft dependencies only
 on:
   push:
     branches: [ci/java25-singleplayer-smoke-20261016]
   workflow_dispatch:
 permissions:
   contents: read
-  actions: write
 jobs:
-  split-runtime:
+  public-dependencies:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - name: Retrieve already downloaded public runtime
-        uses: actions/download-artifact@v5
+      - uses: actions/setup-java@v5
         with:
-          name: public-runtime-offline
-          run-id: 38855492683
-          github-token: ${{ github.token }}
-          path: parts
-      - name: Verify parts
+          distribution: temurin
+          java-version: '25'
+      - name: Download and verify official Gradle
         shell: bash
-        run: sha256sum -c parts/SHA256SUMS
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/public-build/tools" "$RUNNER_TEMP/public-build/projects" out
+          cd "$RUNNER_TEMP/public-build/tools"
+          curl -fL --retry 3 https://services.gradle.org/distributions/gradle-9.6.0-bin.zip -o gradle-9.6.0-bin.zip
+          curl -fL --retry 3 https://services.gradle.org/distributions/gradle-9.6.0-bin.zip.sha256 -o gradle.sha256
+          echo "$(cat gradle.sha256)  gradle-9.6.0-bin.zip" | sha256sum -c -
+          unzip -q gradle-9.6.0-bin.zip
+          ./gradle-9.6.0/bin/gradle --version
+      - name: Resolve public coordinates without repository checkout or private inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GRADLE_USER_HOME="$RUNNER_TEMP/public-build/gradle-home"
+          P="$RUNNER_TEMP/public-build/projects/public-dependencies"
+          mkdir -p "$P"
+          cat > "$P/settings.gradle" <<'EOF'
+          pluginManagement {
+              repositories {
+                  maven { url = 'https://maven.fabricmc.net/' }
+                  gradlePluginPortal()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'public-dependencies-only'
+          EOF
+          cat > "$P/build.gradle" <<'EOF'
+          plugins { id 'net.fabricmc.fabric-loom' version '1.17.20' }
+          repositories {
+              mavenCentral()
+              maven { url = 'https://maven.fabricmc.net/' }
+              exclusiveContent {
+                  forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+                  filter { includeGroup 'maven.modrinth' }
+              }
+          }
+          dependencies {
+              minecraft "com.mojang:minecraft:${project.mcVersion}"
+              implementation 'net.fabricmc:fabric-loader:0.19.5'
+              implementation "net.fabricmc.fabric-api:fabric-api:${project.apiVersion}"
+              implementation 'io.github.humbleui:types:0.2.0'
+              implementation 'io.github.humbleui:skija-shared:0.143.16'
+              runtimeOnly 'io.github.humbleui:skija-windows-x64:0.143.16'
+              runtimeOnly 'io.github.humbleui:skija-windows-arm64:0.143.16'
+              runtimeOnly 'io.github.humbleui:skija-android-arm64:0.143.16'
+              runtimeOnly 'io.github.humbleui:skija-linux-x64:0.143.16'
+              localRuntime 'maven.modrinth:dev-auth-neo:1.1.1'
+          }
+          java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+          tasks.register('resolvePublicDependencies') {
+              doLast {
+                  ['compileClasspath', 'runtimeClasspath', 'annotationProcessor'].each { n ->
+                      def c = configurations.findByName(n)
+                      if (c != null && c.canBeResolved) c.files.each { println "PUBLIC_DEPENDENCY=${it.name}" }
+                  }
+              }
+          }
+          EOF
+          G="$RUNNER_TEMP/public-build/tools/gradle-9.6.0/bin/gradle"
+          "$G" -p "$P" --no-daemon --console=plain -PmcVersion=26.1.2 -PapiVersion=0.155.2+26.1.2 resolvePublicDependencies | tee out/resolve-26.1.2.log
+          "$G" -p "$P" --no-daemon --console=plain -PmcVersion=26.2 -PapiVersion=0.161.0+26.2 resolvePublicDependencies | tee out/resolve-26.2.log
+          echo 'PRIVATE_SOURCE_ACCESSED=NO' | tee out/scope.txt
+          echo 'PRIVATE_PROJECT_COMPILE_EXECUTED=NO' | tee -a out/scope.txt
+          rm -rf "$GRADLE_USER_HOME/daemon"
+          find "$GRADLE_USER_HOME" -name '*.lock' -delete
+          tar -czf "$RUNNER_TEMP/public-build-cache.tar.gz" -C "$RUNNER_TEMP/public-build" tools gradle-home projects
+          split -b 180M -d -a 2 "$RUNNER_TEMP/public-build-cache.tar.gz" out/public-build-cache.tar.gz.part-
+          sha256sum out/public-build-cache.tar.gz.part-* > out/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-build-dependency-logs
+          path: out/*.log
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: public-runtime-part-00
-          path: parts/public-runtime.tar.gz.part-00
+          name: public-build-cache-part-00
+          path: |
+            out/public-build-cache.tar.gz.part-00
+            out/SHA256SUMS
+            out/scope.txt
           compression-level: 0
-          retention-days: 1
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: public-runtime-part-01
-          path: parts/public-runtime.tar.gz.part-01
+          name: public-build-cache-part-01
+          path: out/public-build-cache.tar.gz.part-01
+          if-no-files-found: ignore
           compression-level: 0
-          retention-days: 1
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: public-runtime-part-02
-          path: parts/public-runtime.tar.gz.part-02
+          name: public-build-cache-part-02
+          path: out/public-build-cache.tar.gz.part-02
+          if-no-files-found: ignore
           compression-level: 0
-          retention-days: 1
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: public-runtime-part-03
-          path: parts/public-runtime.tar.gz.part-03
+          name: public-build-cache-part-03
+          path: out/public-build-cache.tar.gz.part-03
+          if-no-files-found: ignore
           compression-level: 0
-          retention-days: 1
-      - name: Remove only the superseded combined artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method DELETE repos/fxjcangku/26.1.2/actions/artifacts/12026772049
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-build-cache-part-04
+          path: out/public-build-cache.tar.gz.part-04
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-build-cache-part-05
+          path: out/public-build-cache.tar.gz.part-05
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 7
