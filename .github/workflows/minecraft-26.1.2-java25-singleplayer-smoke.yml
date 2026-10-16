@@ -1,0 +1,257 @@
+name: Minecraft 26.1.2 Java 25 Singleplayer Smoke
+
+on:
+  push:
+    branches:
+      - ci/java25-singleplayer-smoke-20261016
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  singleplayer-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Install Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install launcher and headless graphics dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xdotool scrot mesa-utils libgl1-mesa-dri libglx-mesa0 \
+            libasound2t64 libopenal1 libx11-6 libxext6 libxi6 libxrandr2 \
+            libxrender1 libxtst6 libxcb1 libxkbcommon0 libxkbcommon-x11-0 \
+            python3-venv jq curl ca-certificates
+          python3 -m venv "$RUNNER_TEMP/pmc-venv"
+          "$RUNNER_TEMP/pmc-venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/pmc-venv/bin/pip" install 'portablemc[certifi]==4.4.1'
+          java -version 2>&1 | tee java25-version.txt
+          "$RUNNER_TEMP/pmc-venv/bin/portablemc" show about | tee portablemc-about.txt
+          glxinfo -B 2>&1 | tee glxinfo-host.txt || true
+
+      - name: Download 26.1.2 server and generate a clean world
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$RUNNER_TEMP/mc-smoke"
+          SERVER="$ROOT/server"
+          mkdir -p "$SERVER"
+          python3 - <<'PY'
+          import hashlib, json, pathlib, urllib.request
+          root = pathlib.Path(__import__('os').environ['RUNNER_TEMP']) / 'mc-smoke' / 'server'
+          with urllib.request.urlopen('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json', timeout=60) as r:
+              manifest = json.load(r)
+          entry = next(v for v in manifest['versions'] if v['id'] == '26.1.2')
+          with urllib.request.urlopen(entry['url'], timeout=60) as r:
+              meta = json.load(r)
+          assert meta['javaVersion']['majorVersion'] == 25, meta['javaVersion']
+          dl = meta['downloads']['server']
+          data = urllib.request.urlopen(dl['url'], timeout=120).read()
+          actual = hashlib.sha1(data).hexdigest()
+          assert actual == dl['sha1'], (actual, dl['sha1'])
+          (root / 'server.jar').write_bytes(data)
+          (root / 'version-metadata.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
+          print('SERVER_SHA1=' + actual)
+          print('JAVA_MAJOR=' + str(meta['javaVersion']['majorVersion']))
+          PY
+          cd "$SERVER"
+          printf 'eula=true\n' > eula.txt
+          cat > server.properties <<'EOF'
+          level-name=SmokeWorld
+          gamemode=creative
+          difficulty=peaceful
+          online-mode=false
+          spawn-protection=0
+          view-distance=2
+          simulation-distance=2
+          max-players=1
+          enable-command-block=false
+          motd=Singleplayer smoke world generator
+          EOF
+          mkfifo server.stdin
+          exec 3<>server.stdin
+          java -Xms1G -Xmx3G -jar server.jar nogui <&3 > server-console.log 2>&1 &
+          SERVER_PID=$!
+          ok=0
+          for _ in $(seq 1 180); do
+            if grep -qE ']: Done \(' server-console.log 2>/dev/null; then ok=1; break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          cat server-console.log
+          cp server-console.log "$GITHUB_WORKSPACE/server-console.log"
+          if [ "$ok" != 1 ]; then
+            echo 'SERVER_WORLD_GENERATION=FAILED' | tee "$GITHUB_WORKSPACE/server-result.txt"
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          echo stop >&3
+          wait "$SERVER_PID"
+          exec 3>&-
+          test -f SmokeWorld/level.dat
+          cp server-console.log "$GITHUB_WORKSPACE/server-console.log"
+          echo 'SERVER_WORLD_GENERATION=PASS' | tee "$GITHUB_WORKSPACE/server-result.txt"
+
+      - name: Install vanilla client files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$RUNNER_TEMP/mc-smoke"
+          MAIN="$ROOT/main"
+          WORK="$ROOT/work"
+          mkdir -p "$MAIN" "$WORK/saves"
+          cp -a "$ROOT/server/SmokeWorld" "$WORK/saves/SmokeWorld"
+          PMC="$RUNNER_TEMP/pmc-venv/bin/portablemc"
+          "$PMC" --main-dir "$MAIN" --work-dir "$WORK" start \
+            --dry --jvm "$JAVA_HOME/bin/java" --resolution 854x480 \
+            --jvm-args='-Xms1G -Xmx4G -XX:+UseZGC' \
+            -u SmokeTester 26.1.2 | tee client-install.log
+          test -f "$WORK/saves/SmokeWorld/level.dat"
+          cat > "$WORK/options.txt" <<'EOF'
+          onboardAccessibility:false
+          pauseOnLostFocus:false
+          fullscreen:false
+          enableVsync:false
+          maxFps:20
+          graphicsMode:0
+          renderDistance:2
+          simulationDistance:2
+          entityDistanceScaling:0.5
+          mipmapLevels:0
+          biomeBlendRadius:0
+          soundDevice:
+          autoJump:false
+          skipMultiplayerWarning:true
+          EOF
+
+      - name: Launch client and enter the singleplayer world
+        id: client
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          ROOT="$RUNNER_TEMP/mc-smoke"
+          MAIN="$ROOT/main"
+          WORK="$ROOT/work"
+          PMC="$RUNNER_TEMP/pmc-venv/bin/portablemc"
+          REAL_JAVA="$JAVA_HOME/bin/java"
+          WRAPPER="$ROOT/java-quickplay-wrapper.sh"
+          RESULT="$GITHUB_WORKSPACE/singleplayer-result.txt"
+          cat > "$WRAPPER" <<EOF
+          #!/usr/bin/env bash
+          printf '%q ' "\$@" >> "$GITHUB_WORKSPACE/java-wrapper-args.log"
+          printf '\n' >> "$GITHUB_WORKSPACE/java-wrapper-args.log"
+          is_game=0
+          for arg in "\$@"; do
+            case "\$arg" in
+              net.minecraft.client.main.Main|net.minecraft.client.Minecraft) is_game=1 ;;
+            esac
+          done
+          if [ "\$is_game" = 1 ]; then
+            exec "$REAL_JAVA" "\$@" --quickPlaySingleplayer SmokeWorld
+          else
+            exec "$REAL_JAVA" "\$@"
+          fi
+          EOF
+          chmod +x "$WRAPPER"
+          : > "$GITHUB_WORKSPACE/client-launch.log"
+          echo 'WORLD_ENTERED=NO' > "$RESULT"
+          timeout 720s xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' bash -c '
+            set -uo pipefail
+            export LIBGL_ALWAYS_SOFTWARE=1
+            export MESA_GL_VERSION_OVERRIDE=4.5
+            export ALSOFT_DRIVERS=null
+            export __GLX_VENDOR_LIBRARY_NAME=mesa
+            setsid "'"$PMC"'" --main-dir "'"$MAIN"'" --work-dir "'"$WORK"'" start \
+              --jvm "'"$WRAPPER"'" --resolution 854x480 \
+              --jvm-args="-Xms1G -Xmx4G -XX:+UseZGC" \
+              -u SmokeTester 26.1.2 > "'"$GITHUB_WORKSPACE"'/client-launch.log" 2>&1 &
+            launcher_pid=$!
+            success=0
+            seen_java=0
+            for i in $(seq 1 120); do
+              sleep 5
+              if pgrep -f "[n]et.minecraft.client.main.Main" >/dev/null; then seen_java=1; fi
+              cat "'"$GITHUB_WORKSPACE"'/client-launch.log" "'"$WORK"'/logs/latest.log 2>/dev/null > "'"$GITHUB_WORKSPACE"'/combined-client.log" || true
+              if grep -qE "Starting integrated minecraft server version 26\\.1\\.2|Starting integrated minecraft server" "'"$GITHUB_WORKSPACE"'/combined-client.log" \
+                 && grep -qE "ServerLevel\\[|Preparing start region|Local game hosted on port|logged in with entity id|Joined the game" "'"$GITHUB_WORKSPACE"'/combined-client.log"; then
+                success=1
+                echo "WORLD_ENTERED=YES" > "'"$RESULT"'"
+                echo "WORLD_LOAD_SECONDS=$((i*5))" >> "'"$RESULT"'"
+                break
+              fi
+              if ! kill -0 "$launcher_pid" 2>/dev/null && [ "$seen_java" = 1 ]; then break; fi
+            done
+            window=$(xdotool search --name "Minecraft" 2>/dev/null | tail -1 || true)
+            if [ -n "$window" ]; then
+              xdotool windowactivate --sync "$window" 2>/dev/null || true
+              sleep 15
+            fi
+            scrot "'"$GITHUB_WORKSPACE"'/singleplayer-screen.png" 2>/dev/null || true
+            glxinfo -B > "'"$GITHUB_WORKSPACE"'/glxinfo-xvfb.txt" 2>&1 || true
+            ps auxww > "'"$GITHUB_WORKSPACE"'/processes.txt" || true
+            if [ "$success" = 1 ]; then sleep 10; fi
+            kill -TERM -- -"$launcher_pid" 2>/dev/null || true
+            sleep 5
+            kill -KILL -- -"$launcher_pid" 2>/dev/null || true
+            [ "$success" = 1 ]
+          '
+          status=$?
+          cp -a "$WORK/logs" "$GITHUB_WORKSPACE/game-logs" 2>/dev/null || true
+          find "$WORK/crash-reports" -type f -maxdepth 1 -print -exec cp -a {} "$GITHUB_WORKSPACE/" \; 2>/dev/null || true
+          cat "$RESULT"
+          tail -n 300 "$GITHUB_WORKSPACE/combined-client.log" 2>/dev/null || true
+          exit "$status"
+
+      - name: Write final report
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo 'Minecraft 26.1.2 Java 25 singleplayer smoke test'
+            echo "UTC=$(date -u +%FT%TZ)"
+            cat java25-version.txt 2>/dev/null || true
+            cat server-result.txt 2>/dev/null || true
+            cat singleplayer-result.txt 2>/dev/null || true
+            echo 'Success criteria: client started an integrated 26.1.2 server and emitted an in-world loading marker.'
+          } | tee final-report.txt
+
+      - name: Upload logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-26.1.2-java25-singleplayer-smoke
+          path: |
+            final-report.txt
+            java25-version.txt
+            portablemc-about.txt
+            server-result.txt
+            singleplayer-result.txt
+            server-console.log
+            client-install.log
+            client-launch.log
+            combined-client.log
+            java-wrapper-args.log
+            glxinfo-*.txt
+            processes.txt
+            singleplayer-screen.png
+            game-logs/
+            hs_err_pid*.log
+            crash-*.txt
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Enforce result
+        if: always()
+        shell: bash
+        run: |
+          grep -qx 'SERVER_WORLD_GENERATION=PASS' server-result.txt
+          grep -qx 'WORLD_ENTERED=YES' singleplayer-result.txt
